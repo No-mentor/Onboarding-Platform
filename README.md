@@ -15,6 +15,7 @@
 | 2 | [`docs/OnboardOS_기능명세서.pdf`](./docs/OnboardOS_기능명세서.pdf) | F-xx 수용 기준 |
 | 3 | [`docs/OnboardOS_API_명세서.pdf`](./docs/OnboardOS_API_명세서.pdf) | REST API 스펙 |
 | 4 | [`docs/OnboardOS_ERD.md`](./docs/OnboardOS_ERD.md) · [`docs/OnboardOS_ERD.pdf`](./docs/OnboardOS_ERD.pdf) | ERD · 관계 · 제약 · 인덱스 · DDL |
+| 5 | [`docs/Git_사용법.md`](./docs/Git_사용법.md) · [`docs/Git_사용법.pdf`](./docs/Git_사용법.pdf) | 브랜치·커밋·이슈·PR 팀 규칙 |
 
 문서 재생성:
 
@@ -38,16 +39,35 @@
 
 ## 기여 (Issues / PR)
 
-- **Issue:** Bug / Feature / Docs 템플릿 사용 (`.github/ISSUE_TEMPLATE/`)
-- **PR:** `.github/PULL_REQUEST_TEMPLATE.md` 체크리스트 작성
-- **브랜치:** `main` 직접 푸시 금지 → `feat/*`, `fix/*`, `docs/*` 등에서 PR
-- **보호 규칙:** PR 리뷰 1명 이상, 대화 해결, force-push 금지, CI 통과
+팀 규칙 전문: [`docs/Git_사용법.md`](./docs/Git_사용법.md) (원본 PDF 동봉)
 
-권장 브랜치 이름:
+### 브랜치 전략
 
 ```text
-feat/F-03-chat-permission
-fix/workspace-isolation
-docs/erd-v1
-chore/ci
+main  ←  최종 버전 (dev 통합·테스트 완료 후 병합)
+ dev  ←  개발 통합 (기능 브랜치 PR의 base)
+  └─ feat/#12 , fix/#14 , docs/#3 , chore/#1  …
 ```
+
+### 작업 시작
+
+```bash
+git checkout dev
+git pull origin dev
+git checkout -b feat/#12          # 이슈 번호 포함
+# … 작업 …
+git add .
+git commit -m "feat: 로그인 기능 추가"
+git push -u origin feat/#12
+# PR: feat/#12 → dev  (Squash and Merge, 팀원 절반 이상 승인)
+```
+
+### 커밋 태그
+
+`feat` · `fix` · `docs` · `style` · `refactor` · `test` · `chore` · `comment` · `hotfix` · `rename` · `remove` · `cicd`
+
+### Issue / PR
+
+- Issue 제목: `[feat] 로그인 페이지 추가` 형식, Assignee=본인, Label 설정
+- PR 제목: Issue와 동일, Reviewers=팀원, base=**dev**, **Squash and Merge**
+- `main` 보호: 직접 푸시 금지 · 리뷰·CI·conversation resolve 필요
