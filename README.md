@@ -23,6 +23,24 @@
 .venv/bin/python scripts/generate_docs.py
 ```
 
+## 저장소 구조
+
+```text
+Onboarding-Platform/
+├── FE/                 # 프론트엔드 전용 (Next.js …) — UI 작업은 여기만
+├── BE/                 # 백엔드 전용 (Spring Boot …) — API·AI·DB 작업은 여기만
+├── docs/               # PRD · 기능/API 명세 · ERD · Git 사용법
+├── scripts/            # 문서 생성 등 유틸
+├── AI_LEARN_FIRST.pdf  # AI/바이브코딩 필수 가이드
+└── README.md
+```
+
+| 폴더 | 담당 | 규칙 |
+|------|------|------|
+| [`FE/`](./FE) | Frontend | React/Next 코드는 **FE 안에서만** |
+| [`BE/`](./BE) | Backend | Spring/Java·RAG·보안은 **BE 안에서만** |
+| `docs/` | 전원 | 제품·API·ERD·Git 문서 |
+
 ## 스택 (목표)
 
 - **FE:** Next.js · React · TypeScript · Tailwind · shadcn/ui  
