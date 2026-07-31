@@ -61,23 +61,36 @@ Onboarding-Platform/
 
 ### 브랜치 전략
 
+| 브랜치 | 용도 |
+|--------|------|
+| **`dev`** | **개발 디폴트** (GitHub default branch). 일상 PR의 base |
+| **`main`** | **완전 배포·서비용**. 검증 끝난 코드만 `dev → main` |
+
 ```text
-main  ←  최종 버전 (dev 통합·테스트 완료 후 병합)
- dev  ←  개발 통합 (기능 브랜치 PR의 base)
+main  ←  배포·서버 안정본 (릴리스 때만 갱신)
+ dev  ←  개발 통합 · 기본 작업 브랜치  ★ default
   └─ feat/#12 , fix/#14 , docs/#3 , chore/#1  …
 ```
 
 ### 작업 시작
 
 ```bash
-git checkout dev
+git clone https://github.com/No-mentor/Onboarding-Platform.git
+cd Onboarding-Platform          # 기본 브랜치 = dev
 git pull origin dev
-git checkout -b feat/#12          # 이슈 번호 포함
+git checkout -b feat/#12        # 이슈 번호 포함
 # … 작업 …
 git add .
 git commit -m "feat: 로그인 기능 추가"
 git push -u origin feat/#12
 # PR: feat/#12 → dev  (Squash and Merge, 팀원 절반 이상 승인)
+```
+
+### 배포 (main)
+
+```bash
+# 통합 테스트·검수 완료 후
+# PR: dev → main  (보호 규칙: 리뷰 1+ · CI · conversation resolve)
 ```
 
 ### 커밋 태그
@@ -87,5 +100,5 @@ git push -u origin feat/#12
 ### Issue / PR
 
 - Issue 제목: `[feat] 로그인 페이지 추가` 형식, Assignee=본인, Label 설정
-- PR 제목: Issue와 동일, Reviewers=팀원, base=**dev**, **Squash and Merge**
-- `main` 보호: 직접 푸시 금지 · 리뷰·CI·conversation resolve 필요
+- PR 제목: Issue와 동일, Reviewers=팀원, base=**dev** (일상), **Squash and Merge**
+- `main`: 배포용만 · 직접 푸시 금지 · 리뷰·CI·conversation resolve 필수

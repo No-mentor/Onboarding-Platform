@@ -50,7 +50,8 @@
 
 ## PR 등록 확인 (팀 규칙)
 
-- [ ] **Base branch = `dev`** (main 직접 PR 금지 · 일상 개발)
+- [ ] **일상 개발:** Base = **`dev`** (GitHub default · 기능 브랜치 → dev)
+- [ ] **배포만:** Base = **`main`** 은 `dev → main` 릴리스 PR에만 사용
 - [ ] Reviewers: 팀원 전원
 - [ ] Assignees: 본인
 - [ ] Label: Issue와 동일
