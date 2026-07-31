@@ -35,3 +35,19 @@
 > 이 기능이 신입의 적응 속도(TTP)를 실제로 높이는가?
 
 아니면 구현하지 않습니다.
+
+## 기여 (Issues / PR)
+
+- **Issue:** Bug / Feature / Docs 템플릿 사용 (`.github/ISSUE_TEMPLATE/`)
+- **PR:** `.github/PULL_REQUEST_TEMPLATE.md` 체크리스트 작성
+- **브랜치:** `main` 직접 푸시 금지 → `feat/*`, `fix/*`, `docs/*` 등에서 PR
+- **보호 규칙:** PR 리뷰 1명 이상, 대화 해결, force-push 금지, CI 통과
+
+권장 브랜치 이름:
+
+```text
+feat/F-03-chat-permission
+fix/workspace-isolation
+docs/erd-v1
+chore/ci
+```

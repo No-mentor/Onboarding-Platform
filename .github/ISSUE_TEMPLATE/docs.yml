@@ -1,0 +1,58 @@
+name: 📄 Documentation
+description: PRD · 기능명세 · API · ERD · AI_LEARN_FIRST 등 문서 이슈
+title: "[Docs] "
+labels: ["documentation", "triage"]
+body:
+  - type: dropdown
+    id: doc
+    attributes:
+      label: 대상 문서
+      options:
+        - AI_LEARN_FIRST.pdf
+        - OnboardOS_상세_PRD.pdf
+        - OnboardOS_기능명세서.pdf
+        - OnboardOS_API_명세서.pdf
+        - OnboardOS_ERD.md / .pdf
+        - README.md
+        - scripts/generate_docs.py
+        - Other / multiple
+      default: 0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 유형
+      options:
+        - 오류 / 불일치 (명세 ↔ 코드 또는 문서 간)
+        - 누락 (섹션·엔드포인트·테이블)
+        - 개선 (가독성·예시·다이어그램)
+        - 버전 bump / 재생성
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 요약
+      placeholder: 어떤 내용이 틀렸거나 필요한가요?
+    validations:
+      required: true
+
+  - type: textarea
+    id: detail
+    attributes:
+      label: 상세 / 제안 문구
+      description: 가능하면 수정 후 문구 초안을 적어 주세요.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: regen
+    attributes:
+      label: 후속 작업
+      options:
+        - label: `scripts/generate_docs.py` 재실행 필요
+        - label: AI_LEARN_FIRST 문서 맵 동시 수정 필요

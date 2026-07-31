@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: AI LEARN FIRST (필수 학습)
+    url: https://github.com/No-mentor/Onboarding-Platform/blob/main/AI_LEARN_FIRST.pdf
+    about: 바이브코딩·구현 전 제품 원칙과 MVP 순서를 확인하세요.
+  - name: 문서 세트 (docs/)
+    url: https://github.com/No-mentor/Onboarding-Platform/tree/main/docs
+    about: PRD · 기능명세 · API 명세 · ERD

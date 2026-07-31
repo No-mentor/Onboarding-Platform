@@ -1,0 +1,27 @@
+# 초기 브랜치 보호용 상태 체크 플레이스홀더.
+# 실제 FE/BE 테스트가 생기면 이 워크플로를 확장하거나 교체하세요.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  docs-layout:
+    name: Docs layout check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Required paths exist
+        run: |
+          set -euo pipefail
+          test -f README.md
+          test -f AI_LEARN_FIRST.pdf
+          test -f docs/OnboardOS_ERD.md
+          test -f scripts/generate_docs.py
+          test -f .github/PULL_REQUEST_TEMPLATE.md
+          echo "OK: core docs and templates present"
