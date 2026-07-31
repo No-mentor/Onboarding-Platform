@@ -27,5 +27,18 @@ node_modules/
 tmp/
 .temp/
 
+# FE (Next.js)
+FE/node_modules/
+FE/.next/
+FE/out/
+FE/coverage/
+
+# BE (Spring / Java)
+BE/.gradle/
+BE/build/
+BE/target/
+BE/out/
+BE/*.iml
+
 # Local previews
 /tmp/
