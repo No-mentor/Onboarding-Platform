@@ -42,3 +42,7 @@ BE/*.iml
 
 # Local previews
 /tmp/
+
+.env
+.env.*
+!.env.example
