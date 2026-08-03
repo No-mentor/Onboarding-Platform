@@ -6,77 +6,51 @@
 
 - Spring Boot 4 · Java 17
 - Spring Security + JWT
-- Spring Data JPA · Flyway · PostgreSQL
-- springdoc-openapi (Swagger UI)
+- Spring Data JPA · Flyway · PostgreSQL + **pgvector**
+- LangChain4j + OpenAI (선택)
+- springdoc-openapi · Testcontainers
 
-## 현재 구현 (MVP 백엔드 슬라이스)
+## 현재 구현
 
 | 영역 | 내용 |
 |------|------|
-| Auth | signup / login / me / logout + JWT |
-| Workspace | 생성(OWNER) · 목록 · 수정 |
-| Members | 초대 · 수락(NEW_HIRE 시 계획 생성) · 목록 · 역할 변경 |
-| Documents | 업로드 · 청킹 · READY 상태 · 재처리 · soft delete |
-| Onboarding | 30일 계획 생성 · 오늘 할 일 · 체크리스트 |
-| Chat | RAG 키워드 검색 + Permission + Citation + Audit |
-| Dashboard | `GET /dashboard/me` 집계 |
-| Progress | `GET /progress/me`, admin progress 목록·상세 |
-| Admin | audit-logs 조회 |
-| DB | Flyway V1~V5 |
+| Auth / Workspace | JWT, OWNER 생성 |
+| Members | 초대·수락·목록·역할 |
+| Documents | 업로드·청킹·READY·(옵션) 임베딩 |
+| Onboarding | 30일 계획·오늘 할 일·체크리스트 |
+| Templates | CRUD + 계획 생성 시 템플릿 적용 |
+| Chat | 벡터/키워드 RAG + Permission + Citation + Audit |
+| Dashboard / Progress | 신입·관리자 집계 |
+| AI | `AI_ENABLED` + `OPENAI_API_KEY` 시 임베딩·LLM |
+| DB | Flyway V1~V7 |
+| Test | Testcontainers 통합 테스트 |
 
 ## 로컬 실행
 
 ```bash
-# 1) DB
 cd BE
-cp .env.example .env   # 비밀번호 맞추기
-docker compose up -d
-
-# 2) 앱
+cp .env.example .env
+docker compose up -d          # pgvector/pgvector:pg17
 ./gradlew bootRun
 ```
 
 - Health: http://localhost:8080/api/v1/health  
 - Swagger: http://localhost:8080/swagger-ui.html  
 
-### 스모크 예시
+### AI (선택)
 
 ```bash
-# 회원가입
-curl -s -X POST http://localhost:8080/api/v1/auth/signup \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"admin@example.com","password":"password1","name":"관리자"}'
-
-# 로그인 후 토큰으로 Workspace 생성
-TOKEN=...
-curl -s -X POST http://localhost:8080/api/v1/workspaces \
-  -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Acme","slug":"acme"}'
+# .env
+AI_ENABLED=true
+OPENAI_API_KEY=sk-...
 ```
 
-## 패키지 구조
+미설정 시 키워드 RAG + 템플릿 답변.
 
-```text
-com.onboardos.onboarding
-├── auth/                 # 인증 API
-├── workspace/            # Workspace API
-├── domain/               # JPA 엔티티·리포지토리
-│   ├── user/
-│   ├── workspace/
-│   └── common/
-└── global/
-    ├── config/
-    ├── security/         # JWT, SecurityFilterChain
-    ├── exception/
-    └── web/
+### 테스트
+
+```bash
+./gradlew test   # Docker 필요
 ```
-
-## 다음 슬라이스 (예정)
-
-1. 온보딩 템플릿 CRUD  
-2. pgvector 임베딩 + LangChain4j LLM  
-3. BE 통합 테스트 (Testcontainers)  
-4. FE 연동  
 
 명세: 루트 `docs/OnboardOS_API_명세서.pdf`, `docs/OnboardOS_ERD.md`

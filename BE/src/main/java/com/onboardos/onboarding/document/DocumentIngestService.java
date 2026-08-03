@@ -1,5 +1,6 @@
 package com.onboardos.onboarding.document;
 
+import com.onboardos.onboarding.ai.EmbeddingService;
 import com.onboardos.onboarding.domain.document.DocumentChunk;
 import com.onboardos.onboarding.domain.document.DocumentChunkRepository;
 import com.onboardos.onboarding.domain.document.DocumentEntity;
@@ -20,7 +21,9 @@ public class DocumentIngestService {
 
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
+    private final DocumentChunkVectorRepository vectorRepository;
     private final DocumentStorageService storageService;
+    private final EmbeddingService embeddingService;
 
     @Async
     @Transactional
@@ -54,6 +57,18 @@ public class DocumentIngestService {
                 ));
             }
             documentChunkRepository.saveAll(chunks);
+
+            if (embeddingService.isEnabled()) {
+                for (DocumentChunk c : chunks) {
+                    float[] vec = embeddingService.embed(c.getContent());
+                    String literal = embeddingService.toPgVectorLiteral(vec);
+                    if (literal != null) {
+                        vectorRepository.updateEmbedding(c.getId(), literal);
+                    }
+                }
+                log.info("Embeddings stored for document {}", documentId);
+            }
+
             doc.markReady(chunks.size());
             documentRepository.save(doc);
             log.info("Document ingested: {} chunks={}", documentId, chunks.size());

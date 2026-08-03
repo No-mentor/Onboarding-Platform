@@ -13,6 +13,7 @@ import com.onboardos.onboarding.domain.plan.OnboardingPlanItem;
 import com.onboardos.onboarding.domain.plan.OnboardingPlanItemRepository;
 import com.onboardos.onboarding.domain.plan.OnboardingPlanRepository;
 import com.onboardos.onboarding.domain.plan.PlanItemType;
+import com.onboardos.onboarding.domain.template.OnboardingTemplateItem;
 import com.onboardos.onboarding.domain.user.UserRole;
 import com.onboardos.onboarding.global.exception.BusinessException;
 import com.onboardos.onboarding.global.exception.ErrorCode;
@@ -23,6 +24,7 @@ import com.onboardos.onboarding.onboarding.dto.PlanItemResponse;
 import com.onboardos.onboarding.onboarding.dto.PlanResponse;
 import com.onboardos.onboarding.onboarding.dto.RecommendationResponse;
 import com.onboardos.onboarding.onboarding.dto.TodayRecommendationsResponse;
+import com.onboardos.onboarding.template.TemplateService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -30,12 +32,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@RequiredArgsConstructor
 public class OnboardingPlanService {
 
     private final OnboardingPlanRepository planRepository;
@@ -44,16 +45,40 @@ public class OnboardingPlanService {
     private final DailyRecommendationRepository recommendationRepository;
     private final DocumentRepository documentRepository;
     private final WorkspaceAccessService workspaceAccessService;
+    private final TemplateService templateService;
+
+    public OnboardingPlanService(
+            OnboardingPlanRepository planRepository,
+            OnboardingPlanItemRepository planItemRepository,
+            ChecklistItemRepository checklistItemRepository,
+            DailyRecommendationRepository recommendationRepository,
+            DocumentRepository documentRepository,
+            WorkspaceAccessService workspaceAccessService,
+            @Lazy TemplateService templateService
+    ) {
+        this.planRepository = planRepository;
+        this.planItemRepository = planItemRepository;
+        this.checklistItemRepository = checklistItemRepository;
+        this.recommendationRepository = recommendationRepository;
+        this.documentRepository = documentRepository;
+        this.workspaceAccessService = workspaceAccessService;
+        this.templateService = templateService;
+    }
 
     @Transactional
     public PlanResponse generate(UserPrincipal principal, UUID workspaceId, GeneratePlanRequest request) {
         workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
         UUID targetUserId = request.userId() == null ? principal.getId() : request.userId();
-        return generateForUser(workspaceId, targetUserId, request.force());
+        return generateForUser(workspaceId, targetUserId, request.force(), request.templateId());
     }
 
     @Transactional
     public PlanResponse generateForUser(UUID workspaceId, UUID userId, boolean force) {
+        return generateForUser(workspaceId, userId, force, null);
+    }
+
+    @Transactional
+    public PlanResponse generateForUser(UUID workspaceId, UUID userId, boolean force, UUID templateId) {
         planRepository.findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, userId, "ACTIVE")
                 .ifPresent(existing -> {
                     if (!force) {
@@ -69,7 +94,7 @@ public class OnboardingPlanService {
         List<DocumentEntity> readyDocs = documentRepository
                 .findByWorkspaceIdAndStatusAndDeletedAtIsNull(workspaceId, DocumentStatus.READY);
 
-        List<OnboardingPlanItem> items = buildTemplateItems(plan, readyDocs);
+        List<OnboardingPlanItem> items = buildTemplateItems(plan, readyDocs, templateId);
         planItemRepository.saveAll(items);
 
         // 체크리스트 동기화
@@ -287,7 +312,42 @@ public class OnboardingPlanService {
         plan.updateProgress(percent);
     }
 
-    private List<OnboardingPlanItem> buildTemplateItems(OnboardingPlan plan, List<DocumentEntity> docs) {
+    private List<OnboardingPlanItem> buildTemplateItems(
+            OnboardingPlan plan,
+            List<DocumentEntity> docs,
+            UUID templateId
+    ) {
+        List<OnboardingTemplateItem> custom = templateService.loadItemsForPlan(plan.getWorkspaceId(), templateId);
+        if (!custom.isEmpty()) {
+            List<OnboardingPlanItem> fromTemplate = new ArrayList<>();
+            for (OnboardingTemplateItem ti : custom) {
+                fromTemplate.add(OnboardingPlanItem.create(
+                        plan.getId(),
+                        plan.getWorkspaceId(),
+                        ti.getDayIndex(),
+                        ti.getType(),
+                        ti.getTitle(),
+                        ti.getDescription(),
+                        ti.getSortOrder(),
+                        null,
+                        null
+                ));
+            }
+            // READY 문서를 추가 학습 항목으로 보완
+            int day = 2;
+            for (DocumentEntity doc : docs) {
+                if (day > 10) {
+                    break;
+                }
+                fromTemplate.add(OnboardingPlanItem.create(
+                        plan.getId(), plan.getWorkspaceId(), day, PlanItemType.DOCUMENT,
+                        "문서 읽기: " + doc.getTitle(), "회사 지식 문서 학습", 99, doc.getId(), null
+                ));
+                day++;
+            }
+            return fromTemplate;
+        }
+
         List<OnboardingPlanItem> items = new ArrayList<>();
         int sort = 0;
         items.add(OnboardingPlanItem.create(

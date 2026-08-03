@@ -1,11 +1,14 @@
 package com.onboardos.onboarding.chat;
 
+import com.onboardos.onboarding.ai.EmbeddingService;
+import com.onboardos.onboarding.ai.LlmService;
 import com.onboardos.onboarding.audit.AuditService;
 import com.onboardos.onboarding.chat.dto.ChatMessageResponse;
 import com.onboardos.onboarding.chat.dto.ChatSessionDetailResponse;
 import com.onboardos.onboarding.chat.dto.ChatSessionSummaryResponse;
 import com.onboardos.onboarding.chat.dto.SendMessageRequest;
 import com.onboardos.onboarding.chat.dto.SendMessageResponse;
+import com.onboardos.onboarding.document.DocumentChunkVectorRepository;
 import com.onboardos.onboarding.document.DocumentPermissionService;
 import com.onboardos.onboarding.domain.chat.ChatMessage;
 import com.onboardos.onboarding.domain.chat.ChatMessageRepository;
@@ -37,10 +40,13 @@ public class ChatService {
     private final ChatSessionRepository sessionRepository;
     private final ChatMessageRepository messageRepository;
     private final DocumentChunkRepository chunkRepository;
+    private final DocumentChunkVectorRepository vectorRepository;
     private final DocumentRepository documentRepository;
     private final DocumentPermissionService permissionService;
     private final WorkspaceAccessService workspaceAccessService;
     private final AuditService auditService;
+    private final EmbeddingService embeddingService;
+    private final LlmService llmService;
 
     @Transactional
     public SendMessageResponse send(UserPrincipal principal, UUID workspaceId, SendMessageRequest request) {
@@ -65,9 +71,7 @@ public class ChatService {
 
         messageRepository.save(ChatMessage.user(session.getId(), workspaceId, principal.getId(), question));
 
-        // Retrieve → Permission Check → Answer + Citation
-        String keyword = extractKeyword(question);
-        List<DocumentChunk> candidates = chunkRepository.searchByKeyword(workspaceId, keyword, 20);
+        List<DocumentChunk> candidates = retrieve(workspaceId, question);
 
         List<Map<String, Object>> citations = new ArrayList<>();
         List<String> denied = new ArrayList<>();
@@ -95,7 +99,7 @@ public class ChatService {
             String snippet = chunk.getContent();
             citation.put("snippet", snippet.length() > 180 ? snippet.substring(0, 180) + "…" : snippet);
             citations.add(citation);
-            allowedSnippets.add("- [" + doc.getTitle() + "] " + citation.get("snippet"));
+            allowedSnippets.add("[" + doc.getTitle() + "] " + citation.get("snippet"));
             if (citations.size() >= 5) {
                 break;
             }
@@ -103,6 +107,7 @@ public class ChatService {
 
         String answer;
         String result;
+        String model = "template-rag-v1";
         if (citations.isEmpty()) {
             if (!denied.isEmpty()) {
                 answer = "접근 권한이 있는 문서에서 확인된 근거가 없어 답변드릴 수 없습니다. 관리자에게 권한을 요청하세요.";
@@ -112,7 +117,13 @@ public class ChatService {
                 result = "SUCCESS";
             }
         } else {
-            answer = buildGroundedAnswer(question, allowedSnippets);
+            String llmAnswer = llmService.answerWithCitations(question, allowedSnippets);
+            if (llmAnswer != null && !llmAnswer.isBlank()) {
+                answer = llmAnswer;
+                model = llmService.modelName();
+            } else {
+                answer = buildGroundedAnswer(question, allowedSnippets);
+            }
             result = "SUCCESS";
         }
 
@@ -123,7 +134,7 @@ public class ChatService {
                 answer,
                 citations,
                 denied,
-                "template-rag-v1"
+                model
         );
         messageRepository.save(assistant);
 
@@ -137,7 +148,9 @@ public class ChatService {
                 question,
                 Map.of(
                         "citations", citations.size(),
-                        "denied", denied.size()
+                        "denied", denied.size(),
+                        "model", model,
+                        "vectorSearch", embeddingService.isEnabled()
                 )
         );
         if (!denied.isEmpty()) {
@@ -162,6 +175,21 @@ public class ChatService {
                 denied,
                 assistant.getCreatedAt()
         );
+    }
+
+    private List<DocumentChunk> retrieve(UUID workspaceId, String question) {
+        if (embeddingService.isEnabled()) {
+            float[] qVec = embeddingService.embed(question);
+            String literal = embeddingService.toPgVectorLiteral(qVec);
+            if (literal != null) {
+                List<DocumentChunk> vectorHits = vectorRepository.searchByVector(workspaceId, literal, 20);
+                if (!vectorHits.isEmpty()) {
+                    return vectorHits;
+                }
+            }
+        }
+        String keyword = extractKeyword(question);
+        return chunkRepository.searchByKeyword(workspaceId, keyword, 20);
     }
 
     @Transactional(readOnly = true)
@@ -199,7 +227,6 @@ public class ChatService {
         if (parts.length == 0) {
             return cleaned.length() > 2 ? cleaned.substring(0, Math.min(10, cleaned.length())) : cleaned;
         }
-        // 가장 긴 토큰을 검색어로 (한글/영문 혼합 대응)
         String best = parts[0];
         for (String p : parts) {
             if (p.length() > best.length()) {
@@ -214,9 +241,9 @@ public class ChatService {
         sb.append("질문: ").append(question).append("\n\n");
         sb.append("회사 문서에서 확인된 근거를 바탕으로 정리하면 다음과 같습니다.\n\n");
         for (String s : snippets) {
-            sb.append(s).append("\n");
+            sb.append("- ").append(s).append("\n");
         }
-        sb.append("\n※ 모든 답변은 위 Citation 문서에 근거합니다. 문서에 없는 내용은 단정하지 않습니다.");
+        sb.append("\n※ Citation 문서 근거 기반 답변입니다. (OpenAI 미설정 시 템플릿 모드)");
         return sb.toString();
     }
 }

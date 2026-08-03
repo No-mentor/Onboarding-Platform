@@ -40,6 +40,14 @@ app:
     expiration-ms: ${JWT_EXPIRATION_MS:3600000}
   storage:
     root: ${STORAGE_ROOT:./storage}
+  ai:
+    # true 이고 OPENAI_API_KEY 가 있으면 임베딩·LLM 사용, 아니면 키워드 RAG fallback
+    enabled: ${AI_ENABLED:false}
+    openai-api-key: ${OPENAI_API_KEY:}
+    embedding-model: ${AI_EMBEDDING_MODEL:text-embedding-3-small}
+    chat-model: ${AI_CHAT_MODEL:gpt-4o-mini}
+    embedding-dimension: 1536
+
 
 springdoc:
   api-docs:
