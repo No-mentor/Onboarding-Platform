@@ -93,6 +93,62 @@ public class OnboardingPlanService {
         return toPlanResponse(plan, items);
     }
 
+    @Transactional(readOnly = true)
+    public PlanResponse getPlan(UserPrincipal principal, UUID workspaceId, UUID planId) {
+        workspaceAccessService.requireMembership(workspaceId, principal.getId());
+        OnboardingPlan plan = planRepository.findByIdAndWorkspaceIdAndDeletedAtIsNull(planId, workspaceId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "계획을 찾을 수 없습니다."));
+        if (!plan.getUserId().equals(principal.getId())) {
+            workspaceAccessService.requireRoles(
+                    workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER
+            );
+        }
+        List<OnboardingPlanItem> items = planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(plan.getId());
+        return toPlanResponse(plan, items);
+    }
+
+    @Transactional
+    public PlanResponse regenerate(UserPrincipal principal, UUID workspaceId, UUID planId, boolean keepCompleted) {
+        workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
+        OnboardingPlan existing = planRepository.findByIdAndWorkspaceIdAndDeletedAtIsNull(planId, workspaceId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "계획을 찾을 수 없습니다."));
+
+        // keepCompleted: MVP에서는 완료 항목 제목을 기억한 뒤 재생성 후 복원
+        final List<String> completedTitles = keepCompleted
+                ? planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(existing.getId())
+                .stream()
+                .filter(i -> i.getStatus() == ItemStatus.DONE)
+                .map(OnboardingPlanItem::getTitle)
+                .toList()
+                : List.of();
+
+        PlanResponse regenerated = generateForUser(workspaceId, existing.getUserId(), true);
+        if (!completedTitles.isEmpty()) {
+            planRepository.findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(
+                    workspaceId, existing.getUserId(), "ACTIVE"
+            ).ifPresent(newPlan -> {
+                List<OnboardingPlanItem> newItems =
+                        planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(newPlan.getId());
+                for (OnboardingPlanItem item : newItems) {
+                    if (completedTitles.contains(item.getTitle())) {
+                        item.markDone();
+                    }
+                }
+                recalculateProgress(newPlan);
+            });
+            return myPlanForUser(workspaceId, existing.getUserId());
+        }
+        return regenerated;
+    }
+
+    private PlanResponse myPlanForUser(UUID workspaceId, UUID userId) {
+        OnboardingPlan plan = planRepository
+                .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, userId, "ACTIVE")
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "온보딩 계획이 없습니다."));
+        List<OnboardingPlanItem> items = planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(plan.getId());
+        return toPlanResponse(plan, items);
+    }
+
     @Transactional
     public PlanItemResponse updateItemStatus(
             UserPrincipal principal,

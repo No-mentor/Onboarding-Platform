@@ -55,6 +55,25 @@ public class OnboardingController {
         return planService.myPlan(SecurityUtils.currentUser(), workspaceId);
     }
 
+    @Operation(summary = "계획 상세")
+    @GetMapping("/onboarding-plans/{planId}")
+    public PlanResponse getPlan(
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @PathVariable UUID planId
+    ) {
+        return planService.getPlan(SecurityUtils.currentUser(), workspaceId, planId);
+    }
+
+    @Operation(summary = "계획 재생성 (Admin)")
+    @PostMapping("/onboarding-plans/{planId}/regenerate")
+    public PlanResponse regenerate(
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @PathVariable UUID planId,
+            @RequestParam(defaultValue = "true") boolean keepCompleted
+    ) {
+        return planService.regenerate(SecurityUtils.currentUser(), workspaceId, planId, keepCompleted);
+    }
+
     @Operation(summary = "계획 항목 상태 변경")
     @PatchMapping("/onboarding-plans/items/{itemId}")
     public PlanItemResponse updateItem(
