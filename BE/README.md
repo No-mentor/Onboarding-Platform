@@ -9,14 +9,18 @@
 - Spring Data JPA · Flyway · PostgreSQL
 - springdoc-openapi (Swagger UI)
 
-## 현재 구현 (Identity 슬라이스)
+## 현재 구현 (MVP 백엔드 슬라이스)
 
 | 영역 | 내용 |
 |------|------|
-| Auth | `POST /api/v1/auth/signup`, `login`, `logout` · `GET /api/v1/auth/me` |
-| Workspace | `POST /api/v1/workspaces`, `GET /me`, `PATCH /{id}` |
-| 보안 | JWT Bearer · BCrypt · 공통 에러 JSON |
-| DB | Flyway `V1__identity.sql` (users / workspaces / memberships) |
+| Auth | signup / login / me / logout + JWT |
+| Workspace | 생성(OWNER) · 목록 · 수정 |
+| Members | 초대 · 수락(NEW_HIRE 시 계획 생성) · 목록 · 역할 변경 |
+| Documents | 업로드 · 청킹 · READY 상태 · 재처리 · soft delete |
+| Onboarding | 30일 계획 생성 · 오늘 할 일 · 체크리스트 |
+| Chat | RAG 키워드 검색 + Permission + Citation + Audit |
+| Admin | audit-logs 조회 |
+| DB | Flyway V1~V5 |
 
 ## 로컬 실행
 

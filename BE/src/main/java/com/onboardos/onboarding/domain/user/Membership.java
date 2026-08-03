@@ -79,4 +79,13 @@ public class Membership extends BaseTimeEntity {
     public boolean isActive() {
         return status == MembershipStatus.ACTIVE && deletedAt == null;
     }
+
+    public void changeRole(UserRole role) {
+        this.role = role;
+    }
+
+    public void changeStatus(MembershipStatus status) {
+        this.status = status;
+    }
 }
+
