@@ -45,7 +45,7 @@ public class OnboardingController {
             @RequestHeader("X-Workspace-Id") UUID workspaceId,
             @RequestBody(required = false) GeneratePlanRequest request
     ) {
-        GeneratePlanRequest body = request == null ? new GeneratePlanRequest(null, false) : request;
+        GeneratePlanRequest body = request == null ? new GeneratePlanRequest(null, null, false) : request;
         return planService.generate(SecurityUtils.currentUser(), workspaceId, body);
     }
 

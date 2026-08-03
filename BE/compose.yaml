@@ -2,7 +2,8 @@ name: onboarding
 
 services:
   db:
-    image: postgres:17
+    # pgvector 확장 포함 이미지
+    image: pgvector/pgvector:pg17
     container_name: onboarding-db
     restart: unless-stopped
 
