@@ -11,8 +11,11 @@ public interface MembershipRepository extends JpaRepository<Membership, UUID> {
 
     List<Membership> findByWorkspaceIdAndDeletedAtIsNull(UUID workspaceId);
 
+    List<Membership> findByWorkspaceIdAndRoleAndDeletedAtIsNull(UUID workspaceId, UserRole role);
+
     Optional<Membership> findByWorkspaceIdAndUserIdAndDeletedAtIsNull(UUID workspaceId, UUID userId);
 
     boolean existsByWorkspaceIdAndUserIdAndDeletedAtIsNull(UUID workspaceId, UUID userId);
 }
+
 

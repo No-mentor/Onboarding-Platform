@@ -19,6 +19,8 @@
 | Documents | 업로드 · 청킹 · READY 상태 · 재처리 · soft delete |
 | Onboarding | 30일 계획 생성 · 오늘 할 일 · 체크리스트 |
 | Chat | RAG 키워드 검색 + Permission + Citation + Audit |
+| Dashboard | `GET /dashboard/me` 집계 |
+| Progress | `GET /progress/me`, admin progress 목록·상세 |
 | Admin | audit-logs 조회 |
 | DB | Flyway V1~V5 |
 
@@ -72,9 +74,9 @@ com.onboardos.onboarding
 
 ## 다음 슬라이스 (예정)
 
-1. Members / Invitations  
-2. Documents + ingest job  
-3. Onboarding Plan / Recommendations  
-4. Chat + Permission + Citation + Audit  
+1. 온보딩 템플릿 CRUD  
+2. pgvector 임베딩 + LangChain4j LLM  
+3. BE 통합 테스트 (Testcontainers)  
+4. FE 연동  
 
 명세: 루트 `docs/OnboardOS_API_명세서.pdf`, `docs/OnboardOS_ERD.md`
