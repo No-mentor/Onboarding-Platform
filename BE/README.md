@@ -1,49 +1,76 @@
-# BE — Backend
+# BE — Backend (OnboardOS)
 
-OnboardOS **백엔드 전용** 작업 공간입니다.  
-API·도메인·AI(RAG)·보안 로직은 **이 폴더(`BE/`) 안에서만** 작성·수정합니다.
+프론트엔드(`FE/`)는 건드리지 않습니다. API·도메인·보안·AI는 **이 폴더에서만** 작업합니다.
 
-## 스택 (목표)
+## 스택
 
-- Spring Boot + Java
-- Spring Security + OAuth2 + JWT
-- PostgreSQL + pgvector
-- LangChain4j / OpenAI (서버 사이드만)
+- Spring Boot 4 · Java 17
+- Spring Security + JWT
+- Spring Data JPA · Flyway · PostgreSQL
+- springdoc-openapi (Swagger UI)
 
-## 디렉토리 (예정)
+## 현재 구현 (Identity 슬라이스)
 
-```text
-BE/
-├── README.md
-├── src/main/java/.../
-│   ├── domain/
-│   ├── repository/
-│   ├── service/            # PermissionService 등
-│   ├── web/                # REST controllers
-│   ├── ai/                 # RAG, Planner, Recommendation
-│   ├── security/
-│   └── config/
-├── src/main/resources/
-│   ├── application.yml
-│   └── db/migration/       # Flyway 등
-├── build.gradle / pom.xml  # (스캐폴딩 후)
-└── …
-```
+| 영역 | 내용 |
+|------|------|
+| Auth | `POST /api/v1/auth/signup`, `login`, `logout` · `GET /api/v1/auth/me` |
+| Workspace | `POST /api/v1/workspaces`, `GET /me`, `PATCH /{id}` |
+| 보안 | JWT Bearer · BCrypt · 공통 에러 JSON |
+| DB | Flyway `V1__identity.sql` (users / workspaces / memberships) |
 
-현재는 구조 자리만 잡아 둔 상태입니다. 프로젝트 생성은 별도 Issue에서 진행합니다.
-
-## 규칙
-
-- **Frontend 코드는 `FE/`에만** 둡니다. 이 폴더에 React/Next 코드를 넣지 않습니다.
-- LLM·임베딩 키는 서버 환경변수로만 관리합니다. (`FE` 노출 금지)
-- 모든 비즈니스 데이터는 `workspace_id` 격리 + RAG 전 Permission Check + Citation (ERD/API 명세 참고)
-- 브랜치/커밋: `docs/Git_사용법.md`
-
-## 로컬 실행 (스캐폴딩 후)
+## 로컬 실행
 
 ```bash
+# 1) DB
 cd BE
+cp .env.example .env   # 비밀번호 맞추기
+docker compose up -d
+
+# 2) 앱
 ./gradlew bootRun
-# 또는
-./mvnw spring-boot:run
 ```
+
+- Health: http://localhost:8080/api/v1/health  
+- Swagger: http://localhost:8080/swagger-ui.html  
+
+### 스모크 예시
+
+```bash
+# 회원가입
+curl -s -X POST http://localhost:8080/api/v1/auth/signup \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"password1","name":"관리자"}'
+
+# 로그인 후 토큰으로 Workspace 생성
+TOKEN=...
+curl -s -X POST http://localhost:8080/api/v1/workspaces \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Acme","slug":"acme"}'
+```
+
+## 패키지 구조
+
+```text
+com.onboardos.onboarding
+├── auth/                 # 인증 API
+├── workspace/            # Workspace API
+├── domain/               # JPA 엔티티·리포지토리
+│   ├── user/
+│   ├── workspace/
+│   └── common/
+└── global/
+    ├── config/
+    ├── security/         # JWT, SecurityFilterChain
+    ├── exception/
+    └── web/
+```
+
+## 다음 슬라이스 (예정)
+
+1. Members / Invitations  
+2. Documents + ingest job  
+3. Onboarding Plan / Recommendations  
+4. Chat + Permission + Citation + Audit  
+
+명세: 루트 `docs/OnboardOS_API_명세서.pdf`, `docs/OnboardOS_ERD.md`
