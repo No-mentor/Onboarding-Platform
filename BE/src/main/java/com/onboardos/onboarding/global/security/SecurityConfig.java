@@ -1,6 +1,6 @@
 package com.onboardos.onboarding.global.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.onboardos.onboarding.global.exception.ErrorCode;
 import com.onboardos.onboarding.global.exception.ErrorResponse;
 import jakarta.servlet.http.HttpServletResponse;
@@ -31,7 +31,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper jsonMapper;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -58,12 +58,16 @@ public class SecurityConfig {
                                 writeError(response, ErrorCode.FORBIDDEN, request.getRequestURI()))
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
         return http.build();
     }
 
-    private void writeError(HttpServletResponse response, ErrorCode code, String path) throws java.io.IOException {
+    private void writeError(HttpServletResponse response, ErrorCode code, String path)
+            throws java.io.IOException {
+
         response.setStatus(code.getStatus().value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+
         ErrorResponse body = ErrorResponse.builder()
                 .timestamp(Instant.now())
                 .status(code.getStatus().value())
@@ -73,7 +77,8 @@ public class SecurityConfig {
                 .path(path)
                 .traceId(UUID.randomUUID().toString().substring(0, 8))
                 .build();
-        objectMapper.writeValue(response.getOutputStream(), body);
+
+        jsonMapper.writeValue(response.getOutputStream(), body);
     }
 
     @Bean
@@ -82,7 +87,9 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+    public AuthenticationManager authenticationManager(
+            AuthenticationConfiguration configuration
+    ) throws Exception {
         return configuration.getAuthenticationManager();
     }
 }
