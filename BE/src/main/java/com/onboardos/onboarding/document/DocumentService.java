@@ -22,7 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class DocumentService {
 
     private final DocumentRepository documentRepository;
-    private final DocumentStorageService storageService;
+    private final DocumentStorage storageService;
     private final DocumentIngestService ingestService;
     private final WorkspaceAccessService workspaceAccessService;
 
