@@ -5,6 +5,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 import javax.crypto.SecretKey;
 import org.springframework.stereotype.Component;
@@ -20,12 +21,13 @@ public class JwtTokenProvider {
         this.key = Keys.hmacShaKeyFor(properties.getSecret().getBytes(StandardCharsets.UTF_8));
     }
 
-    public String createAccessToken(UUID userId, String email) {
+    public String createAccessToken(UUID userId, String email, List<String> roles) {
         Date now = new Date();
         Date exp = new Date(now.getTime() + properties.getExpirationMs());
         return Jwts.builder()
                 .subject(userId.toString())
                 .claim("email", email)
+                .claim("roles", roles)
                 .issuedAt(now)
                 .expiration(exp)
                 .signWith(key)
@@ -38,6 +40,12 @@ public class JwtTokenProvider {
 
     public UUID getUserId(String token) {
         return UUID.fromString(parseClaims(token).getSubject());
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<String> getRoles(String token) {
+        Object roles = parseClaims(token).get("roles");
+        return roles == null ? List.of() : (List<String>) roles;
     }
 
     public boolean validate(String token) {
