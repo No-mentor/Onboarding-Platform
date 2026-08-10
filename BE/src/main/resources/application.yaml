@@ -39,7 +39,11 @@ app:
     secret: ${JWT_SECRET:onboardos-dev-secret-change-me-min-32-chars!!}
     expiration-ms: ${JWT_EXPIRATION_MS:3600000}
   storage:
+    provider: ${STORAGE_PROVIDER:local}
     root: ${STORAGE_ROOT:./storage}
+    supabase-url: ${SUPABASE_URL:}
+    supabase-secret-key: ${SUPABASE_SECRET_KEY:}
+    supabase-bucket: ${SUPABASE_STORAGE_BUCKET:onboardos-documents}
   ai:
     # true 이고 OPENAI_API_KEY 가 있으면 임베딩·LLM 사용, 아니면 키워드 RAG fallback
     enabled: ${AI_ENABLED:false}

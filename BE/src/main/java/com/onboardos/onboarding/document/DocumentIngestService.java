@@ -22,7 +22,7 @@ public class DocumentIngestService {
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
     private final DocumentChunkVectorRepository vectorRepository;
-    private final DocumentStorageService storageService;
+    private final DocumentStorage storageService;
     private final EmbeddingService embeddingService;
 
     @Async
