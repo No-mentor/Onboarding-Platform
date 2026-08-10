@@ -9,6 +9,13 @@ public record MeResponse(
         String email,
         String name,
         WorkspaceSummaryResponse currentWorkspace,
+        ProfileResponse profile,
         List<WorkspaceSummaryResponse> workspaces
 ) {
+    public record ProfileResponse(
+            String department,
+            String careerLevel,
+            String title
+    ) {
+    }
 }
