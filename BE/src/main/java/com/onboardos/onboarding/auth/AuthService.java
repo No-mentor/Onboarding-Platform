@@ -45,7 +45,7 @@ public class AuthService {
         User user = User.create(email, request.name(), passwordEncoder.encode(request.password()));
         userRepository.save(user);
 
-        String token = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail());
+        String token = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail(), List.of());
         return AuthResponse.of(
                 user.getId(),
                 user.getEmail(),
@@ -70,14 +70,19 @@ public class AuthService {
         }
 
         user.markLogin();
-        String token = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail());
+        List<WorkspaceSummaryResponse> workspaces = listWorkspaces(user.getId());
+        List<String> roles = workspaces.stream()
+                .map(w -> w.role().name())
+                .distinct()
+                .toList();
+        String token = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail(), roles);
         return AuthResponse.of(
                 user.getId(),
                 user.getEmail(),
                 user.getName(),
                 token,
                 jwtTokenProvider.getExpirationSeconds(),
-                listWorkspaces(user.getId())
+                workspaces
         );
     }
 
