@@ -103,7 +103,14 @@ public class AuthService {
             current = workspaces.get(0);
         }
 
-        return new MeResponse(user.getId(), user.getEmail(), user.getName(), current, workspaces);
+        MeResponse.ProfileResponse profile = current == null ? null : profileOf(current.id(), user.getId());
+        return new MeResponse(user.getId(), user.getEmail(), user.getName(), current, profile, workspaces);
+    }
+
+    private MeResponse.ProfileResponse profileOf(UUID workspaceId, UUID userId) {
+        return membershipRepository.findByWorkspaceIdAndUserIdAndDeletedAtIsNull(workspaceId, userId)
+                .map(m -> new MeResponse.ProfileResponse(m.getDepartment(), m.getCareerLevel(), m.getTitle()))
+                .orElse(null);
     }
 
     private List<WorkspaceSummaryResponse> listWorkspaces(UUID userId) {
