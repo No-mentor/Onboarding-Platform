@@ -14,6 +14,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @Slf4j
 @RestControllerAdvice
@@ -35,6 +36,14 @@ public class GlobalExceptionHandler {
         return build(ErrorCode.VALIDATION_ERROR, message.isBlank()
                 ? ErrorCode.VALIDATION_ERROR.getDefaultMessage()
                 : message, request);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSize(
+            MaxUploadSizeExceededException ex,
+            HttpServletRequest request
+    ) {
+        return build(ErrorCode.VALIDATION_ERROR, "파일 크기는 20MB 이하여야 합니다.", request);
     }
 
     @ExceptionHandler({AuthenticationException.class, BadCredentialsException.class})

@@ -11,7 +11,8 @@ import org.springframework.stereotype.Service;
 public class DocumentPermissionService {
 
     public boolean canAccess(DocumentEntity document, Membership membership) {
-        if (document == null || document.isDeleted()) {
+        if (document == null || membership == null || document.isDeleted() || !membership.isActive()
+                || !document.getWorkspaceId().equals(membership.getWorkspaceId())) {
             return false;
         }
         if (document.getVisibility() == DocumentVisibility.WORKSPACE) {
