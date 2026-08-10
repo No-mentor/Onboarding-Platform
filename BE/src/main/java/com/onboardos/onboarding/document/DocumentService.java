@@ -4,6 +4,7 @@ import com.onboardos.onboarding.document.dto.DocumentResponse;
 import com.onboardos.onboarding.domain.document.DocumentEntity;
 import com.onboardos.onboarding.domain.document.DocumentRepository;
 import com.onboardos.onboarding.domain.document.DocumentVisibility;
+import com.onboardos.onboarding.domain.user.Membership;
 import com.onboardos.onboarding.domain.user.UserRole;
 import com.onboardos.onboarding.global.exception.BusinessException;
 import com.onboardos.onboarding.global.exception.ErrorCode;
@@ -25,6 +26,8 @@ public class DocumentService {
     private final DocumentStorage storageService;
     private final DocumentIngestService ingestService;
     private final WorkspaceAccessService workspaceAccessService;
+    private final DocumentPermissionService permissionService;
+    private final DocumentUploadValidator uploadValidator;
 
     @Transactional
     public DocumentResponse upload(
@@ -42,9 +45,14 @@ public class DocumentService {
                 UserRole.ADMIN,
                 UserRole.MANAGER
         );
-        if (file == null || file.isEmpty()) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "파일이 비어 있습니다.");
-        }
+        uploadValidator.validate(file);
+
+        DocumentVisibility normalizedVisibility = visibility == null
+                ? DocumentVisibility.WORKSPACE
+                : visibility;
+        List<UserRole> normalizedAllowedRoles = normalizedVisibility == DocumentVisibility.WORKSPACE
+                ? List.of()
+                : allowedRoles == null ? List.of() : allowedRoles;
 
         String storageKey = storageService.store(workspaceId, file);
         String docTitle = (title == null || title.isBlank())
@@ -58,8 +66,8 @@ public class DocumentService {
                 file.getOriginalFilename(),
                 file.getContentType(),
                 file.getSize(),
-                visibility,
-                allowedRoles,
+                normalizedVisibility,
+                normalizedAllowedRoles,
                 principal.getId()
         );
         documentRepository.save(entity);
@@ -71,17 +79,21 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public List<DocumentResponse> list(UserPrincipal principal, UUID workspaceId) {
-        workspaceAccessService.requireMembership(workspaceId, principal.getId());
+        Membership membership = workspaceAccessService.requireMembership(workspaceId, principal.getId());
         return documentRepository.findByWorkspaceIdAndDeletedAtIsNullOrderByCreatedAtDesc(workspaceId).stream()
+                .filter(document -> permissionService.canAccess(document, membership))
                 .map(DocumentResponse::from)
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public DocumentResponse get(UserPrincipal principal, UUID workspaceId, UUID documentId) {
-        workspaceAccessService.requireMembership(workspaceId, principal.getId());
+        Membership membership = workspaceAccessService.requireMembership(workspaceId, principal.getId());
         DocumentEntity doc = documentRepository.findByIdAndWorkspaceIdAndDeletedAtIsNull(documentId, workspaceId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "문서를 찾을 수 없습니다."));
+        if (!permissionService.canAccess(doc, membership)) {
+            throw new BusinessException(ErrorCode.DOCUMENT_ACCESS_DENIED);
+        }
         return DocumentResponse.from(doc);
     }
 
@@ -113,7 +125,15 @@ public class DocumentService {
         return Arrays.stream(csv.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
-                .map(UserRole::valueOf)
+                .map(DocumentService::parseRole)
                 .toList();
+    }
+
+    private static UserRole parseRole(String value) {
+        try {
+            return UserRole.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "allowedRoles에 올바르지 않은 역할이 포함되어 있습니다.");
+        }
     }
 }
