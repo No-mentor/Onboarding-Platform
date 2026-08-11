@@ -71,6 +71,9 @@ public class DocumentEntity extends BaseTimeEntity {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    @Column(name = "storage_purged_at")
+    private Instant storagePurgedAt;
+
     public static DocumentEntity create(
             UUID workspaceId,
             String title,
@@ -122,6 +125,10 @@ public class DocumentEntity extends BaseTimeEntity {
 
     public boolean isDeleted() {
         return deletedAt != null;
+    }
+
+    public void markStoragePurged(Instant purgedAt) {
+        this.storagePurgedAt = purgedAt;
     }
 
     public void resetForReprocess() {

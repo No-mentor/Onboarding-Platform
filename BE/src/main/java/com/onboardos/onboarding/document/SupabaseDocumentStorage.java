@@ -69,6 +69,23 @@ public class SupabaseDocumentStorage implements DocumentStorage {
     private BusinessException readFailure() {
         return new BusinessException(ErrorCode.DOCUMENT_STORAGE_ERROR, "Supabase Storage에서 문서를 읽지 못했습니다.");
     }
+    @Override public void delete(String storageKey) {
+        validateConfiguration();
+        try {
+            restClient.delete().uri(objectUri(storageKey)).header("apikey", secretKey)
+                    .retrieve().toBodilessEntity();
+        } catch (RestClientResponseException e) {
+            if (e.getStatusCode().value() == 404) return;
+            logHttpFailure("delete", e);
+            throw deleteFailure();
+        } catch (RestClientException e) {
+            logCommunicationFailure("delete", e);
+            throw deleteFailure();
+        }
+    }
+    private BusinessException deleteFailure() {
+        return new BusinessException(ErrorCode.DOCUMENT_STORAGE_ERROR, "Supabase Storage에서 문서를 삭제하지 못했습니다.");
+    }
     private void logHttpFailure(String operation, RestClientResponseException exception) {
         log.warn("Supabase Storage {} failed with HTTP status {}", operation, exception.getStatusCode().value());
     }
@@ -76,8 +93,18 @@ public class SupabaseDocumentStorage implements DocumentStorage {
         log.warn("Supabase Storage {} communication failed: {}", operation, exception.getClass().getSimpleName());
     }
     private URI objectUri(String key) {
+        validateStorageKey(key);
         return UriComponentsBuilder.fromUriString(url).pathSegment("storage", "v1", "object", bucket)
                 .pathSegment(key.split("/")).build().encode().toUri();
+    }
+    private void validateStorageKey(String key) {
+        if (!StringUtils.hasText(key)) throw new BusinessException(ErrorCode.VALIDATION_ERROR, "올바르지 않은 문서 저장 경로입니다.");
+        String[] segments = key.split("/", -1);
+        for (String segment : segments) {
+            if (segment.isBlank() || segment.equals(".") || segment.equals("..")) {
+                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "올바르지 않은 문서 저장 경로입니다.");
+            }
+        }
     }
     private void validateConfiguration() {
         if (!StringUtils.hasText(url)) throw configError("SUPABASE_URL 설정이 필요합니다.");

@@ -16,14 +16,18 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DocumentService {
 
     private final DocumentRepository documentRepository;
@@ -59,6 +63,7 @@ public class DocumentService {
                 : allowedRoles == null ? List.of() : allowedRoles;
 
         String storageKey = storageService.store(workspaceId, file);
+        registerRollbackCleanup(storageKey);
         String docTitle = (title == null || title.isBlank())
                 ? file.getOriginalFilename()
                 : title;
@@ -170,5 +175,25 @@ public class DocumentService {
         if (size < 1 || size > 100) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "size는 1 이상 100 이하여야 합니다.");
         }
+    }
+
+    private void registerRollbackCleanup(String storageKey) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status != STATUS_ROLLED_BACK) {
+                    return;
+                }
+                try {
+                    storageService.delete(storageKey);
+                } catch (Exception exception) {
+                    log.warn("Document upload rollback cleanup failed: {}",
+                            exception.getClass().getSimpleName());
+                }
+            }
+        });
     }
 }
