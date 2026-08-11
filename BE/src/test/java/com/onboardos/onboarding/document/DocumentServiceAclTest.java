@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 class DocumentServiceAclTest {
     private final DocumentRepository repository = mock(DocumentRepository.class);
@@ -31,7 +33,7 @@ class DocumentServiceAclTest {
         Membership member = membership(UserRole.MEMBER);
         DocumentEntity document = document(DocumentVisibility.WORKSPACE, List.of());
         prepare(member, document);
-        assertThat(service.list(principal, workspaceId)).hasSize(1);
+        assertThat(service.list(principal, workspaceId, 0, 20, null).items()).hasSize(1);
         assertThat(service.get(principal, workspaceId, document.getId()).id()).isEqualTo(document.getId());
     }
 
@@ -39,7 +41,7 @@ class DocumentServiceAclTest {
         Membership manager = membership(UserRole.MANAGER);
         DocumentEntity document = document(DocumentVisibility.RESTRICTED, List.of(UserRole.MANAGER));
         prepare(manager, document);
-        assertThat(service.list(principal, workspaceId)).hasSize(1);
+        assertThat(service.list(principal, workspaceId, 0, 20, null).items()).hasSize(1);
         assertThat(service.get(principal, workspaceId, document.getId()).id()).isEqualTo(document.getId());
     }
 
@@ -47,7 +49,9 @@ class DocumentServiceAclTest {
         Membership member = membership(UserRole.MEMBER);
         DocumentEntity document = document(DocumentVisibility.RESTRICTED, List.of(UserRole.ADMIN));
         prepare(member, document);
-        assertThat(service.list(principal, workspaceId)).isEmpty();
+        when(repository.findAccessible(workspaceId, "MEMBER", null, PageRequest.of(0, 20)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+        assertThat(service.list(principal, workspaceId, 0, 20, null).items()).isEmpty();
     }
 
     @Test void disallowedRoleGetsDocumentAccessDeniedForDetail() {
@@ -90,7 +94,8 @@ class DocumentServiceAclTest {
 
     private void prepare(Membership membership, DocumentEntity document) {
         when(access.requireMembership(workspaceId, principal.getId())).thenReturn(membership);
-        when(repository.findByWorkspaceIdAndDeletedAtIsNullOrderByCreatedAtDesc(workspaceId)).thenReturn(List.of(document));
+        when(repository.findAccessible(workspaceId, membership.getRole().name(), null, PageRequest.of(0, 20)))
+                .thenReturn(new PageImpl<>(List.of(document), PageRequest.of(0, 20), 1));
         when(repository.findByIdAndWorkspaceIdAndDeletedAtIsNull(document.getId(), workspaceId)).thenReturn(Optional.of(document));
     }
     private Membership membership(UserRole role) { return Membership.create(workspaceId, principal.getId(), role, null, null, null); }

@@ -1,8 +1,10 @@
 package com.onboardos.onboarding.document;
 
 import com.onboardos.onboarding.document.dto.DocumentResponse;
+import com.onboardos.onboarding.document.dto.DocumentPageResponse;
 import com.onboardos.onboarding.domain.document.DocumentEntity;
 import com.onboardos.onboarding.domain.document.DocumentRepository;
+import com.onboardos.onboarding.domain.document.DocumentStatus;
 import com.onboardos.onboarding.domain.document.DocumentVisibility;
 import com.onboardos.onboarding.domain.user.Membership;
 import com.onboardos.onboarding.domain.user.UserRole;
@@ -15,6 +17,8 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -78,12 +82,23 @@ public class DocumentService {
     }
 
     @Transactional(readOnly = true)
-    public List<DocumentResponse> list(UserPrincipal principal, UUID workspaceId) {
+    public DocumentPageResponse list(
+            UserPrincipal principal,
+            UUID workspaceId,
+            int page,
+            int size,
+            DocumentStatus status
+    ) {
+        validatePageRequest(page, size);
         Membership membership = workspaceAccessService.requireMembership(workspaceId, principal.getId());
-        return documentRepository.findByWorkspaceIdAndDeletedAtIsNullOrderByCreatedAtDesc(workspaceId).stream()
-                .filter(document -> permissionService.canAccess(document, membership))
-                .map(DocumentResponse::from)
-                .toList();
+        Page<DocumentResponse> result = documentRepository.findAccessible(
+                        workspaceId,
+                        membership.getRole().name(),
+                        status == null ? null : status.name(),
+                        PageRequest.of(page, size)
+                )
+                .map(DocumentResponse::from);
+        return DocumentPageResponse.from(result);
     }
 
     @Transactional(readOnly = true)
@@ -134,6 +149,26 @@ public class DocumentService {
             return UserRole.valueOf(value);
         } catch (IllegalArgumentException e) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "allowedRoles에 올바르지 않은 역할이 포함되어 있습니다.");
+        }
+    }
+
+    public static DocumentStatus parseStatus(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return DocumentStatus.valueOf(value);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "status 값이 올바르지 않습니다.");
+        }
+    }
+
+    private void validatePageRequest(int page, int size) {
+        if (page < 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "page는 0 이상이어야 합니다.");
+        }
+        if (size < 1 || size > 100) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "size는 1 이상 100 이하여야 합니다.");
         }
     }
 }
