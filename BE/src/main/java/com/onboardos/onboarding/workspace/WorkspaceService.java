@@ -37,7 +37,7 @@ public class WorkspaceService {
         }
 
         Workspace workspace = Workspace.create(request.name(), slug);
-        workspaceRepository.save(workspace);
+        workspace = workspaceRepository.save(workspace);
 
         Membership owner = Membership.createOwner(workspace.getId(), principal.getId());
         membershipRepository.save(owner);
