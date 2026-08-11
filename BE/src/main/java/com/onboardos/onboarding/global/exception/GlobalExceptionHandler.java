@@ -15,6 +15,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @Slf4j
 @RestControllerAdvice
@@ -44,6 +45,14 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         return build(ErrorCode.VALIDATION_ERROR, "파일 크기는 20MB 이하여야 합니다.", request);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(
+            MethodArgumentTypeMismatchException ex,
+            HttpServletRequest request
+    ) {
+        return build(ErrorCode.VALIDATION_ERROR, "요청 파라미터 형식이 올바르지 않습니다.", request);
     }
 
     @ExceptionHandler({AuthenticationException.class, BadCredentialsException.class})

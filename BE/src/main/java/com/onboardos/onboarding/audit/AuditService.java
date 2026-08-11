@@ -2,9 +2,13 @@ package com.onboardos.onboarding.audit;
 
 import com.onboardos.onboarding.domain.audit.AuditLog;
 import com.onboardos.onboarding.domain.audit.AuditLogRepository;
+import com.onboardos.onboarding.audit.dto.AuditLogPageResponse;
+import com.onboardos.onboarding.audit.dto.AuditLogResponse;
 import com.onboardos.onboarding.domain.user.UserRole;
+import com.onboardos.onboarding.global.exception.BusinessException;
+import com.onboardos.onboarding.global.exception.ErrorCode;
 import com.onboardos.onboarding.global.workspace.WorkspaceAccessService;
-import java.util.List;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -36,11 +40,38 @@ public class AuditService {
     }
 
     @Transactional(readOnly = true)
-    public List<AuditLog> list(UUID workspaceId, UUID actorId, int page, int size) {
-        workspaceAccessService.requireRoles(workspaceId, actorId, UserRole.OWNER, UserRole.ADMIN);
-        return auditLogRepository.findByWorkspaceIdOrderByCreatedAtDesc(
-                workspaceId,
-                PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100))
-        );
+    public AuditLogPageResponse list(
+            UUID workspaceId,
+            UUID requesterId,
+            int page,
+            int size,
+            UUID actorId,
+            String eventType,
+            Instant from,
+            Instant to
+    ) {
+        validate(page, size, eventType, from, to);
+        workspaceAccessService.requireRoles(workspaceId, requesterId, UserRole.OWNER, UserRole.ADMIN);
+        String normalizedEventType = eventType == null || eventType.trim().isEmpty()
+                ? null
+                : eventType.trim();
+        return AuditLogPageResponse.from(auditLogRepository.findFiltered(
+                workspaceId, actorId, normalizedEventType, from, to, PageRequest.of(page, size)
+        ).map(AuditLogResponse::from));
+    }
+
+    private void validate(int page, int size, String eventType, Instant from, Instant to) {
+        if (page < 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "page는 0 이상이어야 합니다.");
+        }
+        if (size < 1 || size > 100) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "size는 1 이상 100 이하여야 합니다.");
+        }
+        if (eventType != null && eventType.trim().length() > 50) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "eventType은 50자를 초과할 수 없습니다.");
+        }
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "from은 to보다 이후일 수 없습니다.");
+        }
     }
 }
