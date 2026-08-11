@@ -8,8 +8,11 @@ import com.onboardos.onboarding.domain.user.MembershipRepository;
 import com.onboardos.onboarding.domain.user.User;
 import com.onboardos.onboarding.domain.user.UserRepository;
 import com.onboardos.onboarding.domain.user.UserRole;
+import com.onboardos.onboarding.domain.workspace.Workspace;
+import com.onboardos.onboarding.domain.workspace.WorkspaceRepository;
 import com.onboardos.onboarding.global.exception.BusinessException;
 import com.onboardos.onboarding.global.exception.ErrorCode;
+import com.onboardos.onboarding.global.mail.MailService;
 import com.onboardos.onboarding.global.security.UserPrincipal;
 import com.onboardos.onboarding.global.workspace.WorkspaceAccessService;
 import com.onboardos.onboarding.member.dto.AcceptInvitationResponse;
@@ -37,22 +40,28 @@ public class MemberService {
     private final InvitationRepository invitationRepository;
     private final MembershipRepository membershipRepository;
     private final UserRepository userRepository;
+    private final WorkspaceRepository workspaceRepository;
     private final WorkspaceAccessService workspaceAccessService;
     private final OnboardingPlanService onboardingPlanService;
+    private final MailService mailService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public MemberService(
             InvitationRepository invitationRepository,
             MembershipRepository membershipRepository,
             UserRepository userRepository,
+            WorkspaceRepository workspaceRepository,
             WorkspaceAccessService workspaceAccessService,
-            @Lazy OnboardingPlanService onboardingPlanService
+            @Lazy OnboardingPlanService onboardingPlanService,
+            MailService mailService
     ) {
         this.invitationRepository = invitationRepository;
         this.membershipRepository = membershipRepository;
         this.userRepository = userRepository;
+        this.workspaceRepository = workspaceRepository;
         this.workspaceAccessService = workspaceAccessService;
         this.onboardingPlanService = onboardingPlanService;
+        this.mailService = mailService;
     }
 
     @Transactional
@@ -84,6 +93,14 @@ public class MemberService {
                 generateToken()
         );
         invitationRepository.save(invitation);
+
+        Workspace workspace = workspaceRepository.findByIdAndDeletedAtIsNull(workspaceId).orElse(null);
+        mailService.sendInvitationEmail(
+                invitation.getEmail(),
+                workspace == null ? "OnboardOS" : workspace.getName(),
+                invitation.getToken()
+        );
+
         return new InvitationResponse(
                 invitation.getId(),
                 invitation.getEmail(),
