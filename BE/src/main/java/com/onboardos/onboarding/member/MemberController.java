@@ -1,6 +1,8 @@
 package com.onboardos.onboarding.member;
 
+import com.onboardos.onboarding.domain.user.UserRole;
 import com.onboardos.onboarding.global.security.SecurityUtils;
+import com.onboardos.onboarding.global.web.PageResponse;
 import com.onboardos.onboarding.member.dto.AcceptInvitationResponse;
 import com.onboardos.onboarding.member.dto.CreateInvitationRequest;
 import com.onboardos.onboarding.member.dto.InvitationResponse;
@@ -9,8 +11,6 @@ import com.onboardos.onboarding.member.dto.UpdateMemberRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -50,8 +51,13 @@ public class MemberController {
 
     @Operation(summary = "멤버 목록")
     @GetMapping("/members")
-    public Map<String, List<MemberResponse>> list(@RequestHeader("X-Workspace-Id") UUID workspaceId) {
-        return Map.of("items", memberService.list(SecurityUtils.currentUser(), workspaceId));
+    public PageResponse<MemberResponse> list(
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) UserRole role
+    ) {
+        return PageResponse.of(memberService.list(SecurityUtils.currentUser(), workspaceId, role, page, size));
     }
 
     @Operation(summary = "멤버 역할/상태 변경")

@@ -5,6 +5,7 @@ import com.onboardos.onboarding.domain.invitation.InvitationRepository;
 import com.onboardos.onboarding.domain.invitation.InvitationStatus;
 import com.onboardos.onboarding.domain.user.Membership;
 import com.onboardos.onboarding.domain.user.MembershipRepository;
+import com.onboardos.onboarding.domain.user.MembershipStatus;
 import com.onboardos.onboarding.domain.user.User;
 import com.onboardos.onboarding.domain.user.UserRepository;
 import com.onboardos.onboarding.domain.user.UserRole;
@@ -31,6 +32,9 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -169,7 +173,13 @@ public class MemberService {
     }
 
     @Transactional(readOnly = true)
-    public List<MemberResponse> list(UserPrincipal principal, UUID workspaceId) {
+    public Page<MemberResponse> list(
+            UserPrincipal principal,
+            UUID workspaceId,
+            UserRole roleFilter,
+            int page,
+            int size
+    ) {
         workspaceAccessService.requireRoles(
                 workspaceId,
                 principal.getId(),
@@ -178,27 +188,29 @@ public class MemberService {
                 UserRole.MANAGER
         );
 
-        List<Membership> all = membershipRepository.findByWorkspaceIdAndDeletedAtIsNull(workspaceId);
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100));
+        Page<Membership> memberships = roleFilter == null
+                ? membershipRepository.findByWorkspaceIdAndDeletedAtIsNull(workspaceId, pageable)
+                : membershipRepository.findByWorkspaceIdAndRoleAndDeletedAtIsNull(workspaceId, roleFilter, pageable);
+
         Map<UUID, User> users = userRepository.findAllById(
-                all.stream().map(Membership::getUserId).toList()
+                memberships.getContent().stream().map(Membership::getUserId).toList()
         ).stream().collect(Collectors.toMap(User::getId, Function.identity()));
 
-        return all.stream()
-                .map(m -> {
-                    User u = users.get(m.getUserId());
-                    return new MemberResponse(
-                            m.getId(),
-                            m.getUserId(),
-                            u == null ? null : u.getName(),
-                            u == null ? null : u.getEmail(),
-                            m.getRole(),
-                            m.getStatus(),
-                            m.getDepartment(),
-                            m.getCareerLevel(),
-                            m.getTitle()
-                    );
-                })
-                .toList();
+        return memberships.map(m -> {
+            User u = users.get(m.getUserId());
+            return new MemberResponse(
+                    m.getId(),
+                    m.getUserId(),
+                    u == null ? null : u.getName(),
+                    u == null ? null : u.getEmail(),
+                    m.getRole(),
+                    m.getStatus(),
+                    m.getDepartment(),
+                    m.getCareerLevel(),
+                    m.getTitle()
+            );
+        });
     }
 
     @Transactional
@@ -213,6 +225,20 @@ public class MemberService {
         Membership membership = membershipRepository.findById(memberId)
                 .filter(m -> m.getWorkspaceId().equals(workspaceId) && m.getDeletedAt() == null)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "멤버를 찾을 수 없습니다."));
+
+        boolean removesActiveOwner = membership.getRole() == UserRole.OWNER
+                && membership.getStatus() == MembershipStatus.ACTIVE
+                && ((request.role() != null && request.role() != UserRole.OWNER)
+                    || (request.status() != null && request.status() != MembershipStatus.ACTIVE));
+
+        if (removesActiveOwner) {
+            long activeOwners = membershipRepository.countByWorkspaceIdAndRoleAndStatusAndDeletedAtIsNull(
+                    workspaceId, UserRole.OWNER, MembershipStatus.ACTIVE
+            );
+            if (activeOwners <= 1) {
+                throw new BusinessException(ErrorCode.CONFLICT, "최소 1명의 OWNER는 유지되어야 합니다.");
+            }
+        }
 
         if (request.role() != null) {
             membership.changeRole(request.role());
