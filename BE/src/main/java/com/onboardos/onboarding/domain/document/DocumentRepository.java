@@ -17,6 +17,11 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
 
     List<DocumentEntity> findByWorkspaceIdAndStatusAndDeletedAtIsNull(UUID workspaceId, DocumentStatus status);
 
+    Page<DocumentEntity> findByDeletedAtLessThanEqualAndStoragePurgedAtIsNullOrderByDeletedAtAsc(
+            java.time.Instant deletedBefore,
+            Pageable pageable
+    );
+
     @Query(value = """
             SELECT d.*
             FROM documents d

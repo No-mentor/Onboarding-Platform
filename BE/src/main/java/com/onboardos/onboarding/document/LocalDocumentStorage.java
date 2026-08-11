@@ -37,6 +37,13 @@ public class LocalDocumentStorage implements DocumentStorage {
             return Files.readString(path, StandardCharsets.UTF_8);
         } catch (IOException e) { throw new BusinessException(ErrorCode.DOCUMENT_STORAGE_ERROR, "문서 파일을 로컬 저장소에서 읽지 못했습니다."); }
     }
+    @Override public void delete(String storageKey) {
+        try {
+            Files.deleteIfExists(safePath(storageKey));
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.DOCUMENT_STORAGE_ERROR, "문서 파일을 로컬 저장소에서 삭제하지 못했습니다.");
+        }
+    }
     private Path safePath(String key) {
         Path path = root.resolve(key).normalize();
         if (!path.startsWith(root)) throw new BusinessException(ErrorCode.VALIDATION_ERROR, "올바르지 않은 문서 저장 경로입니다.");

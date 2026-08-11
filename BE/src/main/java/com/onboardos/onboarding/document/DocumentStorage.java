@@ -4,4 +4,5 @@ import org.springframework.web.multipart.MultipartFile;
 public interface DocumentStorage {
     String store(UUID workspaceId, MultipartFile file);
     String readText(String storageKey);
+    void delete(String storageKey);
 }
