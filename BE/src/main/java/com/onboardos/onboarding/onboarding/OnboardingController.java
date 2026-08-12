@@ -1,8 +1,9 @@
 package com.onboardos.onboarding.onboarding;
 
-import com.onboardos.onboarding.domain.plan.ItemStatus;
 import com.onboardos.onboarding.global.security.SecurityUtils;
 import com.onboardos.onboarding.onboarding.dto.ChecklistResponse;
+import com.onboardos.onboarding.onboarding.dto.ChecklistStatusFilter;
+import com.onboardos.onboarding.onboarding.dto.ChecklistSummaryResponse;
 import com.onboardos.onboarding.onboarding.dto.GeneratePlanRequest;
 import com.onboardos.onboarding.onboarding.dto.PlanItemResponse;
 import com.onboardos.onboarding.onboarding.dto.PlanResponse;
@@ -14,7 +15,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -51,8 +51,11 @@ public class OnboardingController {
 
     @Operation(summary = "내 온보딩 계획")
     @GetMapping("/onboarding-plans/me")
-    public PlanResponse myPlan(@RequestHeader("X-Workspace-Id") UUID workspaceId) {
-        return planService.myPlan(SecurityUtils.currentUser(), workspaceId);
+        public PlanResponse myPlan(
+                        @RequestHeader("X-Workspace-Id") UUID workspaceId,
+                        @RequestParam(defaultValue = "true") boolean includeItems
+        ) {
+                return planService.myPlan(SecurityUtils.currentUser(), workspaceId, includeItems);
     }
 
     @Operation(summary = "계획 상세")
@@ -108,16 +111,12 @@ public class OnboardingController {
 
     @Operation(summary = "내 체크리스트")
     @GetMapping("/checklists/me")
-    public Map<String, Object> checklist(@RequestHeader("X-Workspace-Id") UUID workspaceId) {
-        List<ChecklistResponse> items = planService.myChecklist(SecurityUtils.currentUser(), workspaceId);
-        long done = items.stream().filter(i -> i.status() == ItemStatus.DONE).count();
-        double progress = items.isEmpty() ? 0 : (done * 100.0 / items.size());
-        return Map.of(
-                "items", items,
-                "total", items.size(),
-                "done", done,
-                "progressPercent", progress
-        );
+        public ChecklistSummaryResponse checklist(
+                        @RequestHeader("X-Workspace-Id") UUID workspaceId,
+                        @RequestParam(defaultValue = "ALL") ChecklistStatusFilter status
+        ) {
+                List<ChecklistResponse> items = planService.myChecklist(SecurityUtils.currentUser(), workspaceId, status);
+                return ChecklistSummaryResponse.from(items);
     }
 
     @Operation(summary = "체크리스트 항목 갱신")

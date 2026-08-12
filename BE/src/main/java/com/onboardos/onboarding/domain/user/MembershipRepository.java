@@ -19,6 +19,13 @@ public interface MembershipRepository extends JpaRepository<Membership, UUID> {
 
     Page<Membership> findByWorkspaceIdAndRoleAndDeletedAtIsNull(UUID workspaceId, UserRole role, Pageable pageable);
 
+        Page<Membership> findByWorkspaceIdAndRoleAndStatusAndDeletedAtIsNull(
+            UUID workspaceId,
+            UserRole role,
+            MembershipStatus status,
+            Pageable pageable
+        );
+
     Optional<Membership> findByWorkspaceIdAndUserIdAndDeletedAtIsNull(UUID workspaceId, UUID userId);
 
     boolean existsByWorkspaceIdAndUserIdAndDeletedAtIsNull(UUID workspaceId, UUID userId);

@@ -6,6 +6,7 @@ import com.onboardos.onboarding.domain.plan.OnboardingPlanItem;
 import com.onboardos.onboarding.domain.plan.OnboardingPlanItemRepository;
 import com.onboardos.onboarding.domain.plan.OnboardingPlanRepository;
 import com.onboardos.onboarding.domain.user.Membership;
+import com.onboardos.onboarding.domain.user.MembershipStatus;
 import com.onboardos.onboarding.domain.user.MembershipRepository;
 import com.onboardos.onboarding.domain.user.User;
 import com.onboardos.onboarding.domain.user.UserRepository;
@@ -13,6 +14,7 @@ import com.onboardos.onboarding.domain.user.UserRole;
 import com.onboardos.onboarding.global.exception.BusinessException;
 import com.onboardos.onboarding.global.exception.ErrorCode;
 import com.onboardos.onboarding.global.security.UserPrincipal;
+import com.onboardos.onboarding.global.web.PageResponse;
 import com.onboardos.onboarding.global.workspace.WorkspaceAccessService;
 import com.onboardos.onboarding.progress.dto.AdminProgressDetailResponse;
 import com.onboardos.onboarding.progress.dto.AdminProgressItemResponse;
@@ -28,6 +30,8 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,23 +56,34 @@ public class ProgressService {
     }
 
     @Transactional(readOnly = true)
-    public List<AdminProgressItemResponse> adminList(UserPrincipal principal, UUID workspaceId) {
+    public PageResponse<AdminProgressItemResponse> adminList(
+            UserPrincipal principal,
+            UUID workspaceId,
+            int page,
+            int size
+    ) {
         workspaceAccessService.requireRoles(
                 workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER
         );
 
-        List<Membership> newHires = membershipRepository
-                .findByWorkspaceIdAndRoleAndDeletedAtIsNull(workspaceId, UserRole.NEW_HIRE)
-                .stream()
-                .filter(Membership::isActive)
-                .toList();
+        int normalizedPage = Math.max(0, page);
+        int normalizedSize = Math.min(100, Math.max(1, size));
+        PageRequest pageable = PageRequest.of(normalizedPage, normalizedSize);
+
+        Page<Membership> newHires = membershipRepository
+                .findByWorkspaceIdAndRoleAndStatusAndDeletedAtIsNull(
+                        workspaceId,
+                        UserRole.NEW_HIRE,
+                        MembershipStatus.ACTIVE,
+                        pageable
+                );
 
         Map<UUID, User> users = userRepository.findAllById(
-                newHires.stream().map(Membership::getUserId).toList()
+                newHires.getContent().stream().map(Membership::getUserId).toList()
         ).stream().collect(Collectors.toMap(User::getId, Function.identity()));
 
         List<AdminProgressItemResponse> result = new ArrayList<>();
-        for (Membership m : newHires) {
+        for (Membership m : newHires.getContent()) {
             User user = users.get(m.getUserId());
             OnboardingPlan plan = planRepository
                     .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(
@@ -95,7 +110,14 @@ public class ProgressService {
                     currentDay
             ));
         }
-        return result;
+
+        return new PageResponse<>(
+                result,
+                newHires.getNumber(),
+                newHires.getSize(),
+                newHires.getTotalElements(),
+                newHires.getTotalPages()
+        );
     }
 
     @Transactional(readOnly = true)
