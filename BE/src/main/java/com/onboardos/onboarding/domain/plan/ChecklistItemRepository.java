@@ -9,10 +9,22 @@ public interface ChecklistItemRepository extends JpaRepository<ChecklistItem, UU
 
     List<ChecklistItem> findByWorkspaceIdAndUserIdAndDeletedAtIsNullOrderByDueDayAsc(UUID workspaceId, UUID userId);
 
+    List<ChecklistItem> findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNullOrderByDueDayAsc(
+        UUID workspaceId,
+        UUID userId,
+        ItemStatus status
+    );
+
     Optional<ChecklistItem> findByIdAndWorkspaceIdAndUserIdAndDeletedAtIsNull(
             UUID id,
             UUID workspaceId,
             UUID userId
+    );
+
+    Optional<ChecklistItem> findByWorkspaceIdAndUserIdAndPlanItemIdAndDeletedAtIsNull(
+        UUID workspaceId,
+        UUID userId,
+        UUID planItemId
     );
 
     void deleteByWorkspaceIdAndUserId(UUID workspaceId, UUID userId);

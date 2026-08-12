@@ -20,6 +20,7 @@ import com.onboardos.onboarding.global.exception.ErrorCode;
 import com.onboardos.onboarding.global.security.UserPrincipal;
 import com.onboardos.onboarding.global.workspace.WorkspaceAccessService;
 import com.onboardos.onboarding.onboarding.dto.GeneratePlanRequest;
+import com.onboardos.onboarding.onboarding.dto.ChecklistStatusFilter;
 import com.onboardos.onboarding.onboarding.dto.PlanItemResponse;
 import com.onboardos.onboarding.onboarding.dto.PlanResponse;
 import com.onboardos.onboarding.onboarding.dto.RecommendationResponse;
@@ -110,11 +111,18 @@ public class OnboardingPlanService {
 
     @Transactional(readOnly = true)
     public PlanResponse myPlan(UserPrincipal principal, UUID workspaceId) {
+        return myPlan(principal, workspaceId, true);
+    }
+
+    @Transactional(readOnly = true)
+    public PlanResponse myPlan(UserPrincipal principal, UUID workspaceId, boolean includeItems) {
         workspaceAccessService.requireMembership(workspaceId, principal.getId());
         OnboardingPlan plan = planRepository
                 .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, principal.getId(), "ACTIVE")
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "온보딩 계획이 없습니다."));
-        List<OnboardingPlanItem> items = planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(plan.getId());
+        List<OnboardingPlanItem> items = includeItems
+                ? planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(plan.getId())
+                : List.of();
         return toPlanResponse(plan, items);
     }
 
@@ -265,6 +273,10 @@ public class OnboardingPlanService {
         if (rec.getPlanItemId() != null) {
             planItemRepository.findById(rec.getPlanItemId()).ifPresent(item -> {
                 item.markDone();
+                checklistItemRepository
+                        .findByWorkspaceIdAndUserIdAndPlanItemIdAndDeletedAtIsNull(
+                                workspaceId, principal.getId(), item.getId())
+                        .ifPresent(ChecklistItem::markDone);
                 planRepository.findById(item.getPlanId()).ifPresent(this::recalculateProgress);
             });
         }
@@ -276,12 +288,31 @@ public class OnboardingPlanService {
             UserPrincipal principal,
             UUID workspaceId
     ) {
+        return myChecklist(principal, workspaceId, ChecklistStatusFilter.ALL);
+        }
+
+        @Transactional(readOnly = true)
+        public List<com.onboardos.onboarding.onboarding.dto.ChecklistResponse> myChecklist(
+            UserPrincipal principal,
+            UUID workspaceId,
+            ChecklistStatusFilter status
+        ) {
         workspaceAccessService.requireMembership(workspaceId, principal.getId());
-        return checklistItemRepository
-                .findByWorkspaceIdAndUserIdAndDeletedAtIsNullOrderByDueDayAsc(workspaceId, principal.getId())
-                .stream()
-                .map(com.onboardos.onboarding.onboarding.dto.ChecklistResponse::from)
-                .toList();
+        List<ChecklistItem> items = switch (status) {
+            case ALL -> checklistItemRepository
+                .findByWorkspaceIdAndUserIdAndDeletedAtIsNullOrderByDueDayAsc(workspaceId, principal.getId());
+            case PENDING -> checklistItemRepository
+                .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNullOrderByDueDayAsc(
+                    workspaceId, principal.getId(), ItemStatus.PENDING
+                );
+            case DONE -> checklistItemRepository
+                .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNullOrderByDueDayAsc(
+                    workspaceId, principal.getId(), ItemStatus.DONE
+                );
+        };
+        return items.stream()
+            .map(com.onboardos.onboarding.onboarding.dto.ChecklistResponse::from)
+            .toList();
     }
 
     @Transactional
@@ -299,6 +330,16 @@ public class OnboardingPlanService {
             item.markDone();
         } else {
             item.markPending();
+        }
+        if (item.getPlanItemId() != null) {
+            planItemRepository.findById(item.getPlanItemId()).ifPresent(planItem -> {
+                if (status == ItemStatus.DONE) {
+                    planItem.markDone();
+                } else {
+                    planItem.markPending();
+                }
+                planRepository.findById(planItem.getPlanId()).ifPresent(this::recalculateProgress);
+            });
         }
         return com.onboardos.onboarding.onboarding.dto.ChecklistResponse.from(item);
     }
