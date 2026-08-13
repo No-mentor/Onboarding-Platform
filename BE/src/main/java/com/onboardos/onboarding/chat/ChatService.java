@@ -30,9 +30,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ChatService {
@@ -98,6 +100,7 @@ public class ChatService {
             citation.put("chunkId", chunk.getId().toString());
             String snippet = chunk.getContent();
             citation.put("snippet", snippet.length() > 180 ? snippet.substring(0, 180) + "…" : snippet);
+            citation.put("page", null);
             citations.add(citation);
             allowedSnippets.add("[" + doc.getTitle() + "] " + citation.get("snippet"));
             if (citations.size() >= 5) {
@@ -117,7 +120,23 @@ public class ChatService {
                 result = "SUCCESS";
             }
         } else {
-            String llmAnswer = llmService.answerWithCitations(question, allowedSnippets);
+            String llmAnswer;
+            try {
+                llmAnswer = llmService.answerWithCitations(question, allowedSnippets);
+            } catch (Exception e) {
+                log.error("Chat LLM call failed: sessionId={}, workspaceId={}", session.getId(), workspaceId, e);
+                auditService.recordIndependently(
+                        workspaceId,
+                        principal.getId(),
+                        "CHAT_QUERY",
+                        "CHAT_SESSION",
+                        session.getId(),
+                        "ERROR",
+                        question,
+                        Map.of("model", llmService.modelName(), "error", e.getClass().getSimpleName())
+                );
+                throw new BusinessException(ErrorCode.AI_PROVIDER_ERROR, "LLM 호출 중 오류가 발생했습니다.");
+            }
             if (llmAnswer != null && !llmAnswer.isBlank()) {
                 answer = llmAnswer;
                 model = llmService.modelName();
