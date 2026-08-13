@@ -14,6 +14,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -25,6 +26,26 @@ public class AuditService {
 
     @Transactional
     public void record(
+            UUID workspaceId,
+            UUID actorId,
+            String eventType,
+            String resourceType,
+            UUID resourceId,
+            String result,
+            String message,
+            Map<String, Object> metadata
+    ) {
+        auditLogRepository.save(AuditLog.of(
+                workspaceId, actorId, eventType, resourceType, resourceId, result, message, metadata
+        ));
+    }
+
+    /**
+     * 호출부에서 이 기록 직후 예외를 던져 자신의 트랜잭션을 롤백할 예정일 때 사용한다.
+     * 별도 트랜잭션으로 즉시 커밋해서, 바깥 트랜잭션이 롤백돼도 감사 로그는 남는다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordIndependently(
             UUID workspaceId,
             UUID actorId,
             String eventType,

@@ -18,6 +18,7 @@ public enum ErrorCode {
     GONE(HttpStatus.GONE, "GONE", "만료되었거나 더 이상 유효하지 않습니다."),
     WORKSPACE_MISMATCH(HttpStatus.FORBIDDEN, "WORKSPACE_MISMATCH", "워크스페이스 접근 권한이 없습니다."),
     DOCUMENT_NOT_READY(HttpStatus.CONFLICT, "DOCUMENT_NOT_READY", "문서 처리가 아직 완료되지 않았습니다."),
+    AI_PROVIDER_ERROR(HttpStatus.SERVICE_UNAVAILABLE, "AI_PROVIDER_ERROR", "AI 제공자 오류로 답변을 생성할 수 없습니다."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "서버 오류가 발생했습니다.");
 
     private final HttpStatus status;
