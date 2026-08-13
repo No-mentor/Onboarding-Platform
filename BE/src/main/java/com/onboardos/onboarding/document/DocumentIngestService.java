@@ -1,6 +1,8 @@
 package com.onboardos.onboarding.document;
 
 import com.onboardos.onboarding.ai.EmbeddingService;
+import com.onboardos.onboarding.ai.embedding.EmbeddingConfigurationException;
+import com.onboardos.onboarding.ai.embedding.EmbeddingProviderException;
 import com.onboardos.onboarding.domain.document.DocumentChunk;
 import com.onboardos.onboarding.domain.document.DocumentChunkRepository;
 import com.onboardos.onboarding.domain.document.DocumentEntity;
@@ -37,6 +39,7 @@ public class DocumentIngestService {
         if (doc == null || doc.isDeleted()) {
             return;
         }
+        Integer failedChunkIndex = null;
         try {
             doc.markProcessing();
             documentRepository.save(doc);
@@ -60,23 +63,40 @@ public class DocumentIngestService {
 
             if (embeddingService.isEnabled()) {
                 for (DocumentChunk c : chunks) {
+                    failedChunkIndex = c.getChunkIndex();
                     float[] vec = embeddingService.embed(c.getContent());
                     String literal = embeddingService.toPgVectorLiteral(vec);
                     if (literal != null) {
                         vectorRepository.updateEmbedding(c.getId(), literal);
                     }
                 }
+                failedChunkIndex = null;
                 log.info("Embeddings stored for document {}", documentId);
             }
 
             doc.markReady(chunks.size());
             documentRepository.save(doc);
             log.info("Document ingested: {} chunks={}", documentId, chunks.size());
+        } catch (EmbeddingConfigurationException e) {
+            logIngestFailure(documentId, e, failedChunkIndex);
+            doc.markFailed("설정 오류: " + e.getMessage());
+            documentRepository.save(doc);
+        } catch (EmbeddingProviderException e) {
+            logIngestFailure(documentId, e, failedChunkIndex);
+            doc.markFailed("일시적 오류, 재시도 권장: " + e.getMessage());
+            documentRepository.save(doc);
         } catch (Exception e) {
-            log.error("Document ingest failed: {}", documentId, e);
+            logIngestFailure(documentId, e, failedChunkIndex);
             doc.markFailed(e.getMessage() == null ? "ingest failed" : e.getMessage());
             documentRepository.save(doc);
         }
+    }
+
+    private void logIngestFailure(UUID documentId, Exception e, Integer failedChunkIndex) {
+        log.error(
+                "Document ingest failed: documentId={}, type={}, failedChunkIndex={}",
+                documentId, e.getClass().getSimpleName(), failedChunkIndex, e
+        );
     }
 
     private List<String> chunk(String text, int size) {
