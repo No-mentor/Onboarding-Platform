@@ -58,8 +58,8 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform {
-		// Docker/Testcontainers 통합 테스트는 기본 test 에서 제외
-		excludeTags 'integration'
+		// Docker/Testcontainers 통합 테스트와 실제 API 수동 검증은 기본 test 에서 제외
+		excludeTags 'integration', 'manual-ai'
 	}
 }
 
@@ -69,6 +69,17 @@ tasks.register('integrationTest', Test) {
 	shouldRunAfter test
 	useJUnitPlatform {
 		includeTags 'integration'
+		excludeTags 'manual-ai'
+	}
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+}
+
+tasks.register('manualAiTest', Test) {
+	description = '실제 OpenAI API 키로 수동 실행하는 검증 (CI 자동 실행 대상 아님, Docker 필요)'
+	group = 'verification'
+	useJUnitPlatform {
+		includeTags 'manual-ai'
 	}
 	testClassesDirs = sourceSets.test.output.classesDirs
 	classpath = sourceSets.test.runtimeClasspath
