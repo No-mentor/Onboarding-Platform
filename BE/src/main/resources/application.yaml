@@ -76,6 +76,7 @@ app:
     embedding-model: ${AI_EMBEDDING_MODEL:text-embedding-3-small}
     chat-model: ${AI_CHAT_MODEL:gpt-4o-mini}
     embedding-dimension: 1536
+    embedding-timeout-ms: ${AI_EMBEDDING_TIMEOUT_MS:10000}
 
 
 springdoc:
