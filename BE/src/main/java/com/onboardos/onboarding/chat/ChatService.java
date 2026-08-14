@@ -1,5 +1,7 @@
 package com.onboardos.onboarding.chat;
 
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.onboardos.onboarding.ai.EmbeddingService;
 import com.onboardos.onboarding.ai.LlmService;
 import com.onboardos.onboarding.audit.AuditService;
@@ -38,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ChatService {
+    private static final ObjectMapper METADATA_MAPPER = new ObjectMapper();
 
     private final ChatSessionRepository sessionRepository;
     private final ChatMessageRepository messageRepository;
@@ -100,7 +103,7 @@ public class ChatService {
             citation.put("chunkId", chunk.getId().toString());
             String snippet = chunk.getContent();
             citation.put("snippet", snippet.length() > 180 ? snippet.substring(0, 180) + "…" : snippet);
-            citation.put("page", null);
+            citation.put("page", pageOf(chunk.getMetadata()));
             citations.add(citation);
             allowedSnippets.add("[" + doc.getTitle() + "] " + citation.get("snippet"));
             if (citations.size() >= 5) {
@@ -194,6 +197,15 @@ public class ChatService {
                 denied,
                 assistant.getCreatedAt()
         );
+    }
+
+    private Integer pageOf(String metadata) {
+        try {
+            JsonNode page = METADATA_MAPPER.readTree(metadata).get("page");
+            return page != null && page.canConvertToInt() && page.asInt() > 0 ? page.asInt() : null;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private List<DocumentChunk> retrieve(UUID workspaceId, String question) {

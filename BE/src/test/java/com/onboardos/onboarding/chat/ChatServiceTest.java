@@ -69,7 +69,7 @@ class ChatServiceTest {
         assertThat(response.answer()).isEqualTo("LLM 답변 [1]");
         assertThat(response.citations()).hasSize(1);
         assertThat(response.citations().get(0)).containsKey("page");
-        assertThat(response.citations().get(0).get("page")).isNull();
+        assertThat(response.citations().get(0).get("page")).isEqualTo(7);
     }
 
     @Test void llmDisabledFallsBackToTemplateAnswer() {
@@ -142,7 +142,7 @@ class ChatServiceTest {
     }
 
     private DocumentChunk chunkOf(DocumentEntity doc) {
-        DocumentChunk chunk = DocumentChunk.create(doc.getId(), workspaceId, 0, "청크 내용");
+        DocumentChunk chunk = DocumentChunk.create(doc.getId(), workspaceId, 0, "청크 내용", "{\"page\":7}");
         when(documentRepository.findById(doc.getId())).thenReturn(Optional.of(doc));
         return chunk;
     }

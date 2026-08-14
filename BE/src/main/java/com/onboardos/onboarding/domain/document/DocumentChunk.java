@@ -44,6 +44,10 @@ public class DocumentChunk {
     private Instant createdAt = Instant.now();
 
     public static DocumentChunk create(UUID documentId, UUID workspaceId, int index, String content) {
+        return create(documentId, workspaceId, index, content, "{}");
+    }
+
+    public static DocumentChunk create(UUID documentId, UUID workspaceId, int index, String content, String metadata) {
         DocumentChunk c = new DocumentChunk();
         c.id = UUID.randomUUID();
         c.documentId = documentId;
@@ -51,7 +55,7 @@ public class DocumentChunk {
         c.chunkIndex = index;
         c.content = content;
         c.tokenCount = content == null ? 0 : content.length() / 4;
-        c.metadata = "{}";
+        c.metadata = metadata;
         c.createdAt = Instant.now();
         return c;
     }
