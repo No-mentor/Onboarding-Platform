@@ -51,13 +51,12 @@ public class SupabaseDocumentStorage implements DocumentStorage {
     private BusinessException uploadFailure() {
         return new BusinessException(ErrorCode.DOCUMENT_STORAGE_ERROR, "Supabase Storage에 문서를 업로드하지 못했습니다.");
     }
-    @Override public String readText(String storageKey) {
+    @Override public byte[] read(String storageKey) {
         validateConfiguration();
         try {
             byte[] content = restClient.get().uri(objectUri(storageKey)).header("apikey", secretKey)
                     .accept(MediaType.APPLICATION_PDF).retrieve().body(byte[].class);
-            if (content == null || content.length == 0) return "";
-            return LocalDocumentStorage.pdfPlaceholder(storageKey.substring(storageKey.lastIndexOf('/') + 1));
+            return content == null ? new byte[0] : content;
         } catch (RestClientResponseException e) {
             logHttpFailure("read", e);
             throw readFailure();

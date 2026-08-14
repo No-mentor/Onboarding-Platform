@@ -23,7 +23,7 @@ class LocalDocumentStorageTest {
 
         assertThat(key).startsWith(workspaceId + "/").endsWith("_guide.txt");
         assertThat(Files.exists(root.resolve(key))).isTrue();
-        assertThat(storage.readText(key)).isEqualTo("hello");
+        assertThat(storage.read(key)).isEqualTo("hello".getBytes());
     }
 
     @Test void deletesFileAndTreatsMissingFileAsAlreadyDeleted() throws Exception {
@@ -40,5 +40,12 @@ class LocalDocumentStorageTest {
         LocalDocumentStorage storage = new LocalDocumentStorage(root.toString());
         assertThatThrownBy(() -> storage.delete("../outside.pdf"))
                 .isInstanceOf(com.onboardos.onboarding.global.exception.BusinessException.class);
+    }
+
+    @Test void rejectsReadOutsideStorageRootAndMissingFileIsEmpty() {
+        LocalDocumentStorage storage = new LocalDocumentStorage(root.toString());
+        assertThatThrownBy(() -> storage.read("../outside.pdf"))
+                .isInstanceOf(com.onboardos.onboarding.global.exception.BusinessException.class);
+        assertThat(storage.read("missing.pdf")).isEmpty();
     }
 }

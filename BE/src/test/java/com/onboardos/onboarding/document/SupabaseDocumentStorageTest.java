@@ -3,6 +3,7 @@ package com.onboardos.onboarding.document;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.headerDoesNotExist;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -53,9 +54,33 @@ class SupabaseDocumentStorageTest {
         String key = UUID.randomUUID() + "/" + UUID.randomUUID() + ".pdf";
         server.expect(requestTo("https://project.supabase.co/storage/v1/object/bucket/" + key))
                 .andExpect(method(HttpMethod.GET)).andExpect(header("apikey", SECRET))
+                .andExpect(headerDoesNotExist("Authorization"))
                 .andRespond(withSuccess("%PDF", MediaType.APPLICATION_PDF));
-        assertThat(storage.readText(key)).startsWith("PDF 문서:");
+        assertThat(storage.read(key)).isEqualTo("%PDF".getBytes());
         server.verify();
+    }
+
+    @Test void encodesDownloadPathAndReturnsEmptyBody() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        SupabaseDocumentStorage storage = new SupabaseDocumentStorage(builder, "https://project.supabase.co", SECRET, "bucket");
+        server.expect(requestTo("https://project.supabase.co/storage/v1/object/bucket/folder/file%20name.pdf"))
+                .andExpect(header("apikey", SECRET)).andExpect(headerDoesNotExist("Authorization"))
+                .andRespond(withSuccess(new byte[0], MediaType.APPLICATION_PDF));
+        assertThat(storage.read("folder/file name.pdf")).isEmpty();
+        server.verify();
+    }
+
+    @Test void downloadHttpFailureDoesNotLeakSecretOrBody(CapturedOutput output) {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        SupabaseDocumentStorage storage = new SupabaseDocumentStorage(builder, "https://project.supabase.co", SECRET, "bucket");
+        server.expect(requestTo("https://project.supabase.co/storage/v1/object/bucket/folder/missing.pdf"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND).body("private " + SECRET));
+        assertThatThrownBy(() -> storage.read("folder/missing.pdf"))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> assertThat(ex.getMessage())
+                        .doesNotContain(SECRET).doesNotContain("private"));
+        assertThat(output).doesNotContain(SECRET).doesNotContain("private");
     }
 
     @Test
