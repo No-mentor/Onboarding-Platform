@@ -17,9 +17,14 @@ import com.onboardos.onboarding.ai.LlmService;
 import com.onboardos.onboarding.ai.embedding.EmbeddingClient;
 import com.onboardos.onboarding.document.DocumentChunkVectorRepository;
 import com.onboardos.onboarding.support.PostgresTestcontainersConfig;
-import java.nio.charset.StandardCharsets;
+import java.io.ByteArrayOutputStream;
 import java.util.List;
 import java.util.UUID;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -217,6 +222,23 @@ class ChatPipelineIntegrationTest {
         org.mockito.Mockito.verify(embeddingClient, org.mockito.Mockito.never()).embedAll(any());
     }
 
+    @Test void koreanParticleFallbackReturnsPageTwoCitationWhenAiDisabled() throws Exception {
+        when(embeddingClient.isReady()).thenReturn(false);
+        when(llmService.answerWithCitations(any(), any())).thenReturn(null);
+
+        String token = signup("korean-keyword");
+        String workspaceId = createWorkspace(token, "korean-keyword");
+        String content = "테스트 보안 교육 마감일은 입사 후 7일 이내입니다. 교육 담당 부서는 정보보안팀입니다.";
+        seedReadyDocumentWithChunk(workspaceId, "온보딩 보안 교육", content);
+
+        JsonNode body = json(sendMessage(
+                token, workspaceId, "테스트 보안 교육의 담당 부서와 마감일을 알려줘."));
+
+        assertThat(body.get("answer").asText()).contains("입사 후 7일 이내", "정보보안팀");
+        assertThat(body.get("citations")).hasSize(1);
+        assertThat(body.get("citations").get(0).get("page").asInt()).isEqualTo(2);
+    }
+
     private void stubEmbeddingByHash() {
         when(embeddingClient.embedAll(anyList())).thenAnswer(inv -> {
             List<String> texts = inv.getArgument(0);
@@ -256,19 +278,29 @@ class ChatPipelineIntegrationTest {
 
         UUID chunkId = UUID.randomUUID();
         jdbc.update("""
-                INSERT INTO document_chunks (id, document_id, workspace_id, chunk_index, content)
-                VALUES (?, ?, ?, 0, ?)
+                INSERT INTO document_chunks (id, document_id, workspace_id, chunk_index, content, metadata)
+                VALUES (?, ?, ?, 0, ?, CAST('{"page":2}' AS jsonb))
                 """, chunkId, documentId, UUID.fromString(workspaceId), content);
 
         vectorRepository.updateEmbedding(chunkId, embeddingService.toPgVectorLiteral(vectorFor(content)));
         return documentId;
     }
 
-    private MockMultipartFile pdfFile() {
-        String minimalPdf = "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>";
-        return new MockMultipartFile(
-                "file", "leave-policy.pdf", "application/pdf", minimalPdf.getBytes(StandardCharsets.US_ASCII)
-        );
+    private MockMultipartFile pdfFile() throws Exception {
+        try (PDDocument document = new PDDocument(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            try (PDPageContentStream stream = new PDPageContentStream(document, page)) {
+                stream.beginText();
+                stream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+                stream.newLineAtOffset(50, 700);
+                stream.showText("Leave policy content");
+                stream.endText();
+            }
+            document.save(output);
+            return new MockMultipartFile(
+                    "file", "leave-policy.pdf", "application/pdf", output.toByteArray());
+        }
     }
 
     private String signup(String prefix) throws Exception {

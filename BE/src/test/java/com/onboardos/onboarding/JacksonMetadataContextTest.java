@@ -7,6 +7,7 @@ import com.onboardos.onboarding.ai.EmbeddingService;
 import com.onboardos.onboarding.ai.LlmService;
 import com.onboardos.onboarding.audit.AuditService;
 import com.onboardos.onboarding.chat.ChatService;
+import com.onboardos.onboarding.chat.KoreanKeywordExtractor;
 import com.onboardos.onboarding.document.DocumentChunkVectorRepository;
 import com.onboardos.onboarding.document.DocumentIngestService;
 import com.onboardos.onboarding.document.DocumentPermissionService;
@@ -43,7 +44,8 @@ class JacksonMetadataContextTest {
             .withBean(DocumentPermissionService.class, () -> mock(DocumentPermissionService.class))
             .withBean(WorkspaceAccessService.class, () -> mock(WorkspaceAccessService.class))
             .withBean(AuditService.class, () -> mock(AuditService.class))
-            .withBean(LlmService.class, () -> mock(LlmService.class));
+            .withBean(LlmService.class, () -> mock(LlmService.class))
+            .withBean(KoreanKeywordExtractor.class, KoreanKeywordExtractor::new);
 
     @Test
     void springContextCreatesMetadataServicesWithJackson3ObjectMapper() {
