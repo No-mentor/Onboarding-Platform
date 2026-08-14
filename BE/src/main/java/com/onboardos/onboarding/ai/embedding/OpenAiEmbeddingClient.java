@@ -25,7 +25,11 @@ public class OpenAiEmbeddingClient implements EmbeddingClient {
     @PostConstruct
     void init() {
         if (!properties.isOpenAiReady()) {
-            log.info("OpenAI Embedding client 비활성화 (AI_ENABLED=false 또는 API 키 없음) — 키워드 RAG fallback 사용");
+            if (properties.isEnabled()) {
+                log.warn("OpenAI Embedding client disabled because OPENAI_API_KEY is not configured");
+            } else {
+                log.info("OpenAI Embedding client disabled; keyword fallback is active");
+            }
             return;
         }
         embeddingModel = OpenAiEmbeddingModel.builder()
@@ -58,7 +62,9 @@ public class OpenAiEmbeddingClient implements EmbeddingClient {
         List<TextSegment> segments = texts.stream().map(TextSegment::from).toList();
         try {
             Response<List<Embedding>> response = embeddingModel.embedAll(segments);
-            return response.content().stream().map(Embedding::vector).toList();
+            List<float[]> vectors = response.content().stream().map(Embedding::vector).toList();
+            validateDimensions(vectors, properties.getEmbeddingDimension());
+            return vectors;
         } catch (OpenAiHttpException e) {
             throw classify(e);
         } catch (Exception e) {
@@ -73,5 +79,14 @@ public class OpenAiEmbeddingClient implements EmbeddingClient {
             );
         }
         return new EmbeddingProviderException("OpenAI 임베딩 호출 실패: HTTP " + e.code(), e);
+    }
+
+    static void validateDimensions(List<float[]> vectors, int expectedDimension) {
+        for (float[] vector : vectors) {
+            if (vector == null || vector.length != expectedDimension) {
+                throw new EmbeddingConfigurationException(
+                        "Embedding dimension does not match configured storage dimension", null);
+            }
+        }
     }
 }

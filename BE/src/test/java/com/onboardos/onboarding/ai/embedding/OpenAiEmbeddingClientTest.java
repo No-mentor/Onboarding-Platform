@@ -2,6 +2,7 @@ package com.onboardos.onboarding.ai.embedding;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.onboardos.onboarding.ai.AiProperties;
 import dev.ai4j.openai4j.OpenAiHttpException;
@@ -58,5 +59,13 @@ class OpenAiEmbeddingClientTest {
                 .isInstanceOf(EmbeddingProviderException.class);
         assertThat(OpenAiEmbeddingClient.classify(new OpenAiHttpException(503, "unavailable")))
                 .isInstanceOf(EmbeddingProviderException.class);
+    }
+
+    @Test void rejectsEmbeddingDimensionMismatchWithoutPaddingOrTruncation() {
+        assertThatThrownBy(() -> OpenAiEmbeddingClient.validateDimensions(
+                List.of(new float[1535]), 1536))
+                .isInstanceOf(EmbeddingConfigurationException.class)
+                .hasMessageNotContaining("[")
+                .hasMessageNotContaining("key");
     }
 }

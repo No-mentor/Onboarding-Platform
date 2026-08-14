@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.onboardos.onboarding.ai.EmbeddingService;
-import com.onboardos.onboarding.document.DocumentChunkVectorRepository;
+import com.onboardos.onboarding.document.search.DocumentChunkVectorRepository;
 import com.onboardos.onboarding.support.PostgresTestcontainersConfig;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;

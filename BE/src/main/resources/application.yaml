@@ -75,8 +75,12 @@ app:
     openai-api-key: ${OPENAI_API_KEY:}
     embedding-model: ${AI_EMBEDDING_MODEL:text-embedding-3-small}
     chat-model: ${AI_CHAT_MODEL:gpt-4o-mini}
-    embedding-dimension: 1536
+    embedding-dimension: ${AI_EMBEDDING_DIMENSION:1536}
     embedding-timeout-ms: ${AI_EMBEDDING_TIMEOUT_MS:10000}
+    chat-timeout-ms: ${AI_CHAT_TIMEOUT_MS:20000}
+    max-search-chunks: ${AI_MAX_SEARCH_CHUNKS:20}
+    max-context-chunks: ${AI_MAX_CONTEXT_CHUNKS:5}
+    max-context-chars: ${AI_MAX_CONTEXT_CHARS:6000}
 
 
 springdoc:
