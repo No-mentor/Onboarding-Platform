@@ -26,6 +26,7 @@ import com.onboardos.onboarding.global.exception.ErrorCode;
 import com.onboardos.onboarding.global.security.UserPrincipal;
 import com.onboardos.onboarding.global.workspace.WorkspaceAccessService;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,6 +42,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ChatService {
     private static final ObjectMapper METADATA_MAPPER = new ObjectMapper();
+    private static final int KEYWORD_CANDIDATES_PER_TERM = 10;
+    private static final int MAX_RETRIEVAL_RESULTS = 20;
 
     private final ChatSessionRepository sessionRepository;
     private final ChatMessageRepository messageRepository;
@@ -52,6 +55,7 @@ public class ChatService {
     private final AuditService auditService;
     private final EmbeddingService embeddingService;
     private final LlmService llmService;
+    private final KoreanKeywordExtractor keywordExtractor;
 
     @Transactional
     public SendMessageResponse send(UserPrincipal principal, UUID workspaceId, SendMessageRequest request) {
@@ -208,20 +212,48 @@ public class ChatService {
         }
     }
 
-    private List<DocumentChunk> retrieve(UUID workspaceId, String question) {
+    List<DocumentChunk> retrieve(UUID workspaceId, String question) {
         if (embeddingService.isEnabled()) {
             float[] qVec = embeddingService.embed(question);
             String literal = embeddingService.toPgVectorLiteral(qVec);
             if (literal != null) {
-                List<DocumentChunk> vectorHits = vectorRepository.searchByVector(workspaceId, literal, 20);
+                List<DocumentChunk> vectorHits = vectorRepository.searchByVector(
+                        workspaceId, literal, MAX_RETRIEVAL_RESULTS);
                 if (!vectorHits.isEmpty()) {
                     return vectorHits;
                 }
             }
         }
-        String keyword = extractKeyword(question);
-        return chunkRepository.searchByKeyword(workspaceId, keyword, 20);
+        return retrieveByKeywords(workspaceId, keywordExtractor.extract(question));
     }
+
+    private List<DocumentChunk> retrieveByKeywords(UUID workspaceId, List<String> keywords) {
+        if (keywords.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, ScoredChunk> scored = new HashMap<>();
+        for (String keyword : keywords.stream().limit(KoreanKeywordExtractor.MAX_KEYWORDS).toList()) {
+            if (keyword == null || keyword.isBlank()) {
+                continue;
+            }
+            for (DocumentChunk chunk : chunkRepository.searchByKeyword(
+                    workspaceId, keyword, KEYWORD_CANDIDATES_PER_TERM)) {
+                scored.compute(chunk.getId(), (id, current) -> current == null
+                        ? new ScoredChunk(chunk, 1)
+                        : new ScoredChunk(current.chunk(), current.matches() + 1));
+            }
+        }
+        return scored.values().stream()
+                .sorted(Comparator.comparingInt(ScoredChunk::matches).reversed()
+                        .thenComparing(result -> result.chunk().getDocumentId().toString())
+                        .thenComparingInt(result -> result.chunk().getChunkIndex())
+                        .thenComparing(result -> result.chunk().getId().toString()))
+                .limit(MAX_RETRIEVAL_RESULTS)
+                .map(ScoredChunk::chunk)
+                .toList();
+    }
+
+    private record ScoredChunk(DocumentChunk chunk, int matches) {}
 
     @Transactional(readOnly = true)
     public List<ChatSessionSummaryResponse> sessions(UserPrincipal principal, UUID workspaceId) {
@@ -250,21 +282,6 @@ public class ChatService {
                 ))
                 .toList();
         return new ChatSessionDetailResponse(session.getId(), messages);
-    }
-
-    private String extractKeyword(String question) {
-        String cleaned = question.replaceAll("[?？!.,]", " ").trim();
-        String[] parts = cleaned.split("\\s+");
-        if (parts.length == 0) {
-            return cleaned.length() > 2 ? cleaned.substring(0, Math.min(10, cleaned.length())) : cleaned;
-        }
-        String best = parts[0];
-        for (String p : parts) {
-            if (p.length() > best.length()) {
-                best = p;
-            }
-        }
-        return best.length() < 2 ? cleaned : best;
     }
 
     private String buildGroundedAnswer(String question, List<String> snippets) {

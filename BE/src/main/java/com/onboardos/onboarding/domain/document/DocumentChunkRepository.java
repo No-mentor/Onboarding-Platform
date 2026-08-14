@@ -19,7 +19,7 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, UU
               AND d.deleted_at IS NULL
               AND d.status = 'READY'
               AND lower(c.content) LIKE lower(concat('%', :q, '%'))
-            ORDER BY c.chunk_index
+            ORDER BY c.document_id, c.chunk_index, c.id
             LIMIT :limit
             """, nativeQuery = true)
     List<DocumentChunk> searchByKeyword(

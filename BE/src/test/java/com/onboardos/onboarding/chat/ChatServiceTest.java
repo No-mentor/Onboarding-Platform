@@ -50,7 +50,8 @@ class ChatServiceTest {
 
     private final ChatService service = new ChatService(
             sessionRepository, messageRepository, chunkRepository, vectorRepository, documentRepository,
-            permissionService, workspaceAccessService, auditService, embeddingService, llmService
+            permissionService, workspaceAccessService, auditService, embeddingService, llmService,
+            new KoreanKeywordExtractor()
     );
 
     private final UUID workspaceId = UUID.randomUUID();
