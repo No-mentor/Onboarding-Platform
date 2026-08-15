@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Eye, EyeOff, Info } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
+import { useRouter } from 'next/navigation';
+import { signup, AuthError } from '@/lib/auth';
+import { saveAuthToken } from '@/lib/storage';
 
 export function SignupForm() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -15,216 +15,210 @@ export function SignupForm() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [errors, setErrors] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [checks, setChecks] = useState({
     terms: false,
     marketing: false,
   });
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    setErrors(prev => ({ ...prev, [name]: false }));
+    const { name, value, type, checked } = e.target;
+    if (type === 'checkbox') {
+      setChecks(prev => ({ ...prev, [name]: checked }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+      if (value.trim()) {
+        setErrors(prev => {
+          const { [name]: _, ...rest } = prev;
+          return rest;
+        });
+      }
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newErrors: Record<string, boolean> = {};
+    const newErrors: Record<string, string> = {};
 
-    if (!formData.name.trim()) newErrors.name = true;
-    if (!formData.email.trim()) newErrors.email = true;
-    if (!formData.password.trim()) newErrors.password = true;
-    if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = true;
+    if (!formData.name.trim()) newErrors.name = '이름을 입력해 주세요.';
+    if (!formData.email.trim()) newErrors.email = '이메일을 입력해 주세요.';
+    if (!formData.password.trim()) newErrors.password = '비밀번호를 입력해 주세요.';
+    if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = '비밀번호가 서로 다릅니다.';
+    }
+    if (!checks.terms) {
+      newErrors.terms = '이용약관에 동의해 주세요.';
+    }
 
-    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await signup({
+        email: formData.email.trim(),
+        password: formData.password,
+        name: formData.name.trim(),
+      });
+
+      saveAuthToken(response.accessToken, response.userId, response.email);
+      router.push('/login?signup=success');
+    } catch (error) {
+      if (error instanceof AuthError) {
+        if (error.isConflict()) {
+          setErrors(prev => ({ ...prev, email: '이미 가입된 이메일입니다.' }));
+        } else {
+          setErrors(prev => ({ ...prev, form: error.message }));
+        }
+      } else {
+        setErrors(prev => ({ ...prev, form: '회원가입 중 오류가 발생했습니다.' }));
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div>
-        <h2 className="text-section-title text-text">계정 만들기</h2>
-        <p className="text-[13.5px] text-body mt-2">
-          가입 후 업무 공간에 참여하면 30일 계획이 자동으로 만들어집니다.
-        </p>
-      </div>
+    <form onSubmit={handleSubmit}>
+      <h2 className="title">계정 만들기</h2>
+      <p className="subtitle">가입 후 업무 공간에 참여하면 30일 계획이 자동으로 만들어집니다.</p>
 
-      {/* Google 가입 */}
-      <Button
-        type="button"
-        variant="secondary"
-        className="w-full flex items-center justify-center gap-2"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          className="w-5 h-5"
-          aria-hidden="true"
-        >
-          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+      <button className="google" type="button">
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.2-.4-4.7H24v8.9h11.8c-.5 2.8-2 5.1-4.4 6.7v5.5h7.1c4.1-3.8 6.6-9.4 6.6-16.4z" />
+          <path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-7.1-5.5c-2 1.3-4.5 2.1-7.4 2.1-5.7 0-10.5-3.8-12.2-9H4.5v5.7C8.1 41.2 15.5 46 24 46z" />
+          <path fill="#FBBC05" d="M11.8 28.3c-.4-1.3-.7-2.7-.7-4.3s.3-2.9.7-4.3v-5.7H4.5A22 22 0 0 0 2 24c0 3.6.9 6.9 2.5 9.9l7.3-5.6z" />
+          <path fill="#EA4335" d="M24 10.7c3.2 0 6.1 1.1 8.4 3.3l6.3-6.3C34.9 4.1 29.9 2 24 2 15.5 2 8.1 6.8 4.5 13.9l7.3 5.7c1.7-5.1 6.5-8.9 12.2-8.9z" />
         </svg>
         Google로 가입하기
-      </Button>
+      </button>
 
-      <div className="flex items-center gap-3">
-        <div className="flex-1 h-px bg-border" />
-        <span className="text-[12px] text-muted">또는 이메일로</span>
-        <div className="flex-1 h-px bg-border" />
+      <div className="or">또는 이메일로</div>
+
+      <div className={`field ${errors.name ? 'invalid' : ''}`}>
+        <label htmlFor="su-name">이름</label>
+        <div className="control">
+          <input
+            id="su-name"
+            type="text"
+            placeholder="김세원"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            autoComplete="name"
+          />
+        </div>
+        <p className="error">이름을 입력해 주세요.</p>
       </div>
 
-      {/* 이름 */}
-      <div>
-        <label htmlFor="signup-name" className="block text-label text-body font-semibold mb-2">
-          이름
-        </label>
-        <Input
-          id="signup-name"
-          type="text"
-          placeholder="김세원"
-          name="name"
-          value={formData.name}
-          onChange={handleChange}
-          error={errors.name ? '이름을 입력해 주세요.' : undefined}
-          autoComplete="name"
-        />
+      <div className={`field ${errors.email ? 'invalid' : ''}`}>
+        <label htmlFor="su-email">회사 이메일</label>
+        <div className="control">
+          <input
+            id="su-email"
+            type="email"
+            placeholder="name@company.com"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            autoComplete="email"
+          />
+        </div>
+        <p className="hint">초대를 받으셨다면 초대받은 주소로 가입해 주세요.</p>
+        <p className="error">이메일을 입력해 주세요.</p>
       </div>
 
-      {/* 이메일 */}
-      <div>
-        <label htmlFor="signup-email" className="block text-label text-body font-semibold mb-2">
-          회사 이메일
-        </label>
-        <Input
-          id="signup-email"
-          type="email"
-          placeholder="name@company.com"
-          name="email"
-          value={formData.email}
-          onChange={handleChange}
-          error={errors.email ? '올바른 이메일 형식이 아닙니다.' : undefined}
-          hint={!errors.email ? '초대를 받으셨다면 초대받은 주소로 가입해 주세요.' : undefined}
-          autoComplete="email"
-        />
-      </div>
-
-      {/* 비밀번호 */}
-      <div>
-        <label htmlFor="signup-password" className="block text-label text-body font-semibold mb-2">
-          비밀번호
-        </label>
-        <div className="relative">
-          <Input
-            id="signup-password"
+      <div className={`field ${errors.password ? 'invalid' : ''}`}>
+        <label htmlFor="su-pw">비밀번호</label>
+        <div className="control">
+          <input
+            id="su-pw"
             type={showPassword ? 'text' : 'password'}
             placeholder="8자 이상"
             name="password"
             value={formData.password}
             onChange={handleChange}
-            error={errors.password ? '영문과 숫자를 포함해 8자 이상이어야 합니다.' : undefined}
-            hint={!errors.password ? '영문과 숫자를 포함해 8자 이상으로 만들어 주세요.' : undefined}
             autoComplete="new-password"
-            className="pr-11"
           />
           <button
+            className="eye"
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-body transition-colors"
             aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 표시'}
           >
-            {showPassword ? (
-              <EyeOff className="w-4 h-4" />
-            ) : (
-              <Eye className="w-4 h-4" />
-            )}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
           </button>
         </div>
+        <p className="hint">영문과 숫자를 포함해 8자 이상으로 만들어 주세요.</p>
+        <p className="error">비밀번호를 입력해 주세요.</p>
       </div>
 
-      {/* 비밀번호 확인 */}
-      <div>
-        <label htmlFor="signup-confirm" className="block text-label text-body font-semibold mb-2">
-          비밀번호 확인
-        </label>
-        <div className="relative">
-          <Input
-            id="signup-confirm"
+      <div className={`field ${errors.confirmPassword ? 'invalid' : ''}`}>
+        <label htmlFor="su-pw2">비밀번호 확인</label>
+        <div className="control">
+          <input
+            id="su-pw2"
             type={showConfirm ? 'text' : 'password'}
             placeholder="비밀번호 다시 입력"
             name="confirmPassword"
             value={formData.confirmPassword}
             onChange={handleChange}
-            error={errors.confirmPassword ? '비밀번호가 서로 다릅니다.' : undefined}
             autoComplete="new-password"
-            className="pr-11"
           />
           <button
+            className="eye"
             type="button"
             onClick={() => setShowConfirm(!showConfirm)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-body transition-colors"
             aria-label={showConfirm ? '비밀번호 숨기기' : '비밀번호 표시'}
           >
-            {showConfirm ? (
-              <EyeOff className="w-4 h-4" />
-            ) : (
-              <Eye className="w-4 h-4" />
-            )}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
           </button>
         </div>
+        <p className="error">비밀번호가 서로 다릅니다.</p>
       </div>
 
-      {/* 약관 동의 */}
-      <div className="space-y-3">
-        <label className="flex items-start gap-2 cursor-pointer">
-          <Checkbox
-            checked={checks.terms}
-            onChange={(e) => setChecks(prev => ({ ...prev, terms: e.target.checked }))}
-            className="mt-1"
-          />
-          <span className="text-[13px] text-body leading-[1.55]">
-            <a href="#" className="text-text underline underline-offset-2 hover:no-underline">
-              이용약관
-            </a>
-            과{' '}
-            <a href="#" className="text-text underline underline-offset-2 hover:no-underline">
-              개인정보 처리방침
-            </a>
-            에 동의합니다.{' '}
-            <span className="text-muted">(필수)</span>
+      <div className="terms">
+        <label className="check">
+          <input type="checkbox" name="terms" checked={checks.terms} onChange={handleChange} />
+          <i className="mark" />
+          <span>
+            <a href="#">이용약관</a>과 <a href="#">개인정보 처리방침</a>에 동의합니다.{' '}
+            <span style={{ color: 'var(--text-faint)' }}>(필수)</span>
           </span>
         </label>
-        <label className="flex items-start gap-2 cursor-pointer">
-          <Checkbox
-            checked={checks.marketing}
-            onChange={(e) => setChecks(prev => ({ ...prev, marketing: e.target.checked }))}
-            className="mt-1"
-          />
-          <span className="text-[13px] text-body leading-[1.55]">
+        <label className="check">
+          <input type="checkbox" name="marketing" checked={checks.marketing} onChange={handleChange} />
+          <i className="mark" />
+          <span>
             제품 업데이트 소식을 이메일로 받겠습니다.{' '}
-            <span className="text-muted">(선택)</span>
+            <span style={{ color: 'var(--text-faint)' }}>(선택)</span>
           </span>
         </label>
       </div>
 
-      {/* 계정 만들기 버튼 */}
-      <Button type="submit" variant="primary" size="xl" className="w-full">
-        계정 만들기
-      </Button>
+      <button className="submit" type="submit" disabled={isLoading}>
+        {isLoading ? '가입 중...' : '계정 만들기'}
+      </button>
 
-      {/* 안내 */}
-      <div className="flex gap-3 p-[13px_14px] bg-surface-sunk rounded-[10px]">
-        <Info className="w-4 h-4 flex-none text-muted mt-[2px]" />
-        <p className="text-[12.5px] text-body leading-[1.65]">
-          가입만으로는 업무 공간에 들어가지 않습니다. 초대 링크를 열거나, 새 업무 공간을 직접 만들면 됩니다.
-        </p>
+      <div className="notice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4M12 8h.01" />
+        </svg>
+        <span>가입만으로는 업무 공간에 들어가지 않습니다. 초대 링크를 열거나, 새 업무 공간을 직접 만들면 됩니다.</span>
       </div>
 
-      {/* 로그인 링크 */}
-      <p className="text-center text-[13px] text-body">
-        이미 계정이 있으신가요?{' '}
-        <button type="button" className="font-semibold text-text hover:underline">
-          로그인
-        </button>
+      <p className="foot">
+        이미 계정이 있으신가요? <button className="link" type="button">로그인</button>
       </p>
     </form>
   );
