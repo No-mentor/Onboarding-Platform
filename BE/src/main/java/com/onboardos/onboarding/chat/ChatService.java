@@ -3,6 +3,7 @@ package com.onboardos.onboarding.chat;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.onboardos.onboarding.ai.EmbeddingService;
+import com.onboardos.onboarding.ai.AiProperties;
 import com.onboardos.onboarding.ai.LlmService;
 import com.onboardos.onboarding.audit.AuditService;
 import com.onboardos.onboarding.chat.dto.ChatMessageResponse;
@@ -10,8 +11,8 @@ import com.onboardos.onboarding.chat.dto.ChatSessionDetailResponse;
 import com.onboardos.onboarding.chat.dto.ChatSessionSummaryResponse;
 import com.onboardos.onboarding.chat.dto.SendMessageRequest;
 import com.onboardos.onboarding.chat.dto.SendMessageResponse;
-import com.onboardos.onboarding.document.DocumentChunkVectorRepository;
-import com.onboardos.onboarding.document.DocumentPermissionService;
+import com.onboardos.onboarding.document.search.DocumentChunkVectorRepository;
+import com.onboardos.onboarding.document.service.DocumentPermissionService;
 import com.onboardos.onboarding.domain.chat.ChatMessage;
 import com.onboardos.onboarding.domain.chat.ChatMessageRepository;
 import com.onboardos.onboarding.domain.chat.ChatSession;
@@ -43,7 +44,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class ChatService {
     private static final ObjectMapper METADATA_MAPPER = new ObjectMapper();
     private static final int KEYWORD_CANDIDATES_PER_TERM = 10;
-    private static final int MAX_RETRIEVAL_RESULTS = 20;
 
     private final ChatSessionRepository sessionRepository;
     private final ChatMessageRepository messageRepository;
@@ -56,6 +56,7 @@ public class ChatService {
     private final EmbeddingService embeddingService;
     private final LlmService llmService;
     private final KoreanKeywordExtractor keywordExtractor;
+    private final AiProperties aiProperties;
 
     @Transactional
     public SendMessageResponse send(UserPrincipal principal, UUID workspaceId, SendMessageRequest request) {
@@ -85,6 +86,7 @@ public class ChatService {
         List<Map<String, Object>> citations = new ArrayList<>();
         List<String> denied = new ArrayList<>();
         List<String> allowedSnippets = new ArrayList<>();
+        int contextChars = 0;
 
         Map<UUID, DocumentEntity> docCache = new HashMap<>();
         for (DocumentChunk chunk : candidates) {
@@ -101,18 +103,22 @@ public class ChatService {
                 }
                 continue;
             }
+            int remaining = aiProperties.getMaxContextChars() - contextChars;
+            if (remaining <= 0 || citations.size() >= aiProperties.getMaxContextChunks()) {
+                break;
+            }
+            String groundedContent = chunk.getContent().substring(
+                    0, Math.min(chunk.getContent().length(), remaining));
+            contextChars += groundedContent.length();
             Map<String, Object> citation = new LinkedHashMap<>();
             citation.put("documentId", doc.getId().toString());
             citation.put("title", doc.getTitle());
             citation.put("chunkId", chunk.getId().toString());
-            String snippet = chunk.getContent();
+            String snippet = groundedContent;
             citation.put("snippet", snippet.length() > 180 ? snippet.substring(0, 180) + "…" : snippet);
             citation.put("page", pageOf(chunk.getMetadata()));
             citations.add(citation);
-            allowedSnippets.add("[" + doc.getTitle() + "] " + citation.get("snippet"));
-            if (citations.size() >= 5) {
-                break;
-            }
+            allowedSnippets.add("[" + doc.getTitle() + "] " + groundedContent);
         }
 
         String answer;
@@ -131,7 +137,8 @@ public class ChatService {
             try {
                 llmAnswer = llmService.answerWithCitations(question, allowedSnippets);
             } catch (Exception e) {
-                log.error("Chat LLM call failed: sessionId={}, workspaceId={}", session.getId(), workspaceId, e);
+                log.warn("Chat LLM failed; template fallback used: sessionId={}, workspaceId={}, type={}",
+                        session.getId(), workspaceId, e.getClass().getSimpleName());
                 auditService.recordIndependently(
                         workspaceId,
                         principal.getId(),
@@ -140,9 +147,10 @@ public class ChatService {
                         session.getId(),
                         "ERROR",
                         question,
-                        Map.of("model", llmService.modelName(), "error", e.getClass().getSimpleName())
+                        Map.of("model", llmService.modelName(), "fallback", true,
+                                "errorType", e.getClass().getSimpleName())
                 );
-                throw new BusinessException(ErrorCode.AI_PROVIDER_ERROR, "LLM 호출 중 오류가 발생했습니다.");
+                llmAnswer = null;
             }
             if (llmAnswer != null && !llmAnswer.isBlank()) {
                 answer = llmAnswer;
@@ -176,7 +184,8 @@ public class ChatService {
                         "citations", citations.size(),
                         "denied", denied.size(),
                         "model", model,
-                        "vectorSearch", embeddingService.isEnabled()
+                        "vectorSearch", embeddingService.isEnabled(),
+                        "fallback", model.equals("template-rag-v1")
                 )
         );
         if (!denied.isEmpty()) {
@@ -218,7 +227,7 @@ public class ChatService {
             String literal = embeddingService.toPgVectorLiteral(qVec);
             if (literal != null) {
                 List<DocumentChunk> vectorHits = vectorRepository.searchByVector(
-                        workspaceId, literal, MAX_RETRIEVAL_RESULTS);
+                        workspaceId, literal, aiProperties.getMaxSearchChunks());
                 if (!vectorHits.isEmpty()) {
                     return vectorHits;
                 }
@@ -248,7 +257,7 @@ public class ChatService {
                         .thenComparing(result -> result.chunk().getDocumentId().toString())
                         .thenComparingInt(result -> result.chunk().getChunkIndex())
                         .thenComparing(result -> result.chunk().getId().toString()))
-                .limit(MAX_RETRIEVAL_RESULTS)
+                .limit(aiProperties.getMaxSearchChunks())
                 .map(ScoredChunk::chunk)
                 .toList();
     }

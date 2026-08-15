@@ -76,4 +76,8 @@ public class ChecklistItem extends BaseTimeEntity {
         this.status = ItemStatus.PENDING;
         this.completedAt = null;
     }
+
+    public void softDelete() {
+        this.deletedAt = Instant.now();
+    }
 }

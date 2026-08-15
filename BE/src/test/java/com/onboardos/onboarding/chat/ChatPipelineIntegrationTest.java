@@ -15,7 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.onboardos.onboarding.ai.EmbeddingService;
 import com.onboardos.onboarding.ai.LlmService;
 import com.onboardos.onboarding.ai.embedding.EmbeddingClient;
-import com.onboardos.onboarding.document.DocumentChunkVectorRepository;
+import com.onboardos.onboarding.document.search.DocumentChunkVectorRepository;
 import com.onboardos.onboarding.support.PostgresTestcontainersConfig;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
@@ -177,7 +177,7 @@ class ChatPipelineIntegrationTest {
         org.mockito.Mockito.verify(llmService, org.mockito.Mockito.never()).answerWithCitations(any(), any());
     }
 
-    @Test void chatLlmFailureReturns503AndRecordsAuditIndependently() throws Exception {
+    @Test void chatLlmFailureFallsBackAndRecordsAuditIndependently() throws Exception {
         when(embeddingClient.isReady()).thenReturn(true);
         stubEmbeddingByHash();
         when(llmService.isEnabled()).thenReturn(true);
@@ -194,8 +194,8 @@ class ChatPipelineIntegrationTest {
                         .header("X-Workspace-Id", workspaceId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"message\":\"%s\"}".formatted(content)))
-                .andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.code").value("AI_PROVIDER_ERROR"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer").value(org.hamcrest.Matchers.containsString("템플릿 모드")));
 
         Integer errorAuditCount = jdbc.queryForObject(
                 "SELECT count(*) FROM audit_logs WHERE workspace_id = ? AND event_type = 'CHAT_QUERY' AND result = 'ERROR'",

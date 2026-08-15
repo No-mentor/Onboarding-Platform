@@ -10,11 +10,10 @@ public interface OnboardingPlanRepository extends JpaRepository<OnboardingPlan, 
     Optional<OnboardingPlan> findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(
             UUID workspaceId,
             UUID userId,
-            String status
+            PlanStatus status
     );
 
     Optional<OnboardingPlan> findByIdAndWorkspaceIdAndDeletedAtIsNull(UUID id, UUID workspaceId);
 
-    List<OnboardingPlan> findByWorkspaceIdAndStatusAndDeletedAtIsNull(UUID workspaceId, String status);
+    List<OnboardingPlan> findByWorkspaceIdAndStatusAndDeletedAtIsNull(UUID workspaceId, PlanStatus status);
 }
-

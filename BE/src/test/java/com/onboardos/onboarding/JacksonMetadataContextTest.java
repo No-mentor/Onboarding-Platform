@@ -4,16 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.onboardos.onboarding.ai.EmbeddingService;
+import com.onboardos.onboarding.ai.AiProperties;
 import com.onboardos.onboarding.ai.LlmService;
 import com.onboardos.onboarding.audit.AuditService;
 import com.onboardos.onboarding.chat.ChatService;
 import com.onboardos.onboarding.chat.KoreanKeywordExtractor;
-import com.onboardos.onboarding.document.DocumentChunkVectorRepository;
-import com.onboardos.onboarding.document.DocumentIngestService;
-import com.onboardos.onboarding.document.DocumentPermissionService;
-import com.onboardos.onboarding.document.DocumentStorage;
-import com.onboardos.onboarding.document.PageChunker;
-import com.onboardos.onboarding.document.PdfTextExtractor;
+import com.onboardos.onboarding.document.search.DocumentChunkVectorRepository;
+import com.onboardos.onboarding.document.ingest.DocumentIngestService;
+import com.onboardos.onboarding.document.service.DocumentPermissionService;
+import com.onboardos.onboarding.document.storage.DocumentStorage;
+import com.onboardos.onboarding.document.ingest.PageChunker;
+import com.onboardos.onboarding.document.ingest.PdfTextExtractor;
 import com.onboardos.onboarding.domain.chat.ChatMessageRepository;
 import com.onboardos.onboarding.domain.chat.ChatSessionRepository;
 import com.onboardos.onboarding.domain.document.DocumentChunkRepository;
@@ -45,7 +46,8 @@ class JacksonMetadataContextTest {
             .withBean(WorkspaceAccessService.class, () -> mock(WorkspaceAccessService.class))
             .withBean(AuditService.class, () -> mock(AuditService.class))
             .withBean(LlmService.class, () -> mock(LlmService.class))
-            .withBean(KoreanKeywordExtractor.class, KoreanKeywordExtractor::new);
+            .withBean(KoreanKeywordExtractor.class, KoreanKeywordExtractor::new)
+            .withBean(AiProperties.class, AiProperties::new);
 
     @Test
     void springContextCreatesMetadataServicesWithJackson3ObjectMapper() {

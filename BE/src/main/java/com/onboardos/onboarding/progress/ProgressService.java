@@ -5,6 +5,7 @@ import com.onboardos.onboarding.domain.plan.OnboardingPlan;
 import com.onboardos.onboarding.domain.plan.OnboardingPlanItem;
 import com.onboardos.onboarding.domain.plan.OnboardingPlanItemRepository;
 import com.onboardos.onboarding.domain.plan.OnboardingPlanRepository;
+import com.onboardos.onboarding.domain.plan.PlanStatus;
 import com.onboardos.onboarding.domain.user.Membership;
 import com.onboardos.onboarding.domain.user.MembershipStatus;
 import com.onboardos.onboarding.domain.user.MembershipRepository;
@@ -50,7 +51,7 @@ public class ProgressService {
         workspaceAccessService.requireMembership(workspaceId, principal.getId());
         OnboardingPlan plan = planRepository
                 .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(
-                        workspaceId, principal.getId(), "ACTIVE")
+                        workspaceId, principal.getId(), PlanStatus.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "온보딩 계획이 없습니다."));
         return buildProgress(plan);
     }
@@ -87,7 +88,7 @@ public class ProgressService {
             User user = users.get(m.getUserId());
             OnboardingPlan plan = planRepository
                     .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(
-                            workspaceId, m.getUserId(), "ACTIVE")
+                            workspaceId, m.getUserId(), PlanStatus.ACTIVE)
                     .orElse(null);
 
             BigDecimal progress = plan == null ? BigDecimal.ZERO : plan.getProgressPercent();
@@ -135,7 +136,7 @@ public class ProgressService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "사용자를 찾을 수 없습니다."));
 
         OnboardingPlan plan = planRepository
-                .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, userId, "ACTIVE")
+                .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, userId, PlanStatus.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "온보딩 계획이 없습니다."));
 
         MyProgressResponse progress = buildProgress(plan);

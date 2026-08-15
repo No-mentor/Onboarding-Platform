@@ -5,14 +5,13 @@ import com.onboardos.onboarding.domain.document.DocumentRepository;
 import com.onboardos.onboarding.domain.document.DocumentStatus;
 import com.onboardos.onboarding.domain.plan.ChecklistItem;
 import com.onboardos.onboarding.domain.plan.ChecklistItemRepository;
-import com.onboardos.onboarding.domain.plan.DailyRecommendation;
-import com.onboardos.onboarding.domain.plan.DailyRecommendationRepository;
 import com.onboardos.onboarding.domain.plan.ItemStatus;
 import com.onboardos.onboarding.domain.plan.OnboardingPlan;
 import com.onboardos.onboarding.domain.plan.OnboardingPlanItem;
 import com.onboardos.onboarding.domain.plan.OnboardingPlanItemRepository;
 import com.onboardos.onboarding.domain.plan.OnboardingPlanRepository;
 import com.onboardos.onboarding.domain.plan.PlanItemType;
+import com.onboardos.onboarding.domain.plan.PlanStatus;
 import com.onboardos.onboarding.domain.template.OnboardingTemplateItem;
 import com.onboardos.onboarding.domain.user.UserRole;
 import com.onboardos.onboarding.global.exception.BusinessException;
@@ -20,16 +19,12 @@ import com.onboardos.onboarding.global.exception.ErrorCode;
 import com.onboardos.onboarding.global.security.UserPrincipal;
 import com.onboardos.onboarding.global.workspace.WorkspaceAccessService;
 import com.onboardos.onboarding.onboarding.dto.GeneratePlanRequest;
-import com.onboardos.onboarding.onboarding.dto.ChecklistStatusFilter;
 import com.onboardos.onboarding.onboarding.dto.PlanItemResponse;
 import com.onboardos.onboarding.onboarding.dto.PlanResponse;
-import com.onboardos.onboarding.onboarding.dto.RecommendationResponse;
-import com.onboardos.onboarding.onboarding.dto.TodayRecommendationsResponse;
 import com.onboardos.onboarding.template.TemplateService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -37,13 +32,16 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 온보딩 계획(Plan) 도메인 서비스.
+ * 30일 계획 생성, 조회, 재생성, 항목 상태 변경을 담당한다.
+ */
 @Service
 public class OnboardingPlanService {
 
     private final OnboardingPlanRepository planRepository;
     private final OnboardingPlanItemRepository planItemRepository;
     private final ChecklistItemRepository checklistItemRepository;
-    private final DailyRecommendationRepository recommendationRepository;
     private final DocumentRepository documentRepository;
     private final WorkspaceAccessService workspaceAccessService;
     private final TemplateService templateService;
@@ -52,7 +50,6 @@ public class OnboardingPlanService {
             OnboardingPlanRepository planRepository,
             OnboardingPlanItemRepository planItemRepository,
             ChecklistItemRepository checklistItemRepository,
-            DailyRecommendationRepository recommendationRepository,
             DocumentRepository documentRepository,
             WorkspaceAccessService workspaceAccessService,
             @Lazy TemplateService templateService
@@ -60,12 +57,14 @@ public class OnboardingPlanService {
         this.planRepository = planRepository;
         this.planItemRepository = planItemRepository;
         this.checklistItemRepository = checklistItemRepository;
-        this.recommendationRepository = recommendationRepository;
         this.documentRepository = documentRepository;
         this.workspaceAccessService = workspaceAccessService;
         this.templateService = templateService;
     }
 
+    /**
+     * Admin/Owner가 대상 사용자의 30일 계획을 생성한다.
+     */
     @Transactional
     public PlanResponse generate(UserPrincipal principal, UUID workspaceId, GeneratePlanRequest request) {
         workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
@@ -73,6 +72,9 @@ public class OnboardingPlanService {
         return generateForUser(workspaceId, targetUserId, request.force(), request.templateId());
     }
 
+    /**
+     * 특정 사용자에 대해 계획을 생성한다 (초대 수락 시 시스템 트리거 등에서 사용).
+     */
     @Transactional
     public PlanResponse generateForUser(UUID workspaceId, UUID userId, boolean force) {
         return generateForUser(workspaceId, userId, force, null);
@@ -80,7 +82,7 @@ public class OnboardingPlanService {
 
     @Transactional
     public PlanResponse generateForUser(UUID workspaceId, UUID userId, boolean force, UUID templateId) {
-        planRepository.findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, userId, "ACTIVE")
+        planRepository.findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, userId, PlanStatus.ACTIVE)
                 .ifPresent(existing -> {
                     if (!force) {
                         throw new BusinessException(ErrorCode.CONFLICT, "이미 활성 온보딩 계획이 있습니다. force=true로 재생성하세요.");
@@ -95,11 +97,11 @@ public class OnboardingPlanService {
         List<DocumentEntity> readyDocs = documentRepository
                 .findByWorkspaceIdAndStatusAndDeletedAtIsNull(workspaceId, DocumentStatus.READY);
 
-        List<OnboardingPlanItem> items = buildTemplateItems(plan, readyDocs, templateId);
+        List<OnboardingPlanItem> items = buildPlanItems(plan, readyDocs, templateId);
         planItemRepository.saveAll(items);
 
-        // 체크리스트 동기화
-        checklistItemRepository.deleteByWorkspaceIdAndUserId(workspaceId, userId);
+        // 기존 체크리스트 soft delete 후 새로 생성
+        softDeleteExistingChecklists(workspaceId, userId);
         List<ChecklistItem> checklists = items.stream()
                 .filter(i -> i.getType() == PlanItemType.CHECKLIST)
                 .map(i -> ChecklistItem.create(workspaceId, userId, i.getId(), i.getTitle(), i.getDayIndex()))
@@ -109,16 +111,14 @@ public class OnboardingPlanService {
         return toPlanResponse(plan, items);
     }
 
-    @Transactional(readOnly = true)
-    public PlanResponse myPlan(UserPrincipal principal, UUID workspaceId) {
-        return myPlan(principal, workspaceId, true);
-    }
-
+    /**
+     * 내 활성 온보딩 계획 조회.
+     */
     @Transactional(readOnly = true)
     public PlanResponse myPlan(UserPrincipal principal, UUID workspaceId, boolean includeItems) {
         workspaceAccessService.requireMembership(workspaceId, principal.getId());
         OnboardingPlan plan = planRepository
-                .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, principal.getId(), "ACTIVE")
+                .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, principal.getId(), PlanStatus.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "온보딩 계획이 없습니다."));
         List<OnboardingPlanItem> items = includeItems
                 ? planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(plan.getId())
@@ -126,6 +126,9 @@ public class OnboardingPlanService {
         return toPlanResponse(plan, items);
     }
 
+    /**
+     * 특정 계획 상세 조회. 본인 또는 Admin/Manager 이상만 조회 가능.
+     */
     @Transactional(readOnly = true)
     public PlanResponse getPlan(UserPrincipal principal, UUID workspaceId, UUID planId) {
         workspaceAccessService.requireMembership(workspaceId, principal.getId());
@@ -140,13 +143,15 @@ public class OnboardingPlanService {
         return toPlanResponse(plan, items);
     }
 
+    /**
+     * 기존 계획을 새 버전으로 재생성한다. 완료된 항목 보존 옵션 지원.
+     */
     @Transactional
     public PlanResponse regenerate(UserPrincipal principal, UUID workspaceId, UUID planId, boolean keepCompleted) {
         workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
         OnboardingPlan existing = planRepository.findByIdAndWorkspaceIdAndDeletedAtIsNull(planId, workspaceId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "계획을 찾을 수 없습니다."));
 
-        // keepCompleted: MVP에서는 완료 항목 제목을 기억한 뒤 재생성 후 복원
         final List<String> completedTitles = keepCompleted
                 ? planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(existing.getId())
                 .stream()
@@ -156,9 +161,10 @@ public class OnboardingPlanService {
                 : List.of();
 
         PlanResponse regenerated = generateForUser(workspaceId, existing.getUserId(), true);
+
         if (!completedTitles.isEmpty()) {
             planRepository.findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(
-                    workspaceId, existing.getUserId(), "ACTIVE"
+                    workspaceId, existing.getUserId(), PlanStatus.ACTIVE
             ).ifPresent(newPlan -> {
                 List<OnboardingPlanItem> newItems =
                         planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(newPlan.getId());
@@ -169,25 +175,17 @@ public class OnboardingPlanService {
                 }
                 recalculateProgress(newPlan);
             });
-            return myPlanForUser(workspaceId, existing.getUserId());
+            return getPlanForUser(workspaceId, existing.getUserId());
         }
         return regenerated;
     }
 
-    private PlanResponse myPlanForUser(UUID workspaceId, UUID userId) {
-        OnboardingPlan plan = planRepository
-                .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, userId, "ACTIVE")
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "온보딩 계획이 없습니다."));
-        List<OnboardingPlanItem> items = planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(plan.getId());
-        return toPlanResponse(plan, items);
-    }
-
+    /**
+     * 계획 항목 상태를 변경한다 (DONE/PENDING).
+     */
     @Transactional
     public PlanItemResponse updateItemStatus(
-            UserPrincipal principal,
-            UUID workspaceId,
-            UUID itemId,
-            ItemStatus status
+            UserPrincipal principal, UUID workspaceId, UUID itemId, ItemStatus status
     ) {
         workspaceAccessService.requireMembership(workspaceId, principal.getId());
         OnboardingPlanItem item = planItemRepository.findByIdAndWorkspaceId(itemId, workspaceId)
@@ -208,143 +206,17 @@ public class OnboardingPlanService {
         return PlanItemResponse.from(item);
     }
 
-    @Transactional
-    public TodayRecommendationsResponse today(UserPrincipal principal, UUID workspaceId, LocalDate date) {
-        workspaceAccessService.requireMembership(workspaceId, principal.getId());
-        LocalDate target = date == null ? LocalDate.now() : date;
+    // --- package-private helpers (used by DashboardService etc.) ---
 
+    PlanResponse getPlanForUser(UUID workspaceId, UUID userId) {
         OnboardingPlan plan = planRepository
-                .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, principal.getId(), "ACTIVE")
-                .orElse(null);
-
-        List<DailyRecommendation> existing = recommendationRepository
-                .findByWorkspaceIdAndUserIdAndRecommendDateOrderByPriorityAsc(
-                        workspaceId, principal.getId(), target);
-
-        if (existing.isEmpty() && plan != null) {
-            long day = ChronoUnit.DAYS.between(plan.getStartDate(), target) + 1;
-            int dayIndex = (int) Math.min(30, Math.max(1, day));
-            List<OnboardingPlanItem> dayItems = planItemRepository
-                    .findByPlanIdAndDayIndexOrderBySortOrderAsc(plan.getId(), dayIndex)
-                    .stream()
-                    .filter(i -> i.getStatus() != ItemStatus.DONE)
-                    .toList();
-            List<DailyRecommendation> created = new ArrayList<>();
-            int p = 1;
-            for (OnboardingPlanItem item : dayItems) {
-                created.add(DailyRecommendation.fromPlanItem(
-                        workspaceId, principal.getId(), target, item, p++
-                ));
-            }
-            if (created.isEmpty()) {
-                OnboardingPlanItem fallback = OnboardingPlanItem.create(
-                        plan.getId(), workspaceId, dayIndex, PlanItemType.PRACTICE,
-                        "오늘 학습 복습 및 질문 정리", "진행 가능한 항목이 없어 복습을 추천합니다.", 0, null, null
-                );
-                // 저장하지 않는 가상 추천
-                DailyRecommendation r = DailyRecommendation.fromPlanItem(
-                        workspaceId, principal.getId(), target, fallback, 1
-                );
-                recommendationRepository.save(r);
-                existing = List.of(r);
-            } else {
-                recommendationRepository.saveAll(created);
-                existing = created;
-            }
-        }
-
-        return new TodayRecommendationsResponse(
-                target,
-                existing.stream().map(RecommendationResponse::from).toList()
-        );
+                .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, userId, PlanStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "온보딩 계획이 없습니다."));
+        List<OnboardingPlanItem> items = planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(plan.getId());
+        return toPlanResponse(plan, items);
     }
 
-    @Transactional
-    public RecommendationResponse completeRecommendation(
-            UserPrincipal principal,
-            UUID workspaceId,
-            UUID recommendationId
-    ) {
-        workspaceAccessService.requireMembership(workspaceId, principal.getId());
-        DailyRecommendation rec = recommendationRepository
-                .findByIdAndWorkspaceIdAndUserId(recommendationId, workspaceId, principal.getId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        rec.markDone();
-        if (rec.getPlanItemId() != null) {
-            planItemRepository.findById(rec.getPlanItemId()).ifPresent(item -> {
-                item.markDone();
-                checklistItemRepository
-                        .findByWorkspaceIdAndUserIdAndPlanItemIdAndDeletedAtIsNull(
-                                workspaceId, principal.getId(), item.getId())
-                        .ifPresent(ChecklistItem::markDone);
-                planRepository.findById(item.getPlanId()).ifPresent(this::recalculateProgress);
-            });
-        }
-        return RecommendationResponse.from(rec);
-    }
-
-    @Transactional(readOnly = true)
-    public List<com.onboardos.onboarding.onboarding.dto.ChecklistResponse> myChecklist(
-            UserPrincipal principal,
-            UUID workspaceId
-    ) {
-        return myChecklist(principal, workspaceId, ChecklistStatusFilter.ALL);
-        }
-
-        @Transactional(readOnly = true)
-        public List<com.onboardos.onboarding.onboarding.dto.ChecklistResponse> myChecklist(
-            UserPrincipal principal,
-            UUID workspaceId,
-            ChecklistStatusFilter status
-        ) {
-        workspaceAccessService.requireMembership(workspaceId, principal.getId());
-        List<ChecklistItem> items = switch (status) {
-            case ALL -> checklistItemRepository
-                .findByWorkspaceIdAndUserIdAndDeletedAtIsNullOrderByDueDayAsc(workspaceId, principal.getId());
-            case PENDING -> checklistItemRepository
-                .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNullOrderByDueDayAsc(
-                    workspaceId, principal.getId(), ItemStatus.PENDING
-                );
-            case DONE -> checklistItemRepository
-                .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNullOrderByDueDayAsc(
-                    workspaceId, principal.getId(), ItemStatus.DONE
-                );
-        };
-        return items.stream()
-            .map(com.onboardos.onboarding.onboarding.dto.ChecklistResponse::from)
-            .toList();
-    }
-
-    @Transactional
-    public com.onboardos.onboarding.onboarding.dto.ChecklistResponse updateChecklist(
-            UserPrincipal principal,
-            UUID workspaceId,
-            UUID itemId,
-            ItemStatus status
-    ) {
-        workspaceAccessService.requireMembership(workspaceId, principal.getId());
-        ChecklistItem item = checklistItemRepository
-                .findByIdAndWorkspaceIdAndUserIdAndDeletedAtIsNull(itemId, workspaceId, principal.getId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        if (status == ItemStatus.DONE) {
-            item.markDone();
-        } else {
-            item.markPending();
-        }
-        if (item.getPlanItemId() != null) {
-            planItemRepository.findById(item.getPlanItemId()).ifPresent(planItem -> {
-                if (status == ItemStatus.DONE) {
-                    planItem.markDone();
-                } else {
-                    planItem.markPending();
-                }
-                planRepository.findById(planItem.getPlanId()).ifPresent(this::recalculateProgress);
-            });
-        }
-        return com.onboardos.onboarding.onboarding.dto.ChecklistResponse.from(item);
-    }
-
-    private void recalculateProgress(OnboardingPlan plan) {
+    void recalculateProgress(OnboardingPlan plan) {
         long total = planItemRepository.countByPlanIdAndStatusNot(plan.getId(), ItemStatus.SKIPPED);
         long done = planItemRepository.countByPlanIdAndStatus(plan.getId(), ItemStatus.DONE);
         BigDecimal percent = total == 0
@@ -353,44 +225,54 @@ public class OnboardingPlanService {
         plan.updateProgress(percent);
     }
 
-    private List<OnboardingPlanItem> buildTemplateItems(
-            OnboardingPlan plan,
-            List<DocumentEntity> docs,
-            UUID templateId
+    // --- private methods ---
+
+    private void softDeleteExistingChecklists(UUID workspaceId, UUID userId) {
+        List<ChecklistItem> existing = checklistItemRepository
+                .findByWorkspaceIdAndUserIdAndDeletedAtIsNullOrderByDueDayAsc(workspaceId, userId);
+        for (ChecklistItem c : existing) {
+            c.softDelete();
+        }
+    }
+
+    private List<OnboardingPlanItem> buildPlanItems(
+            OnboardingPlan plan, List<DocumentEntity> docs, UUID templateId
     ) {
         List<OnboardingTemplateItem> custom = templateService.loadItemsForPlan(plan.getWorkspaceId(), templateId);
         if (!custom.isEmpty()) {
-            List<OnboardingPlanItem> fromTemplate = new ArrayList<>();
-            for (OnboardingTemplateItem ti : custom) {
-                fromTemplate.add(OnboardingPlanItem.create(
-                        plan.getId(),
-                        plan.getWorkspaceId(),
-                        ti.getDayIndex(),
-                        ti.getType(),
-                        ti.getTitle(),
-                        ti.getDescription(),
-                        ti.getSortOrder(),
-                        null,
-                        null
-                ));
-            }
-            // READY 문서를 추가 학습 항목으로 보완
-            int day = 2;
-            for (DocumentEntity doc : docs) {
-                if (day > 10) {
-                    break;
-                }
-                fromTemplate.add(OnboardingPlanItem.create(
-                        plan.getId(), plan.getWorkspaceId(), day, PlanItemType.DOCUMENT,
-                        "문서 읽기: " + doc.getTitle(), "회사 지식 문서 학습", 99, doc.getId(), null
-                ));
-                day++;
-            }
-            return fromTemplate;
+            return buildFromTemplate(plan, custom, docs);
         }
+        return buildDefaultItems(plan, docs);
+    }
 
+    private List<OnboardingPlanItem> buildFromTemplate(
+            OnboardingPlan plan, List<OnboardingTemplateItem> templateItems, List<DocumentEntity> docs
+    ) {
+        List<OnboardingPlanItem> items = new ArrayList<>();
+        for (OnboardingTemplateItem ti : templateItems) {
+            items.add(OnboardingPlanItem.create(
+                    plan.getId(), plan.getWorkspaceId(),
+                    ti.getDayIndex(), ti.getType(), ti.getTitle(), ti.getDescription(),
+                    ti.getSortOrder(), null, null
+            ));
+        }
+        // READY 문서를 추가 학습 항목으로 보완
+        int day = 2;
+        for (DocumentEntity doc : docs) {
+            if (day > 10) break;
+            items.add(OnboardingPlanItem.create(
+                    plan.getId(), plan.getWorkspaceId(), day, PlanItemType.DOCUMENT,
+                    "문서 읽기: " + doc.getTitle(), "회사 지식 문서 학습", 99, doc.getId(), null
+            ));
+            day++;
+        }
+        return items;
+    }
+
+    private List<OnboardingPlanItem> buildDefaultItems(OnboardingPlan plan, List<DocumentEntity> docs) {
         List<OnboardingPlanItem> items = new ArrayList<>();
         int sort = 0;
+
         items.add(OnboardingPlanItem.create(
                 plan.getId(), plan.getWorkspaceId(), 1, PlanItemType.CHECKLIST,
                 "계정 및 도구 접근 확인", "메일·슬랙·저장소 접근 가능 여부 확인", sort++, null, null
@@ -406,16 +288,10 @@ public class OnboardingPlanService {
 
         int day = 2;
         for (DocumentEntity doc : docs) {
-            if (day > 14) {
-                break;
-            }
+            if (day > 14) break;
             items.add(OnboardingPlanItem.create(
                     plan.getId(), plan.getWorkspaceId(), day, PlanItemType.DOCUMENT,
-                    "문서 읽기: " + doc.getTitle(),
-                    "회사 지식 문서 학습",
-                    0,
-                    doc.getId(),
-                    null
+                    "문서 읽기: " + doc.getTitle(), "회사 지식 문서 학습", 0, doc.getId(), null
             ));
             day++;
         }
@@ -441,11 +317,13 @@ public class OnboardingPlanService {
     private PlanResponse toPlanResponse(OnboardingPlan plan, List<OnboardingPlanItem> items) {
         return new PlanResponse(
                 plan.getId(),
+                plan.getUserId(),
                 plan.getStatus(),
                 plan.getVersion(),
                 plan.getStartDate(),
                 plan.getEndDate(),
                 plan.getProgressPercent(),
+                items.size(),
                 items.stream().map(PlanItemResponse::from).toList()
         );
     }

@@ -9,14 +9,16 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.argThat;
 
 import com.onboardos.onboarding.ai.EmbeddingService;
+import com.onboardos.onboarding.ai.AiProperties;
 import com.onboardos.onboarding.ai.LlmService;
 import com.onboardos.onboarding.audit.AuditService;
 import com.onboardos.onboarding.chat.dto.SendMessageRequest;
 import com.onboardos.onboarding.chat.dto.SendMessageResponse;
-import com.onboardos.onboarding.document.DocumentChunkVectorRepository;
-import com.onboardos.onboarding.document.DocumentPermissionService;
+import com.onboardos.onboarding.document.search.DocumentChunkVectorRepository;
+import com.onboardos.onboarding.document.service.DocumentPermissionService;
 import com.onboardos.onboarding.domain.chat.ChatMessageRepository;
 import com.onboardos.onboarding.domain.chat.ChatSessionRepository;
 import com.onboardos.onboarding.domain.document.DocumentChunk;
@@ -51,7 +53,7 @@ class ChatServiceTest {
     private final ChatService service = new ChatService(
             sessionRepository, messageRepository, chunkRepository, vectorRepository, documentRepository,
             permissionService, workspaceAccessService, auditService, embeddingService, llmService,
-            new KoreanKeywordExtractor()
+            new KoreanKeywordExtractor(), new AiProperties()
     );
 
     private final UUID workspaceId = UUID.randomUUID();
@@ -84,7 +86,7 @@ class ChatServiceTest {
         assertThat(response.answer()).contains("OpenAI 미설정 시 템플릿 모드");
     }
 
-    @Test void llmFailureThrowsAiProviderErrorAndRecordsAuditIndependently() {
+    @Test void llmFailureUsesTemplateFallbackAndRecordsAuditIndependently() {
         DocumentEntity doc = accessibleDocument();
         stubSearch(List.of(chunkOf(doc)));
         when(embeddingService.isEnabled()).thenReturn(false);
@@ -92,14 +94,14 @@ class ChatServiceTest {
                 .thenThrow(new RuntimeException("OpenAI timeout"));
         when(llmService.modelName()).thenReturn("gpt-4o-mini");
 
-        assertThatThrownBy(() -> service.send(principal, workspaceId, request("질문입니다")))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.AI_PROVIDER_ERROR));
+        SendMessageResponse response = service.send(principal, workspaceId, request("질문입니다"));
+
+        assertThat(response.answer()).contains("OpenAI 미설정 시 템플릿 모드");
 
         verify(auditService).recordIndependently(
                 any(), any(), any(), any(), any(), any(), any(), any()
         );
-        verify(auditService, never()).record(any(), any(), any(), any(), any(), any(), any(), any());
+        verify(auditService).record(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test void allCandidatesDeniedReturnsDeniedMessageWithoutCallingLlm() {
@@ -129,6 +131,32 @@ class ChatServiceTest {
         assertThat(response.citations()).isEmpty();
         assertThat(response.permissionDeniedDocumentIds()).isEmpty();
         verify(llmService, never()).answerWithCitations(any(), any());
+    }
+
+    @Test void limitsOpenAiContextAndCitationsToActuallyUsedChunks() {
+        AiProperties limited = new AiProperties();
+        limited.setMaxContextChunks(1);
+        limited.setMaxContextChars(5);
+        ChatService limitedService = new ChatService(
+                sessionRepository, messageRepository, chunkRepository, vectorRepository, documentRepository,
+                permissionService, workspaceAccessService, auditService, embeddingService, llmService,
+                new KoreanKeywordExtractor(), limited);
+        DocumentEntity first = accessibleDocument();
+        DocumentChunk firstChunk = DocumentChunk.create(
+                first.getId(), workspaceId, 0, "0123456789", "{\"page\":2}");
+        DocumentChunk secondChunk = DocumentChunk.create(
+                first.getId(), workspaceId, 1, "abcdefghij", "{\"page\":3}");
+        when(documentRepository.findById(first.getId())).thenReturn(Optional.of(first));
+        stubSearch(List.of(firstChunk, secondChunk));
+        when(llmService.answerWithCitations(anyString(), anyList())).thenReturn("answer [1]");
+        when(llmService.modelName()).thenReturn("fake-model");
+
+        SendMessageResponse response = limitedService.send(principal, workspaceId, request("문서 질문"));
+
+        assertThat(response.citations()).hasSize(1);
+        assertThat(response.citations().get(0).get("snippet")).isEqualTo("01234");
+        verify(llmService).answerWithCitations(anyString(), argThat(
+                snippets -> snippets.size() == 1 && snippets.get(0).endsWith("01234")));
     }
 
     private SendMessageRequest request(String message) {

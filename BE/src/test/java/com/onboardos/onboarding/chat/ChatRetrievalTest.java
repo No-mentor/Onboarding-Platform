@@ -9,10 +9,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.onboardos.onboarding.ai.EmbeddingService;
+import com.onboardos.onboarding.ai.AiProperties;
 import com.onboardos.onboarding.ai.LlmService;
 import com.onboardos.onboarding.audit.AuditService;
-import com.onboardos.onboarding.document.DocumentChunkVectorRepository;
-import com.onboardos.onboarding.document.DocumentPermissionService;
+import com.onboardos.onboarding.document.search.DocumentChunkVectorRepository;
+import com.onboardos.onboarding.document.service.DocumentPermissionService;
 import com.onboardos.onboarding.domain.chat.ChatMessageRepository;
 import com.onboardos.onboarding.domain.chat.ChatSessionRepository;
 import com.onboardos.onboarding.domain.document.DocumentChunk;
@@ -31,7 +32,8 @@ class ChatRetrievalTest {
     private final ChatService service = new ChatService(
             mock(ChatSessionRepository.class), mock(ChatMessageRepository.class), chunkRepository, vectorRepository,
             mock(DocumentRepository.class), new DocumentPermissionService(), mock(WorkspaceAccessService.class),
-            mock(AuditService.class), embeddingService, mock(LlmService.class), new KoreanKeywordExtractor());
+            mock(AuditService.class), embeddingService, mock(LlmService.class), new KoreanKeywordExtractor(),
+            new AiProperties());
     private final UUID workspaceId = UUID.randomUUID();
 
     @Test void disabledEmbeddingSearchesMultipleNormalizedKeywords() {
