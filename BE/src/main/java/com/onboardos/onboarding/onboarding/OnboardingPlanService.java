@@ -91,7 +91,7 @@ public class OnboardingPlanService {
                     planRepository.save(existing);
                 });
 
-        OnboardingPlan plan = OnboardingPlan.create(workspaceId, userId, LocalDate.now());
+        OnboardingPlan plan = OnboardingPlan.create(workspaceId, userId, LocalDate.now(), templateId);
         planRepository.save(plan);
 
         List<DocumentEntity> readyDocs = documentRepository

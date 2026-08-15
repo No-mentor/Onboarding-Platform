@@ -79,6 +79,21 @@ public class OnboardingPlanItem extends BaseTimeEntity {
             UUID documentId,
             String personName
     ) {
+        return create(planId, workspaceId, dayIndex, type, title, description, sortOrder, documentId, personName, null);
+    }
+
+    public static OnboardingPlanItem create(
+            UUID planId,
+            UUID workspaceId,
+            int dayIndex,
+            PlanItemType type,
+            String title,
+            String description,
+            int sortOrder,
+            UUID documentId,
+            String personName,
+            Integer estimatedMinutes
+    ) {
         OnboardingPlanItem item = new OnboardingPlanItem();
         item.id = UUID.randomUUID();
         item.planId = planId;
@@ -90,9 +105,19 @@ public class OnboardingPlanItem extends BaseTimeEntity {
         item.sortOrder = sortOrder;
         item.documentId = documentId;
         item.personName = personName;
+        item.estimatedMinutes = estimatedMinutes != null ? estimatedMinutes : defaultMinutes(type);
         item.status = ItemStatus.PENDING;
         item.metadata = "{}";
         return item;
+    }
+
+    private static Integer defaultMinutes(PlanItemType type) {
+        return switch (type) {
+            case DOCUMENT -> 30;
+            case PERSON -> 20;
+            case CHECKLIST -> 10;
+            case PRACTICE -> 45;
+        };
     }
 
     public void markDone() {
@@ -102,6 +127,11 @@ public class OnboardingPlanItem extends BaseTimeEntity {
 
     public void markPending() {
         this.status = ItemStatus.PENDING;
+        this.completedAt = null;
+    }
+
+    public void skip() {
+        this.status = ItemStatus.SKIPPED;
         this.completedAt = null;
     }
 }

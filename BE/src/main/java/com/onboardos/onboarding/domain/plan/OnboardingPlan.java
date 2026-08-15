@@ -32,6 +32,9 @@ public class OnboardingPlan extends BaseTimeEntity {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
+    @Column(name = "template_id")
+    private UUID templateId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private PlanStatus status = PlanStatus.ACTIVE;
@@ -59,16 +62,21 @@ public class OnboardingPlan extends BaseTimeEntity {
     private Instant deletedAt;
 
     public static OnboardingPlan create(UUID workspaceId, UUID userId, LocalDate start) {
+        return create(workspaceId, userId, start, null);
+    }
+
+    public static OnboardingPlan create(UUID workspaceId, UUID userId, LocalDate start, UUID templateId) {
         OnboardingPlan p = new OnboardingPlan();
         p.id = UUID.randomUUID();
         p.workspaceId = workspaceId;
         p.userId = userId;
+        p.templateId = templateId;
         p.status = PlanStatus.ACTIVE;
         p.version = 1;
         p.startDate = start;
         p.endDate = start.plusDays(29);
         p.progressPercent = BigDecimal.ZERO;
-        p.generatedBy = "TEMPLATE";
+        p.generatedBy = templateId != null ? "TEMPLATE" : "TEMPLATE";
         p.meta = "{}";
         return p;
     }

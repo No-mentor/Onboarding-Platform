@@ -104,6 +104,7 @@ public class RecommendationService {
 
     /**
      * 추천 항목 dismiss 처리 (관심 없음/건너뛰기).
+     * 연관된 계획 항목이 있으면 SKIPPED로 전이하고 진행률을 재계산한다.
      */
     @Transactional
     public RecommendationResponse dismiss(UserPrincipal principal, UUID workspaceId, UUID recommendationId) {
@@ -112,6 +113,14 @@ public class RecommendationService {
                 .findByIdAndWorkspaceIdAndUserId(recommendationId, workspaceId, principal.getId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         rec.dismiss();
+
+        // 연관 계획 항목을 SKIPPED로 전이 → 진행률 분모에서 제외
+        if (rec.getPlanItemId() != null) {
+            planItemRepository.findById(rec.getPlanItemId()).ifPresent(item -> {
+                item.skip();
+                planRepository.findById(item.getPlanId()).ifPresent(this::recalculateProgress);
+            });
+        }
 
         return RecommendationResponse.from(rec);
     }
