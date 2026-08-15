@@ -1,0 +1,336 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
+
+@layer base {
+  /* ════════════════════════════════════════════════════════════════ */
+  /* OnboardOS Design Tokens (design.md § Token Reference) */
+  /* ════════════════════════════════════════════════════════════════ */
+
+  :root {
+    /* ── Neutral Scale (Monochrome) ────────────────────────────────── */
+    --color-canvas: #ffffff;
+    --color-surface: #ffffff;
+    --color-panel: #fafafa;
+    --color-surface-hover: #f7f7f8;
+    --color-surface-sunk: #f4f4f5;
+    --color-border: #e7e7e9;
+    --color-border-strong: #d6d6d9;
+    --color-muted: #9a9aa1;
+    --color-body: #6b6b72;
+    --color-primary: #4e4e52;
+    --color-primary-hover: #363639;
+    --color-text: #17171a;
+
+    /* ── Semantic Colors (exception-based) ──────────────────────────── */
+    --color-destructive: #b4342f;
+    --color-warning: #8a6a16;
+
+    /* ── Spacing ────────────────────────────────────────────────────── */
+    --spacing-xs: 0.25rem; /* 4px */
+    --spacing-sm: 0.5rem; /* 8px */
+    --spacing-md: 0.75rem; /* 12px */
+    --spacing-base: 1rem; /* 16px */
+    --spacing-lg: 1.5rem; /* 24px */
+    --spacing-xl: 2rem; /* 32px */
+    --spacing-xxl: 2.5rem; /* 40px */
+    --spacing-section: 3.5rem; /* 56px */
+
+    /* ── Border Radius ──────────────────────────────────────────────── */
+    --radius-xs: 0.3125rem; /* 5px */
+    --radius-sm: 0.4375rem; /* 7px */
+    --radius-md: 0.625rem; /* 10px */
+    --radius-lg: 0.875rem; /* 14px */
+    --radius-full: 9999px;
+
+    /* ── Shadows ────────────────────────────────────────────────────── */
+    --shadow-card: 0 1px 2px rgba(20, 20, 25, 0.04), 0 8px 24px rgba(20, 20, 25, 0.05);
+    --shadow-modal: 0 24px 64px rgba(20, 20, 25, 0.14);
+    --shadow-sticky: 0 -1px 0 #e7e7e9, 0 -12px 24px rgba(20, 20, 25, 0.04);
+
+    /* ── Typography ────────────────────────────────────────────────── */
+    --font-family-base: 'Pretendard Variable', Pretendard, -apple-system,
+      'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    --font-family-numeric: 'Pretendard Variable', Pretendard, -apple-system,
+      'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+
+    /* Font sizes (px) */
+    --font-size-display: 2rem; /* 32px */
+    --font-size-page-title: 1.875rem; /* 30px */
+    --font-size-section-title: 1.375rem; /* 22px */
+    --font-size-card-title: 1.0625rem; /* 17px */
+    --font-size-body: 0.875rem; /* 14px */
+    --font-size-label: 0.78125rem; /* 12.5px */
+    --font-size-caption: 0.75rem; /* 12px */
+    --font-size-badge: 0.6875rem; /* 11px */
+
+    /* Font weights */
+    --font-weight-regular: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --font-weight-extrabold: 800;
+
+    /* Line heights */
+    --line-height-title: 1.35;
+    --line-height-body: 1.6;
+    --line-height-long: 1.72;
+
+    /* Letter spacing (em) */
+    --letter-spacing-display: -0.045em;
+    --letter-spacing-page-title: -0.035em;
+    --letter-spacing-section-title: -0.03em;
+    --letter-spacing-card-title: -0.02em;
+    --letter-spacing-body: -0.01em;
+    --letter-spacing-label: -0.005em;
+    --letter-spacing-badge: 0.04em;
+
+    /* ── Easing & Duration ─────────────────────────────────────────── */
+    --ease-default: cubic-bezier(0.22, 0.9, 0.3, 1);
+    --dur-fast: 140ms;
+    --dur-base: 180ms;
+    --dur-slow: 1100ms;
+  }
+
+  /* ── Baseline Global Styles ──────────────────────────────────────── */
+  * {
+    @apply box-border;
+  }
+
+  html,
+  body {
+    height: 100%;
+    @apply bg-canvas text-text;
+  }
+
+  body {
+    font-family: var(--font-family-base);
+    font-size: var(--font-size-body);
+    font-weight: var(--font-weight-regular);
+    line-height: var(--line-height-body);
+    letter-spacing: var(--letter-spacing-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ── Reduced Motion ────────────────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+
+  /* ── Focus Visible (Keyboard Navigation) ────────────────────────── */
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════ */
+/* Component Base Styles (with Tailwind @apply) */
+/* ════════════════════════════════════════════════════════════════ */
+
+@layer components {
+  /* Button base */
+  .btn-base {
+    @apply relative inline-flex items-center justify-center
+      font-semibold cursor-pointer transition-colors duration-[140ms]
+      disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn-base
+      h-[46px] px-6 rounded-[10px]
+      bg-primary text-white
+      hover:bg-primary-hover
+      active:translate-y-[1px];
+  }
+
+  .btn-secondary {
+    @apply btn-base
+      h-10 px-4 rounded-[10px]
+      bg-surface border border-border-strong text-text
+      hover:bg-surface-hover;
+  }
+
+  .btn-chip {
+    @apply btn-base
+      h-[30px] px-3 rounded-[7px]
+      text-label
+      bg-surface border border-border-strong text-text
+      hover:bg-surface-hover;
+  }
+
+  /* Card base */
+  .card {
+    @apply bg-surface border border-border rounded-[14px] p-6;
+  }
+
+  .card-interactive {
+    @apply card shadow-card;
+  }
+
+  /* Input base */
+  .input-base {
+    @apply w-full h-11 px-[14px]
+      bg-surface border border-border-strong rounded-[10px]
+      text-body font-regular
+      transition-all duration-[160ms]
+      placeholder:text-[#b6b6bc]
+      focus:border-primary focus:ring-3 focus:ring-[rgba(78,78,82,0.11)]
+      focus:outline-none;
+  }
+
+  .input-base:hover {
+    @apply border-[#c3c3c8];
+  }
+
+  .input-base:disabled {
+    @apply text-muted border-border cursor-not-allowed;
+  }
+
+  /* Badge base */
+  .badge-base {
+    @apply inline-flex items-center justify-center
+      h-6 px-[9px] rounded-[7px]
+      text-badge font-semibold leading-none
+      uppercase tracking-[0.04em];
+  }
+
+  .badge-ready {
+    @apply badge-base bg-surface-sunk text-body;
+  }
+
+  .badge-processing {
+    @apply badge-base bg-surface-sunk text-body;
+  }
+
+  .badge-pending {
+    @apply badge-base bg-transparent border border-border text-muted;
+  }
+
+  .badge-failed {
+    @apply badge-base bg-[rgba(180,52,47,0.07)] text-destructive;
+  }
+
+  /* Checkbox base */
+  .checkbox-base {
+    @apply relative h-[17px] w-[17px] flex-none appearance-none
+      border-[1.5px] border-border-strong rounded-[5px]
+      bg-surface cursor-pointer
+      transition-all duration-[140ms]
+      focus-visible:ring-3 focus-visible:ring-[rgba(78,78,82,0.16)];
+  }
+
+  .checkbox-base:checked {
+    @apply bg-primary border-primary;
+  }
+
+  .checkbox-base:checked::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 1.5px;
+    width: 4px;
+    height: 8.5px;
+    border: solid white;
+    border-width: 0 1.7px 1.7px 0;
+    transform: rotate(43deg);
+  }
+
+  /* Progress bar */
+  .progress-track {
+    @apply h-[7px] rounded-full bg-surface-sunk overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full bg-primary rounded-full;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════ */
+/* Utility Classes */
+/* ════════════════════════════════════════════════════════════════ */
+
+@layer utilities {
+  /* Typography utilities */
+  .text-display {
+    @apply text-[32px] font-extrabold leading-[1.35];
+    letter-spacing: var(--letter-spacing-display);
+  }
+
+  .text-page-title {
+    @apply text-[30px] font-bold leading-[1.35];
+    letter-spacing: var(--letter-spacing-page-title);
+  }
+
+  .text-section-title {
+    @apply text-[22px] font-bold leading-[1.35];
+    letter-spacing: var(--letter-spacing-section-title);
+  }
+
+  .text-card-title {
+    @apply text-[17px] font-semibold leading-[1.35];
+    letter-spacing: var(--letter-spacing-card-title);
+  }
+
+  .text-body {
+    @apply text-[14px] font-regular leading-[1.6];
+    letter-spacing: var(--letter-spacing-body);
+  }
+
+  .text-body-strong {
+    @apply text-[14px] font-semibold leading-[1.6];
+    letter-spacing: var(--letter-spacing-body);
+  }
+
+  .text-label {
+    @apply text-[12.5px] font-semibold leading-[1.6];
+    letter-spacing: var(--letter-spacing-label);
+  }
+
+  .text-caption {
+    @apply text-[12px] font-regular leading-[1.6];
+    letter-spacing: var(--letter-spacing-body);
+  }
+
+  .text-badge {
+    @apply text-[11px] font-semibold leading-none;
+  }
+
+  /* Color utilities (semantic) */
+  .text-primary {
+    @apply text-primary;
+  }
+
+  .text-destructive {
+    @apply text-destructive;
+  }
+
+  .text-muted {
+    @apply text-muted;
+  }
+
+  .border-destructive {
+    @apply border-destructive;
+  }
+
+  /* Numeric alignment */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Dashed separator */
+  .border-dashed {
+    @apply border-dashed;
+  }
+}
