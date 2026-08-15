@@ -1,29 +1,54 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { LoginForm } from './login-form';
 import { SignupForm } from './signup-form';
 
 export function AuthTabs() {
-  const [activeTab, setActiveTab] = useState('login');
+  const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
 
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-      <TabsList variant="segment" className="grid w-full grid-cols-2">
-        <TabsTrigger variant="segment" value="login">
+    <>
+      <div className="switch" role="tablist">
+        <button
+          role="tab"
+          id="tab-login"
+          aria-controls="view-login"
+          aria-selected={activeTab === 'login'}
+          onClick={() => setActiveTab('login')}
+        >
           로그인
-        </TabsTrigger>
-        <TabsTrigger variant="segment" value="signup">
+        </button>
+        <button
+          role="tab"
+          id="tab-signup"
+          aria-controls="view-signup"
+          aria-selected={activeTab === 'signup'}
+          onClick={() => setActiveTab('signup')}
+        >
           회원가입
-        </TabsTrigger>
-      </TabsList>
-      <TabsContent value="login">
+        </button>
+      </div>
+
+      <section
+        className="view"
+        id="view-login"
+        role="tabpanel"
+        aria-labelledby="tab-login"
+        hidden={activeTab !== 'login'}
+      >
         <LoginForm />
-      </TabsContent>
-      <TabsContent value="signup">
+      </section>
+
+      <section
+        className="view"
+        id="view-signup"
+        role="tabpanel"
+        aria-labelledby="tab-signup"
+        hidden={activeTab !== 'signup'}
+      >
         <SignupForm />
-      </TabsContent>
-    </Tabs>
+      </section>
+    </>
   );
 }
