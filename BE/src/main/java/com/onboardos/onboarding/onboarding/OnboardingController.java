@@ -37,6 +37,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class OnboardingController {
 
     private final OnboardingPlanService planService;
+    private final RecommendationService recommendationService;
+    private final ChecklistService checklistService;
+
+    // ===== Onboarding Plans =====
 
     @Operation(summary = "30일 온보딩 계획 생성")
     @PostMapping("/onboarding-plans/generate")
@@ -51,11 +55,11 @@ public class OnboardingController {
 
     @Operation(summary = "내 온보딩 계획")
     @GetMapping("/onboarding-plans/me")
-        public PlanResponse myPlan(
-                        @RequestHeader("X-Workspace-Id") UUID workspaceId,
-                        @RequestParam(defaultValue = "true") boolean includeItems
-        ) {
-                return planService.myPlan(SecurityUtils.currentUser(), workspaceId, includeItems);
+    public PlanResponse myPlan(
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @RequestParam(defaultValue = "true") boolean includeItems
+    ) {
+        return planService.myPlan(SecurityUtils.currentUser(), workspaceId, includeItems);
     }
 
     @Operation(summary = "계획 상세")
@@ -89,13 +93,15 @@ public class OnboardingController {
         );
     }
 
+    // ===== Recommendations =====
+
     @Operation(summary = "오늘 할 일 추천")
     @GetMapping("/recommendations/today")
     public TodayRecommendationsResponse today(
             @RequestHeader("X-Workspace-Id") UUID workspaceId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        return planService.today(SecurityUtils.currentUser(), workspaceId, date);
+        return recommendationService.today(SecurityUtils.currentUser(), workspaceId, date);
     }
 
     @Operation(summary = "추천 항목 완료")
@@ -104,19 +110,30 @@ public class OnboardingController {
             @RequestHeader("X-Workspace-Id") UUID workspaceId,
             @PathVariable UUID recommendationId
     ) {
-        return planService.completeRecommendation(
-                SecurityUtils.currentUser(), workspaceId, recommendationId
-        );
+        return recommendationService.complete(SecurityUtils.currentUser(), workspaceId, recommendationId);
     }
+
+    @Operation(summary = "추천 항목 건너뛰기(dismiss)")
+    @PostMapping("/recommendations/{recommendationId}/dismiss")
+    public RecommendationResponse dismissRecommendation(
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @PathVariable UUID recommendationId
+    ) {
+        return recommendationService.dismiss(SecurityUtils.currentUser(), workspaceId, recommendationId);
+    }
+
+    // ===== Checklists =====
 
     @Operation(summary = "내 체크리스트")
     @GetMapping("/checklists/me")
-        public ChecklistSummaryResponse checklist(
-                        @RequestHeader("X-Workspace-Id") UUID workspaceId,
-                        @RequestParam(defaultValue = "ALL") ChecklistStatusFilter status
-        ) {
-                List<ChecklistResponse> items = planService.myChecklist(SecurityUtils.currentUser(), workspaceId, status);
-                return ChecklistSummaryResponse.from(items);
+    public ChecklistSummaryResponse checklist(
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @RequestParam(defaultValue = "ALL") ChecklistStatusFilter status
+    ) {
+        List<ChecklistResponse> items = checklistService.myChecklist(
+                SecurityUtils.currentUser(), workspaceId, status
+        );
+        return ChecklistSummaryResponse.from(items);
     }
 
     @Operation(summary = "체크리스트 항목 갱신")
@@ -126,7 +143,7 @@ public class OnboardingController {
             @PathVariable UUID itemId,
             @Valid @RequestBody StatusUpdateRequest request
     ) {
-        return planService.updateChecklist(
+        return checklistService.updateChecklist(
                 SecurityUtils.currentUser(), workspaceId, itemId, request.status()
         );
     }

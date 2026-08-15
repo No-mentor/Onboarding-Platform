@@ -95,4 +95,8 @@ public class DailyRecommendation extends BaseTimeEntity {
         this.status = ItemStatus.DONE;
         this.completedAt = Instant.now();
     }
+
+    public void dismiss() {
+        this.status = ItemStatus.DISMISSED;
+    }
 }

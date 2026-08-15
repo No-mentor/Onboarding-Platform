@@ -3,6 +3,8 @@ package com.onboardos.onboarding.domain.plan;
 import com.onboardos.onboarding.domain.common.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
@@ -30,8 +32,9 @@ public class OnboardingPlan extends BaseTimeEntity {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private String status = "ACTIVE";
+    private PlanStatus status = PlanStatus.ACTIVE;
 
     @Column(nullable = false)
     private int version = 1;
@@ -60,7 +63,7 @@ public class OnboardingPlan extends BaseTimeEntity {
         p.id = UUID.randomUUID();
         p.workspaceId = workspaceId;
         p.userId = userId;
-        p.status = "ACTIVE";
+        p.status = PlanStatus.ACTIVE;
         p.version = 1;
         p.startDate = start;
         p.endDate = start.plusDays(29);
@@ -71,11 +74,19 @@ public class OnboardingPlan extends BaseTimeEntity {
     }
 
     public void archive() {
-        this.status = "ARCHIVED";
+        this.status = PlanStatus.ARCHIVED;
+    }
+
+    public void complete() {
+        this.status = PlanStatus.COMPLETED;
     }
 
     public void updateProgress(BigDecimal percent) {
         this.progressPercent = percent;
+        // 100% 도달 시 자동 완료
+        if (percent.compareTo(BigDecimal.valueOf(100)) >= 0 && this.status == PlanStatus.ACTIVE) {
+            this.status = PlanStatus.COMPLETED;
+        }
     }
 
     public void bumpVersion() {

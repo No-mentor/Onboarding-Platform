@@ -1,5 +1,6 @@
 package com.onboardos.onboarding.dashboard.dto;
 
+import com.onboardos.onboarding.domain.plan.PlanStatus;
 import com.onboardos.onboarding.onboarding.dto.RecommendationResponse;
 import java.math.BigDecimal;
 import java.util.List;
@@ -15,7 +16,7 @@ public record DashboardResponse(
     public record TodayBlock(int total, int done, List<RecommendationResponse> items) {
     }
 
-    public record PlanBlock(UUID planId, int currentDay, int totalDays, String status) {
+    public record PlanBlock(UUID planId, int currentDay, int totalDays, PlanStatus status) {
     }
 
     public record ChecklistBlock(int total, int done) {

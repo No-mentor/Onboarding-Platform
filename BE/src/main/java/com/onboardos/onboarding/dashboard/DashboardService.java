@@ -9,9 +9,10 @@ import com.onboardos.onboarding.domain.plan.ChecklistItemRepository;
 import com.onboardos.onboarding.domain.plan.ItemStatus;
 import com.onboardos.onboarding.domain.plan.OnboardingPlan;
 import com.onboardos.onboarding.domain.plan.OnboardingPlanRepository;
+import com.onboardos.onboarding.domain.plan.PlanStatus;
 import com.onboardos.onboarding.global.security.UserPrincipal;
 import com.onboardos.onboarding.global.workspace.WorkspaceAccessService;
-import com.onboardos.onboarding.onboarding.OnboardingPlanService;
+import com.onboardos.onboarding.onboarding.RecommendationService;
 import com.onboardos.onboarding.onboarding.dto.RecommendationResponse;
 import com.onboardos.onboarding.onboarding.dto.TodayRecommendationsResponse;
 import java.math.BigDecimal;
@@ -28,20 +29,21 @@ import org.springframework.transaction.annotation.Transactional;
 public class DashboardService {
 
     private final WorkspaceAccessService workspaceAccessService;
-    private final OnboardingPlanService planService;
+    private final RecommendationService recommendationService;
     private final OnboardingPlanRepository planRepository;
     private final ChecklistItemRepository checklistItemRepository;
 
-    @Transactional
+    @Transactional(readOnly = true)
     public DashboardResponse me(UserPrincipal principal, UUID workspaceId) {
         workspaceAccessService.requireMembership(workspaceId, principal.getId());
 
         OnboardingPlan plan = planRepository
                 .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(
-                        workspaceId, principal.getId(), "ACTIVE")
+                        workspaceId, principal.getId(), PlanStatus.ACTIVE)
                 .orElse(null);
 
-        TodayRecommendationsResponse today = planService.today(principal, workspaceId, LocalDate.now());
+        TodayRecommendationsResponse today = recommendationService.todayReadOnly(
+                workspaceId, principal.getId(), LocalDate.now());
         List<RecommendationResponse> todayItems = today.items();
         int todayDone = (int) todayItems.stream().filter(i -> i.status() == ItemStatus.DONE).count();
 
