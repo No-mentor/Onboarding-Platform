@@ -32,8 +32,7 @@ class TemplateIntegrationTest {
     @Autowired
     MockMvc mockMvc;
 
-    @Autowired
-    ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
     void createAndListTemplate() throws Exception {

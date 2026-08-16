@@ -34,8 +34,7 @@ class BackPart2IntegrationTest {
     @Autowired
     MockMvc mockMvc;
 
-    @Autowired
-    ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
     void ownerFlow_plan_recommendation_checklist_template_dashboard_progress() throws Exception {

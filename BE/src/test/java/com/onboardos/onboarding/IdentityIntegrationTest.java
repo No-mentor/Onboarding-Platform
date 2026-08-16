@@ -34,8 +34,7 @@ class IdentityIntegrationTest {
     @Autowired
     MockMvc mockMvc;
 
-    @Autowired
-    ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
     void signup_login_createWorkspace_me() throws Exception {
