@@ -4,6 +4,7 @@ import com.onboardos.onboarding.auth.dto.AuthResponse;
 import com.onboardos.onboarding.auth.dto.LoginRequest;
 import com.onboardos.onboarding.auth.dto.MeResponse;
 import com.onboardos.onboarding.auth.dto.SignupRequest;
+import com.onboardos.onboarding.auth.dto.SignupResponse;
 import com.onboardos.onboarding.domain.user.Membership;
 import com.onboardos.onboarding.domain.user.MembershipRepository;
 import com.onboardos.onboarding.domain.user.User;
@@ -34,9 +35,10 @@ public class AuthService {
     private final WorkspaceRepository workspaceRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final EmailVerificationService emailVerificationService;
 
     @Transactional
-    public AuthResponse signup(SignupRequest request) {
+    public SignupResponse signup(SignupRequest request) {
         String email = request.email().trim().toLowerCase();
         if (userRepository.existsByEmailAndDeletedAtIsNull(email)) {
             throw new BusinessException(ErrorCode.CONFLICT, "이미 가입된 이메일입니다.");
@@ -45,15 +47,12 @@ public class AuthService {
         User user = User.create(email, request.name(), passwordEncoder.encode(request.password()));
         userRepository.save(user);
 
-        String token = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail(), List.of());
-        return AuthResponse.of(
-                user.getId(),
-                user.getEmail(),
-                user.getName(),
-                token,
-                jwtTokenProvider.getExpirationSeconds(),
-                List.of()
-        );
+        boolean emailSent = emailVerificationService.createAndSendCode(user);
+        if (emailSent) {
+            return SignupResponse.success(email);
+        } else {
+            return SignupResponse.mailFailed(email);
+        }
     }
 
     @Transactional
@@ -67,6 +66,9 @@ public class AuthService {
         }
         if (!user.isActive()) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "비활성화된 계정입니다.");
+        }
+        if (!user.isEmailVerified()) {
+            throw new BusinessException(ErrorCode.EMAIL_NOT_VERIFIED, "이메일 인증이 완료되지 않았습니다.");
         }
 
         user.markLogin();

@@ -57,6 +57,7 @@ class ChatPipelineIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired DocumentChunkVectorRepository vectorRepository;
     @Autowired EmbeddingService embeddingService;
+    @Autowired com.onboardos.onboarding.domain.user.EmailVerificationCodeRepository verificationCodeRepository;
 
     @MockitoBean EmbeddingClient embeddingClient;
     @MockitoBean LlmService llmService;
@@ -305,20 +306,50 @@ class ChatPipelineIntegrationTest {
 
     private String signup(String prefix) throws Exception {
         String email = prefix + "_" + System.nanoTime() + "@example.com";
-        MvcResult result = mockMvc.perform(post("/api/v1/auth/signup")
+        mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"%s\",\"password\":\"password1\",\"name\":\"%s\"}".formatted(email, prefix)))
-                .andExpect(status().isCreated())
+                .andExpect(status().isCreated());
+
+        // Verify email (DB stores lowercase-normalized email)
+        String normalizedEmail = email.trim().toLowerCase();
+        com.onboardos.onboarding.domain.user.EmailVerificationCode code =
+                verificationCodeRepository.findByEmail(normalizedEmail).orElseThrow();
+        mockMvc.perform(post("/api/v1/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"%s\",\"code\":\"%s\"}".formatted(normalizedEmail, code.getCode())))
+                .andExpect(status().isOk());
+
+        // Login
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"%s\",\"password\":\"password1\"}".formatted(email)))
+                .andExpect(status().isOk())
                 .andReturn();
         return json(result).get("accessToken").asText();
     }
 
     private UUID signupAndReturnUserId(String prefix) throws Exception {
         String email = prefix + "_" + System.nanoTime() + "@example.com";
-        MvcResult result = mockMvc.perform(post("/api/v1/auth/signup")
+        mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"%s\",\"password\":\"password1\",\"name\":\"%s\"}".formatted(email, prefix)))
-                .andExpect(status().isCreated())
+                .andExpect(status().isCreated());
+
+        // Verify email (DB stores lowercase-normalized email)
+        String normalizedEmail = email.trim().toLowerCase();
+        com.onboardos.onboarding.domain.user.EmailVerificationCode code =
+                verificationCodeRepository.findByEmail(normalizedEmail).orElseThrow();
+        mockMvc.perform(post("/api/v1/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"%s\",\"code\":\"%s\"}".formatted(normalizedEmail, code.getCode())))
+                .andExpect(status().isOk());
+
+        // Login to get userId
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"%s\",\"password\":\"password1\"}".formatted(email)))
+                .andExpect(status().isOk())
                 .andReturn();
         return UUID.fromString(json(result).get("userId").asText());
     }

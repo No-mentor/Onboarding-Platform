@@ -37,4 +37,24 @@ public class MailService {
             log.error("초대 메일 발송 실패: to={}", toEmail, ex);
         }
     }
+
+    /**
+     * 이메일 인증 코드를 동기로 발송합니다.
+     * 발송 실패 시 MailException을 그대로 전파합니다.
+     */
+    public void sendVerificationCode(String toEmail, String code) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(properties.getFrom());
+        message.setTo(toEmail);
+        message.setSubject("[OnboardOS] 이메일 인증 코드");
+        message.setText(
+                "OnboardOS 이메일 인증 코드입니다.\n\n"
+                        + "인증 코드: " + code + "\n\n"
+                        + "이 코드는 5분간 유효합니다.\n"
+                        + "본인이 요청하지 않았다면 이 메일을 무시해주세요."
+        );
+
+        mailSender.send(message);
+        log.info("인증 코드 메일 발송 성공: to={}", toEmail);
+    }
 }

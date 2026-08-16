@@ -32,6 +32,9 @@ public class User extends BaseTimeEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified = true;
+
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
@@ -45,7 +48,12 @@ public class User extends BaseTimeEntity {
         user.name = name.trim();
         user.passwordHash = passwordHash;
         user.active = true;
+        user.emailVerified = false;
         return user;
+    }
+
+    public void markEmailVerified() {
+        this.emailVerified = true;
     }
 
     public void markLogin() {
