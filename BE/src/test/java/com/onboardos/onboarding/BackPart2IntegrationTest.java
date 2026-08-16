@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.onboardos.onboarding.domain.user.EmailVerificationCode;
 import com.onboardos.onboarding.domain.user.EmailVerificationCodeRepository;
 import com.onboardos.onboarding.support.PostgresTestcontainersConfig;
+import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -241,8 +242,8 @@ class BackPart2IntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"BP2 Corp","slug":"%s-%d"}
-                                """.formatted(slugPrefix, System.currentTimeMillis() % 1000000)))
+                                {"name":"BP2 Corp","slug":"%s-%s"}
+                                """.formatted(slugPrefix, UUID.randomUUID().toString().substring(0, 8))))
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readTree(ws.getResponse().getContentAsString()).get("id").asText();

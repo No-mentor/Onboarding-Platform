@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.onboardos.onboarding.domain.user.EmailVerificationCode;
 import com.onboardos.onboarding.domain.user.EmailVerificationCodeRepository;
 import com.onboardos.onboarding.support.PostgresTestcontainersConfig;
+import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -85,8 +86,8 @@ class IdentityIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"Acme","slug":"acme-%d"}
-                                """.formatted(System.currentTimeMillis() % 100000)))
+                                {"name":"Acme","slug":"acme-%s"}
+                                """.formatted(UUID.randomUUID().toString().substring(0, 8))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNotEmpty())
                 .andReturn();
