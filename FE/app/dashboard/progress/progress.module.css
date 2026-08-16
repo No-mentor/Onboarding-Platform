@@ -1,0 +1,282 @@
+.container {
+  margin-left: 260px;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  width: calc(100% - 260px);
+  gap: 24px;
+  animation: slideIn 0.4s ease-out;
+}
+
+.loadingState,
+.errorState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  font-size: 16px;
+  color: var(--text-sub);
+}
+
+.errorState {
+  flex-direction: column;
+  gap: 16px;
+}
+
+.errorState button {
+  padding: 10px 20px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.errorState button:hover {
+  opacity: 0.9;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.backBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.backBtn:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.title {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.card {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  animation: slideIn 0.4s ease-out;
+}
+
+.cardTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 20px;
+}
+
+.progressOverview {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 40px;
+  align-items: center;
+}
+
+.progressCircle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.progressCircle svg {
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.1));
+}
+
+.progressStats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.statBlock {
+  padding: 16px;
+  background: var(--surface-sunk);
+  border-radius: var(--r-md);
+  text-align: center;
+}
+
+.statValue {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.statLabel {
+  font-size: 11px;
+  color: var(--text-sub);
+  font-weight: 600;
+}
+
+.itemsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.item {
+  padding: 16px;
+  background: var(--surface-sunk);
+  border-left: 4px solid var(--border);
+  border-radius: var(--r-md);
+  transition: all 0.2s ease;
+}
+
+.item:hover {
+  background: var(--canvas);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.severity-high {
+  border-left-color: var(--priority-high);
+  background: rgba(220, 38, 38, 0.05);
+}
+
+.severity-medium {
+  border-left-color: var(--priority-medium);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.severity-low {
+  border-left-color: var(--priority-low);
+  background: rgba(107, 114, 128, 0.05);
+}
+
+.itemHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.itemCategory {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.itemSeverity {
+  padding: 3px 8px;
+  background: var(--surface);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+
+.severity-high .itemSeverity {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--priority-high);
+}
+
+.severity-medium .itemSeverity {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--priority-medium);
+}
+
+.severity-low .itemSeverity {
+  background: rgba(107, 114, 128, 0.1);
+  color: var(--priority-low);
+}
+
+.itemDescription {
+  font-size: 13px;
+  color: var(--text-sub);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.delayedItem {
+  padding: 16px;
+  background: rgba(220, 38, 38, 0.05);
+  border-left: 4px solid var(--danger);
+  border-radius: var(--r-md);
+  transition: all 0.2s ease;
+}
+
+.delayedItem:hover {
+  background: rgba(220, 38, 38, 0.1);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.1);
+}
+
+.itemTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.daysOverdue {
+  padding: 3px 8px;
+  background: var(--danger);
+  color: white;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.itemDate {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin: 8px 0 0;
+}
+
+@media (max-width: 1024px) {
+  .container {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .progressOverview {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .progressStats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 12px;
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .progressStats {
+    grid-template-columns: 1fr;
+  }
+}

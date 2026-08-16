@@ -32,8 +32,13 @@ export function LoginForm() {
         password,
       });
 
-      saveAuthToken(response.accessToken, response.userId, response.email);
-      router.push('/');
+      saveAuthToken(
+        response.accessToken,
+        response.userId,
+        response.email,
+        response.workspaces[0]?.id
+      );
+      router.push('/dashboard');
     } catch (error) {
       if (error instanceof AuthError) {
         if (error.isAuthError()) {
