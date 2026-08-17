@@ -2,7 +2,8 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Home, User, Folder, Zap, CheckSquare, Users, MessageCircle, FileText, Users2, Settings } from 'lucide-react';
+import Image from 'next/image';
+import { Home, User, Folder, Zap, CheckSquare, Users, MessageCircle, FileText, Users2, Settings, MoreVertical } from 'lucide-react';
 import styles from './sidebar.module.css';
 
 const navItems = [
@@ -35,7 +36,13 @@ export function Sidebar({ userName = '사용자', userEmail = 'user@company.com'
   return (
     <aside className={styles.sidebar}>
       <div className={styles.header}>
-        <div className={styles.logo}>📦</div>
+        <Image
+          src="/logo.png"
+          alt="OnboardOS Logo"
+          width={40}
+          height={40}
+          className={styles.logo}
+        />
         <span className={styles.title}>OnboardOS</span>
       </div>
 
@@ -74,7 +81,7 @@ export function Sidebar({ userName = '사용자', userEmail = 'user@company.com'
             <div className={styles.userName}>{userName}</div>
             <div className={styles.userEmail}>{userEmail}</div>
           </div>
-          <button className={styles.dropdown}>⋮</button>
+          <button className={styles.dropdown} aria-label="더 보기"><MoreVertical size={16} /></button>
         </div>
       </div>
     </aside>

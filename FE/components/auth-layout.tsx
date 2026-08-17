@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { AuthTabs } from './auth-tabs';
 
 export function AuthLayout() {
@@ -8,11 +9,13 @@ export function AuthLayout() {
     <div className="auth">
       <aside className="brand">
         <div className="logo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-            <path d="m3.3 7 8.7 5 8.7-5" />
-            <path d="M12 22V12" />
-          </svg>
+          <Image
+            src="/logo.png"
+            alt="OnboardOS Logo"
+            width={80}
+            height={80}
+            priority
+          />
           <span>OnboardOS</span>
         </div>
 

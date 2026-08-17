@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRight, FileText, Users, Zap, TrendingUp, Clock, CheckCircle2, BarChart3 } from 'lucide-react';
 import styles from './page.module.css';
 
@@ -38,7 +39,12 @@ export default function LandingPage() {
       <header className={styles.header}>
         <div className={styles.headerContent}>
           <div className={styles.logo}>
-            <div className={styles.logoIcon}>■</div>
+            <Image
+              src="/logo.png"
+              alt="OnboardOS Logo"
+              width={40}
+              height={40}
+            />
             <span className={styles.logoText}>OnboardOS</span>
           </div>
           <nav className={styles.nav}>

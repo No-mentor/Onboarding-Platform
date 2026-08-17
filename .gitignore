@@ -43,6 +43,9 @@ BE/*.iml
 # Local previews
 /tmp/
 
+# Design files
+FE/design-templetes/UI/
+
 .env
 .env.*
 !.env.example
