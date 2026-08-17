@@ -54,7 +54,7 @@ export default function LandingPage() {
             <Link href="/login" className={styles.navLink}>
               로그인
             </Link>
-            <Link href="/signup" className={styles.navLink}>
+            <Link href="/login" className={styles.navLink}>
               회원가입
             </Link>
           </nav>
@@ -78,7 +78,7 @@ export default function LandingPage() {
             신입 직원의 빠른 적응과 팀의 효율성을 동시에 달성하세요.
           </p>
           <div className={styles.heroCTA}>
-            <Link href="/signup" className={styles.ctaPrimary}>
+            <Link href="/login" className={styles.ctaPrimary}>
               지금 시작하기
               <ArrowRight size={18} />
             </Link>
@@ -205,7 +205,7 @@ export default function LandingPage() {
             OnboardOS로 조직의 온보딩 문화를 개선하고 팀의 성장을 가속화하세요.
           </p>
           <div className={styles.ctaButtons}>
-            <Link href="/signup" className={styles.ctaButton}>
+            <Link href="/login" className={styles.ctaButton}>
               무료로 시작하기
             </Link>
             <Link href="/login" className={styles.ctaButtonSecond}>
@@ -238,7 +238,7 @@ export default function LandingPage() {
                 <Link href="/login">로그인</Link>
               </li>
               <li>
-                <Link href="/signup">회원가입</Link>
+                <Link href="/login">회원가입</Link>
               </li>
             </ul>
           </div>
