@@ -64,7 +64,12 @@ export function SignupForm() {
         name: formData.name.trim(),
       });
 
-      saveAuthToken(response.accessToken, response.userId, response.email);
+      saveAuthToken(
+        response.accessToken,
+        response.userId,
+        response.email,
+        response.workspaces[0]?.id
+      );
       router.push('/login?signup=success');
     } catch (error) {
       if (error instanceof AuthError) {
