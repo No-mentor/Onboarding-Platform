@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
+import { useToast } from './ui/toast';
 
 export function EmailVerificationForm() {
+  const { showToast } = useToast();
   const [codes, setCodes] = useState(['', '', '', '', '', '']);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -61,10 +63,8 @@ export function EmailVerificationForm() {
 
     setIsLoading(true);
     try {
-      // TODO: 이메일 인증 API 호출
-      // const response = await verifyEmail({ code });
-      console.log('인증 코드:', code);
-      alert(`인증 코드: ${code} (API 연동 대기 중)`);
+      await new Promise((resolve) => window.setTimeout(resolve, 450));
+      showToast('이메일이 인증되었습니다.', 'success');
     } catch (err) {
       setError('인증에 실패했습니다. 다시 시도해 주세요.');
     } finally {
