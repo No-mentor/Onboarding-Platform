@@ -684,20 +684,193 @@
   box-shadow: 0 4px 12px rgba(108, 70, 162, 0.4);
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
+/* ── 모달 본문 스타일 ────────────────────────────────
+ * 모달 프레임(overlay/header/footer/버튼)은 components/ui/modal.module.css 담당.
+ * 여기서는 모달 안쪽 콘텐츠만 다루며, 페이지 클래스와 충돌하지 않도록 modal 접두어를 붙인다.
+ */
+.modalInput {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--color-text-dark);
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-::-webkit-scrollbar-track {
-  background: var(--color-bg-light);
+.modalInput:focus {
+  outline: none;
+  border-color: var(--color-bright-purple);
+  box-shadow: 0 0 0 3px rgba(108, 70, 162, 0.12);
 }
 
-::-webkit-scrollbar-thumb {
-  background: var(--color-text-light);
-  border-radius: 4px;
+.modalProgress {
+  padding: 24px;
+  background-color: var(--color-bg-light);
+  border-radius: 12px;
+  text-align: center;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-medium);
+.modalProgressValue {
+  font-size: 40px;
+  font-weight: 700;
+  color: var(--color-bright-purple);
+  line-height: 1;
+  margin-bottom: 20px;
+}
+
+.modalProgressStats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.modalStatItem {
+  padding: 10px;
+  background-color: var(--color-card-white);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-dark);
+}
+
+.modalInfoCard {
+  padding: 20px;
+  background-color: var(--color-bg-light);
+  border-radius: 12px;
+}
+
+.modalInfoTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-dark);
+  margin-bottom: 14px;
+}
+
+.modalInfoRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+}
+
+.modalInfoRow:last-child {
+  border-bottom: none;
+}
+
+.modalInfoRow span:first-child {
+  color: var(--color-text-medium);
+  font-weight: 500;
+}
+
+.modalInfoRow span:last-child {
+  color: var(--color-text-dark);
+  font-weight: 600;
+}
+
+.modalSection {
+  padding: 16px;
+  background-color: var(--color-bg-light);
+  border-radius: 10px;
+}
+
+.modalSection + .modalSection {
+  margin-top: 12px;
+}
+
+.modalSection h4 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-dark);
+}
+
+.modalSection p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-medium);
+  line-height: 1.5;
+}
+
+.modalList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modalListItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background-color: var(--color-bg-light);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-dark);
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.modalListItem:hover {
+  border-color: var(--color-bright-purple);
+  background-color: rgba(108, 70, 162, 0.04);
+}
+
+.modalListMeta {
+  font-size: 11px;
+  color: var(--color-text-light);
+  white-space: nowrap;
+}
+
+/* ── 인터랙션 다듬기 ─────────────────────────────── */
+.formGroup input,
+.formGroup select,
+.formGroup textarea,
+.input,
+.select,
+.textarea {
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.actionItem,
+.tabItem,
+.templateItem,
+.memberItem,
+.documentItem,
+.categoryItem {
+  transition: background-color 0.2s, border-color 0.2s, transform 0.15s;
+}
+
+.actionItem:hover,
+.tabItem:hover {
+  transform: translateX(2px);
+}
+
+/* 키보드 사용자에게 포커스를 명확히 보여준다 */
+.actionItem:focus-visible,
+.tabItem:focus-visible {
+  outline: 2px solid var(--color-bright-purple);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actionItem,
+  .tabItem,
+  .templateItem,
+  .memberItem,
+  .documentItem,
+  .categoryItem {
+    transition: none;
+  }
+
+  .actionItem:hover,
+  .tabItem:hover {
+    transform: none;
+  }
 }

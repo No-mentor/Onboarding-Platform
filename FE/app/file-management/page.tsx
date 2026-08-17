@@ -1,13 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Download, MoreVertical, RotateCcw, ChevronLeft, ChevronRight, Bell, HelpCircle, X, Cloud, AlertTriangle, Trash2, FileText, Lock, Share2, MessageCircle } from 'lucide-react';
+import { Search, Download, MoreVertical, RotateCcw, ChevronLeft, ChevronRight, Bell, HelpCircle, X, Cloud, AlertTriangle, Trash2, FileText, Lock, Share2, MessageCircle, Sparkles, Send, Check, Settings } from 'lucide-react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFilePdf, faFileExcel, faFilePowerpoint } from '@fortawesome/free-solid-svg-icons';
 import { CommonSidebar } from '@/components/common-sidebar';
+import { Modal, ModalPrimaryButton, ModalSecondaryButton, ModalDangerButton } from '@/components/ui/modal';
+import { useModalAction } from '@/components/ui/use-modal-action';
 import styles from './file-management.module.css';
 
 export default function FileManagementPage() {
+  const { run, isPending } = useModalAction();
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFile, setSelectedFile] = useState(0);
@@ -263,7 +266,7 @@ export default function FileManagementPage() {
                         <button className={styles.moreBtn} onClick={() => {
                           setSelectedFile(idx);
                           setIsActionsMenuOpen(true);
-                        }}>⋮</button>
+                        }}><MoreVertical size={16} /></button>
                       )}
                     </div>
                   </div>
@@ -396,322 +399,306 @@ export default function FileManagementPage() {
 
       {/* 1. File Upload Modal */}
       {isUploadModalOpen && (
-        <div className={styles.modalOverlay} onClick={() => setIsUploadModalOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>파일 업로드</h2>
-              <button onClick={() => setIsUploadModalOpen(false)} className={styles.modalCloseBtn}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className={styles.modalBody}>
-              {/* Drag and Drop Area */}
-              <div className={styles.uploadArea}>
-                <Cloud size={48} color="#9CA3AF" />
-                <p className={styles.uploadTitle}>파일을 드래그 앤 드롭하거나 클릭하여 업로드</p>
-                <p className={styles.uploadSubtitle}>PDF, DOCX, XLSX, PPTX</p>
-              </div>
-
-              {/* Form Fields */}
-              <div className={styles.formGroup}>
-                <label className={styles.label}>문서명</label>
-                <input
-                  type="text"
-                  value={uploadFileName}
-                  onChange={(e) => setUploadFileName(e.target.value)}
-                  placeholder="예: 행사운영가이드"
-                  className={styles.input}
-                />
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>공개 범위</label>
-                <select
-                  value={uploadScope}
-                  onChange={(e) => setUploadScope(e.target.value)}
-                  className={styles.select}
-                >
-                  <option value="WORKSPACE">WORKSPACE</option>
-                  <option value="ROLE_BASED">ROLE_BASED</option>
-                  <option value="PRIVATE">PRIVATE</option>
-                </select>
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>허용 역할</label>
-                <div className={styles.rolesContainer}>
-                  {['NEW_HIRE', 'MEMBER'].map((role) => (
-                    <div key={role} className={styles.roleCheckbox}>
-                      <input
-                        type="checkbox"
-                        id={`role-${role}`}
-                        checked={uploadRoles.includes(role)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setUploadRoles([...uploadRoles, role]);
-                          } else {
-                            setUploadRoles(uploadRoles.filter(r => r !== role));
-                          }
-                        }}
-                      />
-                      <label htmlFor={`role-${role}`} className={styles.roleLabel}>{role}</label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>설명 (선택)</label>
-                <textarea
-                  value={uploadDescription}
-                  onChange={(e) => setUploadDescription(e.target.value)}
-                  placeholder="문서에 대한 설명을 입력하세요."
-                  className={styles.textarea}
-                  rows={4}
-                />
-                <span className={styles.charCount}>0 / 500</span>
-              </div>
-            </div>
-
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsUploadModalOpen(false)} className={styles.cancelBtn}>
-                취소
-              </button>
-              <button className={styles.primaryBtn}>
+        <Modal
+          open
+          onClose={() => setIsUploadModalOpen(false)}
+          title="파일 업로드"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsUploadModalOpen(false)}>취소</ModalSecondaryButton>
+              <ModalPrimaryButton
+                loading={isPending('file-management-0')}
+                onClick={() => run('file-management-0', '파일을 업로드했습니다.', () => setIsUploadModalOpen(false))}
+              >
                 <Cloud size={16} /> 업로드
-              </button>
+              </ModalPrimaryButton>
+            </>
+          }
+        >
+          {/* Drag and Drop Area */}
+          <div className={styles.uploadArea}>
+            <Cloud size={48} color="#9CA3AF" />
+            <p className={styles.uploadTitle}>파일을 드래그 앤 드롭하거나 클릭하여 업로드</p>
+            <p className={styles.uploadSubtitle}>PDF, DOCX, XLSX, PPTX</p>
+          </div>
+
+          {/* Form Fields */}
+          <div className={styles.formGroup}>
+            <label className={styles.label}>문서명</label>
+            <input
+              type="text"
+              value={uploadFileName}
+              onChange={(e) => setUploadFileName(e.target.value)}
+              placeholder="예: 행사운영가이드"
+              className={styles.input}
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.label}>공개 범위</label>
+            <select
+              value={uploadScope}
+              onChange={(e) => setUploadScope(e.target.value)}
+              className={styles.select}
+            >
+              <option value="WORKSPACE">WORKSPACE</option>
+              <option value="ROLE_BASED">ROLE_BASED</option>
+              <option value="PRIVATE">PRIVATE</option>
+            </select>
+          </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.label}>허용 역할</label>
+            <div className={styles.rolesContainer}>
+              {['NEW_HIRE', 'MEMBER'].map((role) => (
+                <div key={role} className={styles.roleCheckbox}>
+                  <input
+                    type="checkbox"
+                    id={`role-${role}`}
+                    checked={uploadRoles.includes(role)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setUploadRoles([...uploadRoles, role]);
+                      } else {
+                        setUploadRoles(uploadRoles.filter(r => r !== role));
+                      }
+                    }}
+                  />
+                  <label htmlFor={`role-${role}`} className={styles.roleLabel}>{role}</label>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.label}>설명 (선택)</label>
+            <textarea
+              value={uploadDescription}
+              onChange={(e) => setUploadDescription(e.target.value)}
+              placeholder="문서에 대한 설명을 입력하세요."
+              className={styles.textarea}
+              rows={4}
+            />
+            <span className={styles.charCount}>0 / 500</span>
+          </div>
+        </Modal>
       )}
 
       {/* 2. AI Question Modal (File Details) */}
       {isDetailsModalOpen && currentFile && (
-        <div className={styles.modalOverlay} onClick={() => setIsDetailsModalOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>AI에게 질문</h2>
-              <button onClick={() => setIsDetailsModalOpen(false)} className={styles.modalCloseBtn}>
-                <X size={20} />
-              </button>
+        <Modal
+          open
+          onClose={() => setIsDetailsModalOpen(false)}
+          title="AI에게 질문"
+        >
+          <div className={styles.chatContainer}>
+            {/* Chat message from user */}
+            <div className={styles.chatTime}>10:24</div>
+            <div className={styles.userMessage}>
+              {currentFile.name}은 인제 창조된 됐?
             </div>
 
-            <div className={styles.modalBody}>
-              <div className={styles.chatContainer}>
-                {/* Chat message from user */}
-                <div className={styles.chatTime}>10:24</div>
-                <div className={styles.userMessage}>
-                  {currentFile.name}은 인제 창조된 됐?
-                </div>
+            {/* Chat message from AI */}
+            <div className={styles.chatTime}>10:24</div>
+            <div className={styles.aiMessage}>
+              <div className={styles.aiIcon}><Sparkles size={18} /></div>
+              <p>{currentFile.name}은 행사 기획 단계에서 중요한 참고 자료입니다. 또한 행사 주최자 작성 시, 미팅 운영 정책 적 작성 시, 미팅 참석자 현황 시, 중요 정책 및 보고서 작성 시 인도시 필수 메뉴입니다.</p>
+            </div>
 
-                {/* Chat message from AI */}
-                <div className={styles.chatTime}>10:24</div>
-                <div className={styles.aiMessage}>
-                  <div className={styles.aiIcon}>✨</div>
-                  <p>{currentFile.name}은 행사 기획 단계에서 중요한 참고 자료입니다. 또한 행사 주최자 작성 시, 미팅 운영 정책 적 작성 시, 미팅 참석자 현황 시, 중요 정책 및 보고서 작성 시 인도시 필수 메뉴입니다.</p>
-                </div>
-
-                {/* Sources */}
-                <div className={styles.sources}>
-                  <span>출처</span>
-                  <div className={styles.sourceButtons}>
-                    <button className={styles.sourceBtn}>
-                      <FileText size={14} /> {currentFile.name}.pdf - p.3
-                    </button>
-                    <button className={styles.sourceBtn}>
-                      <FileText size={14} /> {currentFile.name}.pdf - p.5
-                    </button>
-                  </div>
-                </div>
-
-                {/* Follow-up question */}
-                <div className={styles.followUpContainer}>
-                  <input
-                    type="text"
-                    placeholder="추기 질문을 입력하세요"
-                    className={styles.followUpInput}
-                  />
-                  <button className={styles.sendBtn}>✓</button>
-                </div>
-              </div>
-
-              <div className={styles.aiFooterButtons}>
-                <button className={styles.aiFooterBtn}>
-                  <RotateCcw size={14} /> 재 질문
+            {/* Sources */}
+            <div className={styles.sources}>
+              <span>출처</span>
+              <div className={styles.sourceButtons}>
+                <button className={styles.sourceBtn}>
+                  <FileText size={14} /> {currentFile.name}.pdf - p.3
                 </button>
-                <button className={styles.aiFooterBtn}>
-                  <Share2 size={14} /> 진 채팅으로 이동
+                <button className={styles.sourceBtn}>
+                  <FileText size={14} /> {currentFile.name}.pdf - p.5
                 </button>
               </div>
+            </div>
+
+            {/* Follow-up question */}
+            <div className={styles.followUpContainer}>
+              <input
+                type="text"
+                placeholder="추기 질문을 입력하세요"
+                className={styles.followUpInput}
+              />
+              <button className={styles.sendBtn}><Send size={16} /></button>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* 3. Reprocess Confirmation Modal */}
-      {isReprocessConfirmOpen && currentFile && (
-        <div className={styles.modalOverlay} onClick={() => setIsReprocessConfirmOpen(false)}>
-          <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setIsReprocessConfirmOpen(false)} className={styles.modalCloseBtn}>
-              <X size={20} />
+          <div className={styles.aiFooterButtons}>
+            <button className={styles.aiFooterBtn}>
+              <RotateCcw size={14} /> 재 질문
             </button>
-
-            <div className={styles.confirmHeader}>
-              <h2>문서 재처리</h2>
-              <p>심패한 문서를 다시 처리할 수 있습니다.</p>
-              <p>재처리된 시점에 따라 상태가 PENDING → PROCESSINGO로 변경되며,</p>
-              <p>처리 결과에 따라 상태가 업데이트됩니다.</p>
-            </div>
-
-            <div className={styles.confirmContent}>
-              <div className={styles.fileCard}>
-                <FileText size={24} color="#DC2626" />
-                <span>{currentFile.name}</span>
-              </div>
-            </div>
-
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsReprocessConfirmOpen(false)} className={styles.cancelBtn}>
-                취소
-              </button>
-              <button className={styles.dangerBtn}>
-                재처리 시작
-              </button>
-            </div>
+            <button className={styles.aiFooterBtn}>
+              <Share2 size={14} /> 진 채팅으로 이동
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* 4. Delete Confirmation Modal */}
-      {isDeleteConfirmOpen && currentFile && (
-        <div className={styles.modalOverlay} onClick={() => setIsDeleteConfirmOpen(false)}>
-          <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.deleteWarning}>
-              <AlertTriangle size={48} color="#FCA5A5" />
-            </div>
+      {/* 3. 문서 재처리 확인 */}
+      {isReprocessConfirmOpen && currentFile && (
+        <Modal
+          open
+          onClose={() => setIsReprocessConfirmOpen(false)}
+          title="문서 재처리"
+          subtitle="실패한 문서를 다시 처리할 수 있습니다."
+          size="sm"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsReprocessConfirmOpen(false)}>취소</ModalSecondaryButton>
+              <ModalDangerButton
+                loading={isPending('file-management-1')}
+                onClick={() => run('file-management-1', '문서 재처리를 시작했습니다.', () => setIsReprocessConfirmOpen(false))}
+              >
+                재처리 시작
+              </ModalDangerButton>
+            </>
+          }
+        >
+          <div className={styles.confirmHeader}>
+            <p>재처리를 시작하면 상태가 PENDING → PROCESSING 으로 변경되며,</p>
+            <p>처리 결과에 따라 상태가 업데이트됩니다.</p>
+          </div>
 
-            <h2 className={styles.deleteTitle}>문서 삭제</h2>
-            <p className={styles.deleteMessage}>
-              '{currentFile.name}'을 삭제하시겠습니까?
-            </p>
-            <p className={styles.deleteSubtext}>
-              이 문서는 유지 중으로 이동되며, AI 단변에 삽은 내용은
-              더 이상 제공되지 않습니다.
-            </p>
-
-            <div className={styles.deleteFileCard}>
-              <FileText size={20} color="#DC2626" />
+          <div className={styles.confirmContent}>
+            <div className={styles.fileCard}>
+              <FileText size={24} color="#DC2626" />
               <span>{currentFile.name}</span>
             </div>
-
-            <p className={styles.deleteFootnote}>
-              휴지통에서는 30일 후 자동으로 완전 삭제됩니다.
-            </p>
-
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsDeleteConfirmOpen(false)} className={styles.cancelBtn}>
-                취소
-              </button>
-              <button className={styles.dangerBtn}>
-                휴지통으로 이동
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
+      )}
+
+      {/* 4. 문서 삭제 확인 */}
+      {isDeleteConfirmOpen && currentFile && (
+        <Modal
+          open
+          onClose={() => setIsDeleteConfirmOpen(false)}
+          title="문서 삭제"
+          size="sm"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsDeleteConfirmOpen(false)}>취소</ModalSecondaryButton>
+              <ModalDangerButton
+                loading={isPending('file-management-2')}
+                onClick={() => run('file-management-2', '문서를 휴지통으로 옮겼습니다.', () => setIsDeleteConfirmOpen(false))}
+              >
+                휴지통으로 이동
+              </ModalDangerButton>
+            </>
+          }
+        >
+          <div className={styles.deleteWarning}>
+            <AlertTriangle size={48} color="#FCA5A5" />
+          </div>
+
+          <p className={styles.deleteMessage}>
+            &apos;{currentFile.name}&apos;을 삭제하시겠습니까?
+          </p>
+          <p className={styles.deleteSubtext}>
+            이 문서는 휴지통으로 이동되며, AI 답변에 담긴 내용은 더 이상 제공되지 않습니다.
+          </p>
+
+          <div className={styles.deleteFileCard}>
+            <FileText size={20} color="#DC2626" />
+            <span>{currentFile.name}</span>
+          </div>
+
+          <p className={styles.deleteFootnote}>휴지통에서는 30일 후 자동으로 완전 삭제됩니다.</p>
+        </Modal>
       )}
 
       {/* 5. Metadata Settings Modal */}
       {isMetadataModalOpen && currentFile && (
-        <div className={styles.modalOverlay} onClick={() => setIsMetadataModalOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>문서 권한 설정</h2>
-              <button onClick={() => setIsMetadataModalOpen(false)} className={styles.modalCloseBtn}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className={styles.modalBody}>
-              <div className={styles.metadataFile}>
-                <FileText size={24} color="#DC2626" />
-                <span>{currentFile.name}</span>
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>공개 범위</label>
-                <select
-                  value={metadataScope}
-                  onChange={(e) => setMetadataScope(e.target.value)}
-                  className={styles.select}
-                >
-                  <option value="WORKSPACE">WORKSPACE</option>
-                  <option value="ROLE_BASED">ROLE_BASED</option>
-                  <option value="PRIVATE">PRIVATE</option>
-                </select>
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>허용 역할</label>
-                <div className={styles.selectedRoles}>
-                  {metadataRoles.map((role, idx) => (
-                    <span key={idx} className={styles.roleTag}>
-                      {role}
-                      <button onClick={() => setMetadataRoles(metadataRoles.filter((_, i) => i !== idx))}>
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className={styles.rolesContainer}>
-                  {['NEW_HIRE', 'MEMBER'].map((role) => (
-                    !metadataRoles.includes(role) && (
-                      <button
-                        key={role}
-                        className={styles.roleAdd}
-                        onClick={() => setMetadataRoles([...metadataRoles, role])}
-                      >
-                        + {role}
-                      </button>
-                    )
-                  ))}
-                </div>
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>태그</label>
-                <input
-                  type="text"
-                  value={metadataTags}
-                  onChange={(e) => setMetadataTags(e.target.value)}
-                  placeholder="태그 입력하고 Enter 눌러 주기하세요."
-                  className={styles.input}
-                />
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>설명</label>
-                <textarea
-                  value={metadataDescription}
-                  onChange={(e) => setMetadataDescription(e.target.value)}
-                  placeholder="행사 운영 정책 및 체크리스트 상세 내용"
-                  className={styles.textarea}
-                  rows={3}
-                />
-                <span className={styles.charCount}>25 / 500</span>
-              </div>
-            </div>
-
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsMetadataModalOpen(false)} className={styles.cancelBtn}>
-                취소
-              </button>
-              <button className={styles.primaryBtn}>
+        <Modal
+          open
+          onClose={() => setIsMetadataModalOpen(false)}
+          title="문서 권한 설정"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsMetadataModalOpen(false)}>취소</ModalSecondaryButton>
+              <ModalPrimaryButton
+                loading={isPending('file-management-3')}
+                onClick={() => run('file-management-3', '변경 내용을 저장했습니다.', () => setIsMetadataModalOpen(false))}
+              >
                 저장
-              </button>
+              </ModalPrimaryButton>
+            </>
+          }
+        >
+          <div className={styles.metadataFile}>
+            <FileText size={24} color="#DC2626" />
+            <span>{currentFile.name}</span>
+          </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.label}>공개 범위</label>
+            <select
+              value={metadataScope}
+              onChange={(e) => setMetadataScope(e.target.value)}
+              className={styles.select}
+            >
+              <option value="WORKSPACE">WORKSPACE</option>
+              <option value="ROLE_BASED">ROLE_BASED</option>
+              <option value="PRIVATE">PRIVATE</option>
+            </select>
+          </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.label}>허용 역할</label>
+            <div className={styles.selectedRoles}>
+              {metadataRoles.map((role, idx) => (
+                <span key={idx} className={styles.roleTag}>
+                  {role}
+                  <button onClick={() => setMetadataRoles(metadataRoles.filter((_, i) => i !== idx))}>
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className={styles.rolesContainer}>
+              {['NEW_HIRE', 'MEMBER'].map((role) => (
+                !metadataRoles.includes(role) && (
+                  <button
+                    key={role}
+                    className={styles.roleAdd}
+                    onClick={() => setMetadataRoles([...metadataRoles, role])}
+                  >
+                    + {role}
+                  </button>
+                )
+              ))}
             </div>
           </div>
-        </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.label}>태그</label>
+            <input
+              type="text"
+              value={metadataTags}
+              onChange={(e) => setMetadataTags(e.target.value)}
+              placeholder="태그 입력하고 Enter 눌러 주기하세요."
+              className={styles.input}
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.label}>설명</label>
+            <textarea
+              value={metadataDescription}
+              onChange={(e) => setMetadataDescription(e.target.value)}
+              placeholder="행사 운영 정책 및 체크리스트 상세 내용"
+              className={styles.textarea}
+              rows={3}
+            />
+            <span className={styles.charCount}>25 / 500</span>
+          </div>
+        </Modal>
       )}
 
       {/* 6. File Actions Menu */}
@@ -761,7 +748,11 @@ export default function FileManagementPage() {
           <div className={styles.sidePanel} onClick={(e) => e.stopPropagation()}>
             <div className={styles.sidePanelHeader}>
               <h2>처리 이력</h2>
-              <button onClick={() => setIsRbacSidePanelOpen(false)} className={styles.modalCloseBtn}>
+              <button
+                onClick={() => setIsRbacSidePanelOpen(false)}
+                className={styles.sidePanelCloseBtn}
+                aria-label="닫기"
+              >
                 <X size={20} />
               </button>
             </div>
@@ -770,7 +761,7 @@ export default function FileManagementPage() {
               {/* Timeline */}
               <div className={styles.timeline}>
                 <div className={styles.timelineItem}>
-                  <div className={styles.timelineIcon} style={{ backgroundColor: '#10B981' }}>✓</div>
+                  <div className={styles.timelineIcon} style={{ backgroundColor: '#10B981' }}><Check size={14} /></div>
                   <div className={styles.timelineContent}>
                     <p className={styles.timelineTitle}>업로드 도입</p>
                     <p className={styles.timelineSubtext}>파일이 업로드되었습니다.</p>
@@ -779,7 +770,7 @@ export default function FileManagementPage() {
                 </div>
 
                 <div className={styles.timelineItem}>
-                  <div className={styles.timelineIcon} style={{ backgroundColor: '#3B82F6' }}>⚙</div>
+                  <div className={styles.timelineIcon} style={{ backgroundColor: '#3B82F6' }}><Settings size={14} /></div>
                   <div className={styles.timelineContent}>
                     <p className={styles.timelineTitle}>파일 처리</p>
                     <p className={styles.timelineSubtext}>파일이 처리되었습니다.</p>
@@ -788,7 +779,7 @@ export default function FileManagementPage() {
                 </div>
 
                 <div className={styles.timelineItem}>
-                  <div className={styles.timelineIcon} style={{ backgroundColor: '#10B981' }}>✓</div>
+                  <div className={styles.timelineIcon} style={{ backgroundColor: '#10B981' }}><Check size={14} /></div>
                   <div className={styles.timelineContent}>
                     <p className={styles.timelineTitle}>체크 생성</p>
                     <p className={styles.timelineSubtext}>문서 42개의 체크 폴드가 생성되었습니다.</p>
@@ -797,7 +788,7 @@ export default function FileManagementPage() {
                 </div>
 
                 <div className={styles.timelineItem}>
-                  <div className={styles.timelineIcon} style={{ backgroundColor: '#10B981' }}>✓</div>
+                  <div className={styles.timelineIcon} style={{ backgroundColor: '#10B981' }}><Check size={14} /></div>
                   <div className={styles.timelineContent}>
                     <p className={styles.timelineTitle}>입체된 완료</p>
                     <p className={styles.timelineSubtext}>파일이 입체되었습니다.</p>
@@ -806,7 +797,7 @@ export default function FileManagementPage() {
                 </div>
 
                 <div className={styles.timelineItem}>
-                  <div className={styles.timelineIcon} style={{ backgroundColor: '#10B981' }}>✓</div>
+                  <div className={styles.timelineIcon} style={{ backgroundColor: '#10B981' }}><Check size={14} /></div>
                   <div className={styles.timelineContent}>
                     <p className={styles.timelineTitle}>READY 전환</p>
                     <p className={styles.timelineSubtext}>문서가 READY 상태로 전환되었습니다.</p>

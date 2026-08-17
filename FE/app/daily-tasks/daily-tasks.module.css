@@ -602,6 +602,271 @@
   box-shadow: 0 4px 12px rgba(108, 70, 162, 0.3);
 }
 
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.primaryBtn {
+  background: var(--color-bright-purple);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.primaryBtn:hover {
+  background: var(--color-dark-purple);
+  transform: translateY(-2px);
+}
+
+.cancelBtn {
+  background: var(--color-bg-light);
+  color: var(--color-text-dark);
+  border: 1px solid var(--color-border);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelBtn:hover {
+  background: var(--color-border);
+}
+
+/* Goals Card */
+.goalsCard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.goalItem {
+  padding: 16px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+}
+
+.goalItem h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-dark);
+}
+
+.goalItem p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-medium);
+  line-height: 1.5;
+}
+
+/* Document List */
+.documentList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.documentItem {
+  padding: 12px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+}
+
+.docName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-dark);
+  margin-bottom: 6px;
+}
+
+.docMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.docTime {
+  font-size: 11px;
+  color: var(--color-text-medium);
+}
+
+.docDesc {
+  font-size: 12px;
+  color: var(--color-text-light);
+}
+
+/* Checklist in Modal */
+.checklistList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.checklistItemModal {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+}
+
+.checklistItemModal input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.itemName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-dark);
+  margin-bottom: 4px;
+}
+
+.itemDesc {
+  font-size: 12px;
+  color: var(--color-text-medium);
+}
+
+/* Category List */
+.categoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.categoryItem {
+  padding: 16px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+}
+
+.categoryItem h4 {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-dark);
+}
+
+.categoryItem p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-medium);
+  line-height: 1.4;
+}
+
+/* Action List */
+.actionList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.actionItem {
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--color-bg-light);
+  color: var(--color-text-dark);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.actionItem:hover {
+  background-color: rgba(108, 70, 162, 0.1);
+  color: var(--color-bright-purple);
+}
+
+/* Form Elements */
+.formGroup {
+  margin-bottom: 20px;
+}
+
+.label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-dark);
+  margin-bottom: 8px;
+}
+
+.textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--color-text-dark);
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.2s;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-bright-purple);
+  box-shadow: 0 0 0 3px rgba(108, 70, 162, 0.1);
+}
+
+/* Criteria List */
+.criteriaList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.criteriaItem {
+  padding: 16px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+}
+
+.criteriaItem h4 {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-dark);
+}
+
+.criteriaItem p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-medium);
+  line-height: 1.4;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -618,4 +883,51 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-medium);
+}
+
+/* ── 인터랙션 다듬기 ─────────────────────────────── */
+.formGroup input,
+.formGroup select,
+.formGroup textarea,
+.input,
+.select,
+.textarea {
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.actionItem,
+.tabItem,
+.templateItem,
+.memberItem,
+.documentItem,
+.categoryItem {
+  transition: background-color 0.2s, border-color 0.2s, transform 0.15s;
+}
+
+.actionItem:hover,
+.tabItem:hover {
+  transform: translateX(2px);
+}
+
+/* 키보드 사용자에게 포커스를 명확히 보여준다 */
+.actionItem:focus-visible,
+.tabItem:focus-visible {
+  outline: 2px solid var(--color-bright-purple);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actionItem,
+  .tabItem,
+  .templateItem,
+  .memberItem,
+  .documentItem,
+  .categoryItem {
+    transition: none;
+  }
+
+  .actionItem:hover,
+  .tabItem:hover {
+    transform: none;
+  }
 }

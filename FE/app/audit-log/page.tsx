@@ -1,11 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, RotateCcw, Bell, HelpCircle, X, Calendar, Download, Copy } from 'lucide-react';
+import { ChevronDown, RotateCcw, Bell, HelpCircle, Calendar, Download, Copy } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
+import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
+import { useModalAction } from '@/components/ui/use-modal-action';
 import styles from './audit-log.module.css';
 
 export default function AuditLogPage() {
+  const { run, isPending } = useModalAction();
   const [selectedUser, setSelectedUser] = useState('all');
   const [selectedEvent, setSelectedEvent] = useState('all');
   const [startDate, setStartDate] = useState('2026.08.10 09:00');
@@ -255,305 +258,279 @@ export default function AuditLogPage() {
 
       {/* 1. Event Details Modal */}
       {isEventDetailsOpen && selectedLogId && (
-        <div className={styles.modalOverlay} onClick={() => setIsEventDetailsOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>로그 상세 보기</h2>
-              <button onClick={() => setIsEventDetailsOpen(false)} className={styles.closeBtn}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className={styles.modalBody}>
-              {logs.find(l => l.id === selectedLogId) && (
-                <>
-                  <div className={styles.detailRow}>
-                    <span className={styles.detailLabel}>시간</span>
-                    <span className={styles.detailValue}>{logs.find(l => l.id === selectedLogId)?.time}</span>
-                  </div>
-                  <div className={styles.detailRow}>
-                    <span className={styles.detailLabel}>행위자</span>
-                    <span className={styles.detailValue}>
-                      {logs.find(l => l.id === selectedLogId)?.user}
-                      <span className={styles.badge}>NEW_HIRE · 마케팅팀</span>
-                    </span>
-                  </div>
-                  <div className={styles.detailRow}>
-                    <span className={styles.detailLabel}>이벤트</span>
-                    <span
-                      className={styles.eventBadge}
-                      style={{
-                        backgroundColor: eventBgColors[logs.find(l => l.id === selectedLogId)?.event!] || '#EDE9FE',
-                        color: eventColors[logs.find(l => l.id === selectedLogId)?.event!] || '#A78BFA',
-                      }}
-                    >
-                      {logs.find(l => l.id === selectedLogId)?.event}
-                    </span>
-                  </div>
-                  <div className={styles.detailRow}>
-                    <span className={styles.detailLabel}>대상</span>
-                    <span className={styles.detailValue}>{logs.find(l => l.id === selectedLogId)?.target}</span>
-                  </div>
-                  <div className={styles.detailRow}>
-                    <span className={styles.detailLabel}>결과</span>
-                    <span
-                      className={styles.resultBadge}
-                      style={{ color: logs.find(l => l.id === selectedLogId)?.resultColor }}
-                    >
-                      {logs.find(l => l.id === selectedLogId)?.result}
-                    </span>
-                  </div>
-                  <div className={styles.detailRow}>
-                    <span className={styles.detailLabel}>워크스페이스</span>
-                    <span className={styles.detailValue}>마케팅팀 인수인계</span>
-                  </div>
-                  <div className={styles.detailRow}>
-                    <span className={styles.detailLabel}>IP 주소</span>
-                    <span className={styles.detailValue}>203.254.11.27</span>
-                  </div>
-                  <div className={styles.detailRow}>
-                    <span className={styles.detailLabel}>설명</span>
-                    <span className={styles.detailValue}>액택 운송에 대한 접근 권한이 없어 액세스가 거부되었습니다.</span>
-                  </div>
-                  <div className={styles.detailRow}>
-                    <span className={styles.detailLabel}>관련 메타데이터</span>
-                    <div className={styles.metadata}>
-                      <code>{JSON.stringify({
-                        "object_type": "document",
-                        "object_id": "doc_8f7a2c1b",
-                        "file_name": "임원_급여자료.pdf",
-                        "file_size": 2847291,
-                        "owner": "admin@company.com",
-                        "permission_required": "viewer"
-                      }, null, 2)}</code>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsEventDetailsOpen(false)} className={styles.cancelBtn}>
-                닫기
-              </button>
-            </div>
-          </div>
-        </div>
+        <Modal
+          open
+          onClose={() => setIsEventDetailsOpen(false)}
+          title="로그 상세 보기"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsEventDetailsOpen(false)}>닫기</ModalSecondaryButton>
+            </>
+          }
+        >
+          {logs.find(l => l.id === selectedLogId) && (
+            <>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>시간</span>
+                <span className={styles.detailValue}>{logs.find(l => l.id === selectedLogId)?.time}</span>
+              </div>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>행위자</span>
+                <span className={styles.detailValue}>
+                  {logs.find(l => l.id === selectedLogId)?.user}
+                  <span className={styles.badge}>NEW_HIRE · 마케팅팀</span>
+                </span>
+              </div>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>이벤트</span>
+                <span
+                  className={styles.eventBadge}
+                  style={{
+                    backgroundColor: eventBgColors[logs.find(l => l.id === selectedLogId)?.event!] || '#EDE9FE',
+                    color: eventColors[logs.find(l => l.id === selectedLogId)?.event!] || '#A78BFA',
+                  }}
+                >
+                  {logs.find(l => l.id === selectedLogId)?.event}
+                </span>
+              </div>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>대상</span>
+                <span className={styles.detailValue}>{logs.find(l => l.id === selectedLogId)?.target}</span>
+              </div>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>결과</span>
+                <span
+                  className={styles.resultBadge}
+                  style={{ color: logs.find(l => l.id === selectedLogId)?.resultColor }}
+                >
+                  {logs.find(l => l.id === selectedLogId)?.result}
+                </span>
+              </div>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>워크스페이스</span>
+                <span className={styles.detailValue}>마케팅팀 인수인계</span>
+              </div>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>IP 주소</span>
+                <span className={styles.detailValue}>203.254.11.27</span>
+              </div>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>설명</span>
+                <span className={styles.detailValue}>액택 운송에 대한 접근 권한이 없어 액세스가 거부되었습니다.</span>
+              </div>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>관련 메타데이터</span>
+                <div className={styles.metadata}>
+                  <code>{JSON.stringify({
+                    "object_type": "document",
+                    "object_id": "doc_8f7a2c1b",
+                    "file_name": "임원_급여자료.pdf",
+                    "file_size": 2847291,
+                    "owner": "admin@company.com",
+                    "permission_required": "viewer"
+                  }, null, 2)}</code>
+                </div>
+              </div>
+            </>
+          )}
+        </Modal>
       )}
 
       {/* 2. Export Modal */}
       {isExportModalOpen && (
-        <div className={styles.modalOverlay} onClick={() => setIsExportModalOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>로그 내보내기</h2>
-              <button onClick={() => setIsExportModalOpen(false)} className={styles.closeBtn}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className={styles.modalBody}>
-              <div className={styles.formGroup}>
-                <label className={styles.label}>파일 형식</label>
-                <div className={styles.formatOptions}>
-                  <label className={styles.radioOption}>
-                    <input type="radio" name="format" value="csv" defaultChecked />
-                    <span>CSV</span>
-                  </label>
-                  <label className={styles.radioOption}>
-                    <input type="radio" name="format" value="excel" />
-                    <span>Excel</span>
-                  </label>
-                  <label className={styles.radioOption}>
-                    <input type="radio" name="format" value="json" />
-                    <span>JSON</span>
-                  </label>
-                </div>
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>포함 범위</label>
-                <div className={styles.checkboxGroup}>
-                  <label className={styles.checkbox}>
-                    <input type="checkbox" defaultChecked />
-                    <span>기본 정보</span>
-                  </label>
-                  <label className={styles.checkbox}>
-                    <input type="checkbox" defaultChecked />
-                    <span>상세 정보</span>
-                  </label>
-                  <label className={styles.checkbox}>
-                    <input type="checkbox" />
-                    <span>메타데이터</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsExportModalOpen(false)} className={styles.cancelBtn}>
-                취소
-              </button>
-              <button className={styles.primaryBtn}>
+        <Modal
+          open
+          onClose={() => setIsExportModalOpen(false)}
+          title="로그 내보내기"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsExportModalOpen(false)}>취소</ModalSecondaryButton>
+              <ModalPrimaryButton
+                loading={isPending('audit-log-0')}
+                onClick={() => run('audit-log-0', '로그를 내보냈습니다.', () => setIsExportModalOpen(false))}
+              >
                 <Download size={16} /> 내보내기
-              </button>
+              </ModalPrimaryButton>
+            </>
+          }
+        >
+          <div className={styles.formGroup}>
+            <label className={styles.label}>파일 형식</label>
+            <div className={styles.formatOptions}>
+              <label className={styles.radioOption}>
+                <input type="radio" name="format" value="csv" defaultChecked />
+                <span>CSV</span>
+              </label>
+              <label className={styles.radioOption}>
+                <input type="radio" name="format" value="excel" />
+                <span>Excel</span>
+              </label>
+              <label className={styles.radioOption}>
+                <input type="radio" name="format" value="json" />
+                <span>JSON</span>
+              </label>
             </div>
           </div>
-        </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.label}>포함 범위</label>
+            <div className={styles.checkboxGroup}>
+              <label className={styles.checkbox}>
+                <input type="checkbox" defaultChecked />
+                <span>기본 정보</span>
+              </label>
+              <label className={styles.checkbox}>
+                <input type="checkbox" defaultChecked />
+                <span>상세 정보</span>
+              </label>
+              <label className={styles.checkbox}>
+                <input type="checkbox" />
+                <span>메타데이터</span>
+              </label>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* 3. Permission Audit Modal */}
       {isPermissionAuditOpen && (
-        <div className={styles.modalOverlay} onClick={() => setIsPermissionAuditOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>권한 감사</h2>
-              <button onClick={() => setIsPermissionAuditOpen(false)} className={styles.closeBtn}>
-                <X size={20} />
-              </button>
+        <Modal
+          open
+          onClose={() => setIsPermissionAuditOpen(false)}
+          title="권한 감사"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsPermissionAuditOpen(false)}>닫기</ModalSecondaryButton>
+            </>
+          }
+        >
+          <div className={styles.permissionItem}>
+            <div className={styles.permissionHeader}>
+              <h3>문서 접근 권한</h3>
             </div>
-
-            <div className={styles.modalBody}>
-              <div className={styles.permissionItem}>
-                <div className={styles.permissionHeader}>
-                  <h3>문서 접근 권한</h3>
-                </div>
-                <div className={styles.permissionContent}>
-                  <div className={styles.permissionRow}>
-                    <span className={styles.permissionLabel}>역할</span>
-                    <span className={styles.permissionValue}>NEW_HIRE</span>
-                  </div>
-                  <div className={styles.permissionRow}>
-                    <span className={styles.permissionLabel}>권한</span>
-                    <span className={styles.permissionValue}>VIEW, DOWNLOAD</span>
-                  </div>
-                  <div className={styles.permissionRow}>
-                    <span className={styles.permissionLabel}>생성 일시</span>
-                    <span className={styles.permissionValue}>2026.08.16 18:21:01</span>
-                  </div>
-                </div>
+            <div className={styles.permissionContent}>
+              <div className={styles.permissionRow}>
+                <span className={styles.permissionLabel}>역할</span>
+                <span className={styles.permissionValue}>NEW_HIRE</span>
               </div>
-
-              <div className={styles.permissionItem}>
-                <div className={styles.permissionHeader}>
-                  <h3>AI 쿼리 권한</h3>
-                </div>
-                <div className={styles.permissionContent}>
-                  <div className={styles.permissionRow}>
-                    <span className={styles.permissionLabel}>역할</span>
-                    <span className={styles.permissionValue}>MEMBER</span>
-                  </div>
-                  <div className={styles.permissionRow}>
-                    <span className={styles.permissionLabel}>권한</span>
-                    <span className={styles.permissionValue}>QUERY</span>
-                  </div>
-                  <div className={styles.permissionRow}>
-                    <span className={styles.permissionLabel}>생성 일시</span>
-                    <span className={styles.permissionValue}>2026.08.16 18:21:01</span>
-                  </div>
-                </div>
+              <div className={styles.permissionRow}>
+                <span className={styles.permissionLabel}>권한</span>
+                <span className={styles.permissionValue}>VIEW, DOWNLOAD</span>
               </div>
-            </div>
-
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsPermissionAuditOpen(false)} className={styles.cancelBtn}>
-                닫기
-              </button>
+              <div className={styles.permissionRow}>
+                <span className={styles.permissionLabel}>생성 일시</span>
+                <span className={styles.permissionValue}>2026.08.16 18:21:01</span>
+              </div>
             </div>
           </div>
-        </div>
+
+          <div className={styles.permissionItem}>
+            <div className={styles.permissionHeader}>
+              <h3>AI 쿼리 권한</h3>
+            </div>
+            <div className={styles.permissionContent}>
+              <div className={styles.permissionRow}>
+                <span className={styles.permissionLabel}>역할</span>
+                <span className={styles.permissionValue}>MEMBER</span>
+              </div>
+              <div className={styles.permissionRow}>
+                <span className={styles.permissionLabel}>권한</span>
+                <span className={styles.permissionValue}>QUERY</span>
+              </div>
+              <div className={styles.permissionRow}>
+                <span className={styles.permissionLabel}>생성 일시</span>
+                <span className={styles.permissionValue}>2026.08.16 18:21:01</span>
+              </div>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* 4. Time Range Picker Modal */}
       {isTimeRangeOpen && (
-        <div className={styles.modalOverlay} onClick={() => setIsTimeRangeOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>시간 범위 선택</h2>
-              <button onClick={() => setIsTimeRangeOpen(false)} className={styles.closeBtn}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className={styles.modalBody}>
-              <div className={styles.calendarGrid}>
-                <div className={styles.calendar}>
-                  <div className={styles.calendarHeader}>
-                    <button>&laquo;</button>
-                    <span>2026년 8월</span>
-                    <button>&raquo;</button>
-                  </div>
-                  <div className={styles.calendarBody}>
-                    <div className={styles.dayHeader}>
-                      <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
-                    </div>
-                    <div className={styles.dayGrid}>
-                      {[26, 27, 28, 29, 30, 31, 1].map((d, i) => (
-                        <button key={`prev-${i}`} className={styles.dayBtn} style={{ color: '#9CA3AF' }}>{d}</button>
-                      ))}
-                      {[...Array(31)].map((_, i) => (
-                        <button
-                          key={`curr-${i + 1}`}
-                          className={`${styles.dayBtn} ${[10, 16].includes(i + 1) ? styles.active : ''}`}
-                        >
-                          {i + 1}
-                        </button>
-                      ))}
-                      {[1, 2, 3, 4, 5].map((d, i) => (
-                        <button key={`next-${i}`} className={styles.dayBtn} style={{ color: '#9CA3AF' }}>{d}</button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className={styles.calendar}>
-                  <div className={styles.calendarHeader}>
-                    <button>&laquo;</button>
-                    <span>2026년 8월</span>
-                    <button>&raquo;</button>
-                  </div>
-                  <div className={styles.calendarBody}>
-                    <div className={styles.dayHeader}>
-                      <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
-                    </div>
-                    <div className={styles.dayGrid}>
-                      {[26, 27, 28, 29, 30, 31, 1].map((d, i) => (
-                        <button key={`prev2-${i}`} className={styles.dayBtn} style={{ color: '#9CA3AF' }}>{d}</button>
-                      ))}
-                      {[...Array(31)].map((_, i) => (
-                        <button
-                          key={`curr2-${i + 1}`}
-                          className={`${styles.dayBtn} ${[16].includes(i + 1) ? styles.active : ''}`}
-                        >
-                          {i + 1}
-                        </button>
-                      ))}
-                      {[1, 2, 3, 4, 5].map((d, i) => (
-                        <button key={`next2-${i}`} className={styles.dayBtn} style={{ color: '#9CA3AF' }}>{d}</button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className={styles.timeRangePresets}>
-                <button className={styles.presetBtn}>오늘</button>
-                <button className={styles.presetBtn}>최근 7일</button>
-                <button className={styles.presetBtn}>최근 30일</button>
-                <button className={styles.presetBtn}>직접 선택</button>
-              </div>
-            </div>
-
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsTimeRangeOpen(false)} className={styles.cancelBtn}>
-                취소
-              </button>
-              <button className={styles.primaryBtn}>
+        <Modal
+          open
+          onClose={() => setIsTimeRangeOpen(false)}
+          title="시간 범위 선택"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsTimeRangeOpen(false)}>취소</ModalSecondaryButton>
+              <ModalPrimaryButton
+                loading={isPending('audit-log-1')}
+                onClick={() => run('audit-log-1', '필터를 적용했습니다.', () => setIsTimeRangeOpen(false))}
+              >
                 적용
-              </button>
+              </ModalPrimaryButton>
+            </>
+          }
+        >
+          <div className={styles.calendarGrid}>
+            <div className={styles.calendar}>
+              <div className={styles.calendarHeader}>
+                <button>&laquo;</button>
+                <span>2026년 8월</span>
+                <button>&raquo;</button>
+              </div>
+              <div className={styles.calendarBody}>
+                <div className={styles.dayHeader}>
+                  <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+                </div>
+                <div className={styles.dayGrid}>
+                  {[26, 27, 28, 29, 30, 31, 1].map((d, i) => (
+                    <button key={`prev-${i}`} className={styles.dayBtn} style={{ color: '#9CA3AF' }}>{d}</button>
+                  ))}
+                  {[...Array(31)].map((_, i) => (
+                    <button
+                      key={`curr-${i + 1}`}
+                      className={`${styles.dayBtn} ${[10, 16].includes(i + 1) ? styles.active : ''}`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                  {[1, 2, 3, 4, 5].map((d, i) => (
+                    <button key={`next-${i}`} className={styles.dayBtn} style={{ color: '#9CA3AF' }}>{d}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.calendar}>
+              <div className={styles.calendarHeader}>
+                <button>&laquo;</button>
+                <span>2026년 8월</span>
+                <button>&raquo;</button>
+              </div>
+              <div className={styles.calendarBody}>
+                <div className={styles.dayHeader}>
+                  <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+                </div>
+                <div className={styles.dayGrid}>
+                  {[26, 27, 28, 29, 30, 31, 1].map((d, i) => (
+                    <button key={`prev2-${i}`} className={styles.dayBtn} style={{ color: '#9CA3AF' }}>{d}</button>
+                  ))}
+                  {[...Array(31)].map((_, i) => (
+                    <button
+                      key={`curr2-${i + 1}`}
+                      className={`${styles.dayBtn} ${[16].includes(i + 1) ? styles.active : ''}`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                  {[1, 2, 3, 4, 5].map((d, i) => (
+                    <button key={`next2-${i}`} className={styles.dayBtn} style={{ color: '#9CA3AF' }}>{d}</button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+
+          <div className={styles.timeRangePresets}>
+            <button className={styles.presetBtn}>오늘</button>
+            <button className={styles.presetBtn}>최근 7일</button>
+            <button className={styles.presetBtn}>최근 30일</button>
+            <button className={styles.presetBtn}>직접 선택</button>
+          </div>
+        </Modal>
       )}
     </div>
   );

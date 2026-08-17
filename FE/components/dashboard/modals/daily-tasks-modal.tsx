@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { Modal } from '@/components/ui/modal';
 import styles from './daily-tasks-modal.module.css';
 
 interface DailyTasksModalProps {
@@ -15,72 +15,65 @@ export function DailyTasksModal({ onClose }: DailyTasksModalProps) {
     {
       id: 1,
       category: '문서',
+      type: 'document',
       title: '행사운영가이드 .pdf 읽기',
-      time: '10:30 가치',
-      description: '행사 진행 흐름은 운영 정책을 확인하고 핵시 내용을 정리해요.',
-      details: [
-        { label: '상태 보기', icon: '👁️' },
-        { label: '완료', icon: '✓' },
-      ],
+      time: '10:30 까지',
+      description: '행사 진행 흐름과 운영 정책을 확인하고 핵심 내용을 정리해요.',
     },
     {
       id: 2,
       category: '체크',
+      type: 'checklist',
       title: '거래처 연락망 확인하기',
-      time: '14:00 가치',
-      description: '주요 거래처 담당자의 정보와 연락처 최신 확인하기',
-      details: [
-        { label: '상태 보기', icon: '👁️' },
-        { label: '완료', icon: '✓' },
-      ],
+      time: '14:00 까지',
+      description: '주요 거래처 담당자의 정보와 연락처를 최신으로 확인하기',
     },
     {
       id: 3,
-      category: '심습',
-      title: '예산안 설물 업데이트',
-      time: '16:00 가치',
-      description: '예산안 설물의 최신 원본을 검토하여 정확하게 완료했으세요.',
-      details: [
-        { label: '상태 보기', icon: '👁️' },
-        { label: '완료', icon: '✓' },
-      ],
+      category: '실습',
+      type: 'practice',
+      title: '예산안 샘플 업데이트',
+      time: '16:00 까지',
+      description: '예산안 샘플의 최신 원본을 검토하여 정확하게 반영해요.',
     },
   ];
 
   const tabs = [
-    { id: 'all', label: '전체', color: '#E3F2FD' },
-    { id: 'document', label: '문서', color: '#E3F2FD' },
-    { id: 'checklist', label: '체크', color: '#E0F2F1' },
-    { id: 'meeting', label: '심습', color: '#FFF3E0' },
+    { id: 'all', label: '전체' },
+    { id: 'document', label: '문서' },
+    { id: 'checklist', label: '체크' },
+    { id: 'practice', label: '실습' },
   ];
 
+  const visibleTasks = activeTab === 'all' ? tasks : tasks.filter((t) => t.type === activeTab);
+
+  const categoryClass = (type: string) => {
+    if (type === 'document') return styles.catDocument;
+    if (type === 'checklist') return styles.catChecklist;
+    return styles.catPractice;
+  };
+
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
-          <h2 className={styles.modalTitle}>오늘 할 일 전체 보기</h2>
-          <button className={styles.closeBtn} onClick={onClose}>
-            <X size={24} />
+    <Modal open onClose={onClose} title="오늘 할 일 전체 보기" size="lg">
+      <div className={styles.tabsContainer}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            className={`${styles.tab} ${activeTab === tab.id ? styles.active : ''}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
           </button>
-        </div>
+        ))}
+      </div>
 
-        <div className={styles.tabsContainer}>
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              className={`${styles.tab} ${activeTab === tab.id ? styles.active : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-              style={activeTab === tab.id ? { backgroundColor: tab.color } : {}}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        <div className={styles.tasksList}>
-          {tasks.map((task) => (
+      <div className={styles.tasksList}>
+        {visibleTasks.length > 0 ? (
+          visibleTasks.map((task) => (
             <div key={task.id} className={styles.taskRow}>
-              <div className={styles.taskCategory}>{task.category}</div>
+              <div className={`${styles.taskCategory} ${categoryClass(task.type)}`}>
+                {task.category}
+              </div>
               <div className={styles.taskContent}>
                 <h3 className={styles.taskTitle}>{task.title}</h3>
                 <p className={styles.taskDesc}>{task.description}</p>
@@ -91,13 +84,13 @@ export function DailyTasksModal({ onClose }: DailyTasksModalProps) {
                 <button className={styles.actionBtnPrimary}>완료</button>
               </div>
             </div>
-          ))}
-        </div>
-
-        <div className={styles.note}>
-          작업을 완료하면 진행률이 자동으로 업데이트됩니다.
-        </div>
+          ))
+        ) : (
+          <div className={styles.empty}>해당 조건의 할 일이 없습니다.</div>
+        )}
       </div>
-    </div>
+
+      <div className={styles.note}>작업을 완료하면 진행률이 자동으로 업데이트됩니다.</div>
+    </Modal>
   );
 }

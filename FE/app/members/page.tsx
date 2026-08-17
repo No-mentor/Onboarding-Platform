@@ -1,11 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, Mail, Bell, HelpCircle, X } from 'lucide-react';
+import { ChevronDown, Mail, Bell, HelpCircle } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
+import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
+import { useModalAction } from '@/components/ui/use-modal-action';
 import styles from './members.module.css';
 
 export default function MembersPage() {
+  const { run, isPending } = useModalAction();
   const [activeRole, setActiveRole] = useState('all');
   const [selectedMember, setSelectedMember] = useState<typeof members[0] | null>(null);
 
@@ -250,7 +253,7 @@ export default function MembersPage() {
                           className={styles.statusBadge}
                           style={{ color: statusColors[member.status] }}
                         >
-                          ● {member.status}
+                          <span className={styles.statusDot} /> {member.status}
                         </span>
                       </td>
                       <td className={styles.dateCell}>{member.joinDate}</td>
@@ -289,272 +292,234 @@ export default function MembersPage() {
 
       {/* 1. Invite Members Modal */}
       {isInviteModalOpen && (
-        <div className={styles.modalOverlay} onClick={() => setIsInviteModalOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>멤버 초대</h2>
-              <button onClick={() => setIsInviteModalOpen(false)} className={styles.modalCloseBtn}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className={styles.modalBody}>
-              <div className={styles.formGroup}>
-                <label className={styles.label}>이메일 주소</label>
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="example@company.com"
-                  className={styles.input}
-                />
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>역할</label>
-                <select
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value)}
-                  className={styles.select}
-                >
-                  <option value="NEW_HIRE">NEW_HIRE</option>
-                  <option value="MEMBER">MEMBER</option>
-                  <option value="MANAGER">MANAGER</option>
-                  <option value="ADMIN">ADMIN</option>
-                </select>
-              </div>
-
-              <p className={styles.helpText}>선택한 역할로 새 멤버를 초대합니다. 초대 메일이 발송됩니다.</p>
-            </div>
-
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsInviteModalOpen(false)} className={styles.cancelBtn}>
-                취소
-              </button>
-              <button className={styles.primaryBtn}>
+        <Modal
+          open
+          onClose={() => setIsInviteModalOpen(false)}
+          title="멤버 초대"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsInviteModalOpen(false)}>취소</ModalSecondaryButton>
+              <ModalPrimaryButton
+                loading={isPending('members-0')}
+                onClick={() => run('members-0', '초대를 발송했습니다.', () => setIsInviteModalOpen(false))}
+              >
                 초대 발송
-              </button>
-            </div>
+              </ModalPrimaryButton>
+            </>
+          }
+        >
+          <div className={styles.formGroup}>
+            <label className={styles.label}>이메일 주소</label>
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="example@company.com"
+              className={styles.input}
+            />
           </div>
-        </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.label}>역할</label>
+            <select
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value)}
+              className={styles.select}
+            >
+              <option value="NEW_HIRE">NEW_HIRE</option>
+              <option value="MEMBER">MEMBER</option>
+              <option value="MANAGER">MANAGER</option>
+              <option value="ADMIN">ADMIN</option>
+            </select>
+          </div>
+
+          <p className={styles.helpText}>선택한 역할로 새 멤버를 초대합니다. 초대 메일이 발송됩니다.</p>
+        </Modal>
       )}
 
       {/* 2. Member Details Modal */}
       {isMemberDetailsModalOpen && selectedMember && (
-        <div className={styles.modalOverlay} onClick={() => setIsMemberDetailsModalOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>멤버 정보</h2>
-              <button onClick={() => setIsMemberDetailsModalOpen(false)} className={styles.modalCloseBtn}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className={styles.modalBody}>
-              <div className={styles.memberCard}>
-                <div
-                  className={styles.memberAvatar}
-                  style={{ backgroundColor: selectedMember.bgColor }}
-                >
-                  {selectedMember.initials}
-                </div>
-                <h3 className={styles.memberCardName}>{selectedMember.name}</h3>
-                <p className={styles.memberCardTeam}>{selectedMember.team}</p>
-              </div>
-
-              <div className={styles.detailsGroup}>
-                <div className={styles.detailRow}>
-                  <span className={styles.detailLabel}>이메일</span>
-                  <span className={styles.detailValue}>{selectedMember.email}</span>
-                </div>
-                <div className={styles.detailRow}>
-                  <span className={styles.detailLabel}>역할</span>
-                  <span className={styles.detailValue} style={{ color: roleColors[selectedMember.role] || '#6C46A2' }}>
-                    {selectedMember.role}
-                  </span>
-                </div>
-                <div className={styles.detailRow}>
-                  <span className={styles.detailLabel}>상태</span>
-                  <span className={styles.detailValue} style={{ color: statusColors[selectedMember.status] }}>
-                    ● {selectedMember.status}
-                  </span>
-                </div>
-                <div className={styles.detailRow}>
-                  <span className={styles.detailLabel}>초대일</span>
-                  <span className={styles.detailValue}>{selectedMember.joinDate}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsMemberDetailsModalOpen(false)} className={styles.cancelBtn}>
-                닫기
-              </button>
-              <button
-                className={styles.primaryBtn}
-                onClick={() => {
-                  setIsMemberDetailsModalOpen(false);
-                  setIsRoleAssignmentModalOpen(true);
-                }}
+        <Modal
+          open
+          onClose={() => setIsMemberDetailsModalOpen(false)}
+          title="멤버 정보"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsMemberDetailsModalOpen(false)}>닫기</ModalSecondaryButton>
+              <ModalPrimaryButton
+                loading={isPending('members-1')}
+                onClick={() => run('members-1', '역할을 변경했습니다.', () => setIsMemberDetailsModalOpen(false))}
               >
                 역할 변경
-              </button>
+              </ModalPrimaryButton>
+            </>
+          }
+        >
+          <div className={styles.memberCard}>
+            <div
+              className={styles.memberAvatar}
+              style={{ backgroundColor: selectedMember.bgColor }}
+            >
+              {selectedMember.initials}
+            </div>
+            <h3 className={styles.memberCardName}>{selectedMember.name}</h3>
+            <p className={styles.memberCardTeam}>{selectedMember.team}</p>
+          </div>
+
+          <div className={styles.detailsGroup}>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>이메일</span>
+              <span className={styles.detailValue}>{selectedMember.email}</span>
+            </div>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>역할</span>
+              <span className={styles.detailValue} style={{ color: roleColors[selectedMember.role] || '#6C46A2' }}>
+                {selectedMember.role}
+              </span>
+            </div>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>상태</span>
+              <span className={styles.detailValue} style={{ color: statusColors[selectedMember.status] }}>
+                <span className={styles.statusDot} /> {selectedMember.status}
+              </span>
+            </div>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>초대일</span>
+              <span className={styles.detailValue}>{selectedMember.joinDate}</span>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* 3. Role Assignment Modal */}
       {isRoleAssignmentModalOpen && selectedMember && (
-        <div className={styles.modalOverlay} onClick={() => setIsRoleAssignmentModalOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>역할 및 상태 변경</h2>
-              <button onClick={() => setIsRoleAssignmentModalOpen(false)} className={styles.modalCloseBtn}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className={styles.modalBody}>
-              <div className={styles.memberCard}>
-                <div
-                  className={styles.memberAvatar}
-                  style={{ backgroundColor: selectedMember.bgColor }}
-                >
-                  {selectedMember.initials}
-                </div>
-                <h3 className={styles.memberCardName}>{selectedMember.name}</h3>
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>새 역할</label>
-                <select
-                  value={newMemberRole}
-                  onChange={(e) => setNewMemberRole(e.target.value)}
-                  className={styles.select}
-                >
-                  <option value="NEW_HIRE">NEW_HIRE</option>
-                  <option value="MEMBER">MEMBER</option>
-                  <option value="MANAGER">MANAGER</option>
-                  <option value="ADMIN">ADMIN</option>
-                </select>
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>상태</label>
-                <select
-                  value={newMemberStatus}
-                  onChange={(e) => setNewMemberStatus(e.target.value)}
-                  className={styles.select}
-                >
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="PENDING">PENDING</option>
-                </select>
-              </div>
-
-              <p className={styles.helpText}>변경 사항은 즉시 적용됩니다.</p>
-            </div>
-
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsRoleAssignmentModalOpen(false)} className={styles.cancelBtn}>
-                취소
-              </button>
-              <button className={styles.primaryBtn}>
+        <Modal
+          open
+          onClose={() => setIsRoleAssignmentModalOpen(false)}
+          title="역할 및 상태 변경"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsRoleAssignmentModalOpen(false)}>취소</ModalSecondaryButton>
+              <ModalPrimaryButton
+                loading={isPending('members-2')}
+                onClick={() => run('members-2', '변경 내용을 저장했습니다.', () => setIsRoleAssignmentModalOpen(false))}
+              >
                 변경 저장
-              </button>
+              </ModalPrimaryButton>
+            </>
+          }
+        >
+          <div className={styles.memberCard}>
+            <div
+              className={styles.memberAvatar}
+              style={{ backgroundColor: selectedMember.bgColor }}
+            >
+              {selectedMember.initials}
             </div>
+            <h3 className={styles.memberCardName}>{selectedMember.name}</h3>
           </div>
-        </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.label}>새 역할</label>
+            <select
+              value={newMemberRole}
+              onChange={(e) => setNewMemberRole(e.target.value)}
+              className={styles.select}
+            >
+              <option value="NEW_HIRE">NEW_HIRE</option>
+              <option value="MEMBER">MEMBER</option>
+              <option value="MANAGER">MANAGER</option>
+              <option value="ADMIN">ADMIN</option>
+            </select>
+          </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.label}>상태</label>
+            <select
+              value={newMemberStatus}
+              onChange={(e) => setNewMemberStatus(e.target.value)}
+              className={styles.select}
+            >
+              <option value="ACTIVE">ACTIVE</option>
+              <option value="PENDING">PENDING</option>
+            </select>
+          </div>
+
+          <p className={styles.helpText}>변경 사항은 즉시 적용됩니다.</p>
+        </Modal>
       )}
 
       {/* 4. Member Roles Modal */}
       {isMemberRolesModalOpen && (
-        <div className={styles.modalOverlay} onClick={() => setIsMemberRolesModalOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>멤버 역할 설명</h2>
-              <button onClick={() => setIsMemberRolesModalOpen(false)} className={styles.modalCloseBtn}>
-                <X size={20} />
-              </button>
+        <Modal
+          open
+          onClose={() => setIsMemberRolesModalOpen(false)}
+          title="멤버 역할 설명"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsMemberRolesModalOpen(false)}>닫기</ModalSecondaryButton>
+            </>
+          }
+        >
+          <div className={styles.roleInfo}>
+            <div className={styles.roleItem}>
+              <h4 className={styles.roleName}>NEW_HIRE</h4>
+              <p className={styles.roleDesc}>새로 입사한 직원이며 기본 접근 권한을 가집니다.</p>
             </div>
-
-            <div className={styles.modalBody}>
-              <div className={styles.roleInfo}>
-                <div className={styles.roleItem}>
-                  <h4 className={styles.roleName}>NEW_HIRE</h4>
-                  <p className={styles.roleDesc}>새로 입사한 직원이며 기본 접근 권한을 가집니다.</p>
-                </div>
-                <div className={styles.roleItem}>
-                  <h4 className={styles.roleName}>MEMBER</h4>
-                  <p className={styles.roleDesc}>일반 구성원으로 대부분의 기능에 접근할 수 있습니다.</p>
-                </div>
-                <div className={styles.roleItem}>
-                  <h4 className={styles.roleName}>MANAGER</h4>
-                  <p className={styles.roleDesc}>팀 관리자로 팀원 관리 및 보고서 작성 권한이 있습니다.</p>
-                </div>
-                <div className={styles.roleItem}>
-                  <h4 className={styles.roleName}>ADMIN</h4>
-                  <p className={styles.roleDesc}>최고 관리자로 모든 기능에 대한 완전한 접근 권한이 있습니다.</p>
-                </div>
-              </div>
+            <div className={styles.roleItem}>
+              <h4 className={styles.roleName}>MEMBER</h4>
+              <p className={styles.roleDesc}>일반 구성원으로 대부분의 기능에 접근할 수 있습니다.</p>
             </div>
-
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsMemberRolesModalOpen(false)} className={styles.primaryBtn}>
-                닫기
-              </button>
+            <div className={styles.roleItem}>
+              <h4 className={styles.roleName}>MANAGER</h4>
+              <p className={styles.roleDesc}>팀 관리자로 팀원 관리 및 보고서 작성 권한이 있습니다.</p>
+            </div>
+            <div className={styles.roleItem}>
+              <h4 className={styles.roleName}>ADMIN</h4>
+              <p className={styles.roleDesc}>최고 관리자로 모든 기능에 대한 완전한 접근 권한이 있습니다.</p>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* 5. Member Actions Modal */}
       {isMemberActionsModalOpen && selectedMember && (
-        <div className={styles.modalOverlay} onClick={() => setIsMemberActionsModalOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>멤버 작업</h2>
-              <button onClick={() => setIsMemberActionsModalOpen(false)} className={styles.modalCloseBtn}>
-                <X size={20} />
-              </button>
+        <Modal
+          open
+          onClose={() => setIsMemberActionsModalOpen(false)}
+          title="멤버 작업"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsMemberActionsModalOpen(false)}>닫기</ModalSecondaryButton>
+            </>
+          }
+        >
+          <div className={styles.memberCard}>
+            <div
+              className={styles.memberAvatar}
+              style={{ backgroundColor: selectedMember.bgColor }}
+            >
+              {selectedMember.initials}
             </div>
-
-            <div className={styles.modalBody}>
-              <div className={styles.memberCard}>
-                <div
-                  className={styles.memberAvatar}
-                  style={{ backgroundColor: selectedMember.bgColor }}
-                >
-                  {selectedMember.initials}
-                </div>
-                <h3 className={styles.memberCardName}>{selectedMember.name}</h3>
-              </div>
-
-              <div className={styles.actionsList}>
-                <button className={styles.actionItem}>
-                  역할 변경
-                </button>
-                <button className={styles.actionItem}>
-                  초대 재발송
-                </button>
-                <button className={styles.actionItem}>
-                  이메일 변경
-                </button>
-                <button className={styles.actionItem} style={{ color: '#dc2626' }}>
-                  삭제
-                </button>
-              </div>
-            </div>
-
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsMemberActionsModalOpen(false)} className={styles.cancelBtn}>
-                닫기
-              </button>
-            </div>
+            <h3 className={styles.memberCardName}>{selectedMember.name}</h3>
           </div>
-        </div>
+
+          <div className={styles.actionsList}>
+            <button className={styles.actionItem}>
+              역할 변경
+            </button>
+            <button className={styles.actionItem}>
+              초대 재발송
+            </button>
+            <button className={styles.actionItem}>
+              이메일 변경
+            </button>
+            <button className={styles.actionItem} style={{ color: '#dc2626' }}>
+              삭제
+            </button>
+          </div>
+        </Modal>
       )}
-    </div>
     </div>
   );
 }

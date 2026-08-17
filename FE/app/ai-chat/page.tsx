@@ -5,11 +5,23 @@ import { Send, Plus, RefreshCw, Bell, HelpCircle, Zap } from 'lucide-react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFilePdf, faFileExcel } from '@fortawesome/free-solid-svg-icons';
 import { CommonSidebar } from '@/components/common-sidebar';
+import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
+import { useModalAction } from '@/components/ui/use-modal-action';
 import styles from './ai-chat.module.css';
 
 export default function AIChatPage() {
+  const { run, isPending } = useModalAction();
   const [selectedChat, setSelectedChat] = useState(0);
   const [inputValue, setInputValue] = useState('');
+
+  // Modal states
+  const [isChatContextModalOpen, setIsChatContextModalOpen] = useState(false);
+  const [isAICitationModalOpen, setIsAICitationModalOpen] = useState(false);
+  const [isDocumentReferenceModalOpen, setIsDocumentReferenceModalOpen] = useState(false);
+  const [isChatFollowupModalOpen, setIsChatFollowupModalOpen] = useState(false);
+  const [isSearchSimilarModalOpen, setIsSearchSimilarModalOpen] = useState(false);
+  const [isQuestionDetailsModalOpen, setIsQuestionDetailsModalOpen] = useState(false);
+  const [isAIResponseModalOpen, setIsAIResponseModalOpen] = useState(false);
 
   const conversations = [
     { id: 1, title: '예산안 사용 지침', time: '10:42', status: '방금 전' },
@@ -100,7 +112,7 @@ export default function AIChatPage() {
           <aside className={styles.conversationPanel}>
             <div className={styles.conversationHeader}>
               <h3 className={styles.conversationTitle}>대화 기록</h3>
-              <button className={styles.newChatBtn}>
+              <button className={styles.newChatBtn} onClick={() => setIsChatContextModalOpen(true)}>
                 <Plus size={16} /> 새 대화
               </button>
             </div>
@@ -144,7 +156,7 @@ export default function AIChatPage() {
                       <div className={styles.citations}>
                         <span className={styles.citationsLabel}>출처</span>
                         {msg.citations.map((citation, i) => (
-                          <div key={i} className={styles.citation}>
+                          <div key={i} className={styles.citation} onClick={() => setIsAICitationModalOpen(true)} style={{ cursor: 'pointer' }}>
                             {getFileIcon(citation.type)}
                             <span className={styles.citationText}>
                               {citation.name} · p.{citation.page}
@@ -207,6 +219,182 @@ export default function AIChatPage() {
           </div>
         </div>
       </main>
+
+      {/* MODALS */}
+
+      {/* 1. Chat Context Modal */}
+      {isChatContextModalOpen && (
+        <Modal
+          open
+          onClose={() => setIsChatContextModalOpen(false)}
+          title="새 대화 시작"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsChatContextModalOpen(false)}>취소</ModalSecondaryButton>
+              <ModalPrimaryButton
+                loading={isPending('ai-chat-0')}
+                onClick={() => run('ai-chat-0', '처리를 완료했습니다.', () => setIsChatContextModalOpen(false))}
+              >
+                대화 시작
+              </ModalPrimaryButton>
+            </>
+          }
+        >
+          <div className={styles.formGroup}>
+            <label className={styles.label}>대화 주제</label>
+            <input type="text" placeholder="예: 예산안 사용 지침" className={styles.input} />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.label}>참고 자료</label>
+            <select className={styles.select}>
+              <option>자료 선택</option>
+              <option>행사운영가이드.pdf</option>
+              <option>예산안_v7.xlsx</option>
+            </select>
+          </div>
+        </Modal>
+      )}
+
+      {/* 2. AI Citation Modal */}
+      {isAICitationModalOpen && (
+        <Modal
+          open
+          onClose={() => setIsAICitationModalOpen(false)}
+          title="출처 정보"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsAICitationModalOpen(false)}>닫기</ModalSecondaryButton>
+            </>
+          }
+        >
+          <div className={styles.citationCard}>
+            <div className={styles.citationHeader}>
+              <span className={styles.citationFileName}>행사_예산안_v7.xlsx</span>
+              <span className={styles.citationPage}>Page 1</span>
+            </div>
+            <p className={styles.citationDesc}>이 출처는 AI의 답변을 생성하는 데 사용되었습니다.</p>
+            <div className={styles.citationActions}>
+              <button className={styles.citationBtn}>파일 열기</button>
+              <button className={styles.citationBtn}>더 자세히</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 3. Document Reference Modal */}
+      {isDocumentReferenceModalOpen && (
+        <Modal
+          open
+          onClose={() => setIsDocumentReferenceModalOpen(false)}
+          title="참고 문서"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsDocumentReferenceModalOpen(false)}>닫기</ModalSecondaryButton>
+            </>
+          }
+        >
+          <div className={styles.documentList}>
+            <div className={styles.docItem}>행사_예산안_v7.xlsx</div>
+            <div className={styles.docItem}>행사운영가이드.pdf</div>
+            <div className={styles.docItem}>거래처_연락망.xlsx</div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 4. Chat Followup Modal */}
+      {isChatFollowupModalOpen && (
+        <Modal
+          open
+          onClose={() => setIsChatFollowupModalOpen(false)}
+          title="추가 질문"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsChatFollowupModalOpen(false)}>닫기</ModalSecondaryButton>
+            </>
+          }
+        >
+          <div className={styles.followupList}>
+            <button className={styles.followupItem}>예산 변경 절차는?</button>
+            <button className={styles.followupItem}>승인자 라인은?</button>
+            <button className={styles.followupItem}>최신 버전은?</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* 5. Search Similar Modal */}
+      {isSearchSimilarModalOpen && (
+        <Modal
+          open
+          onClose={() => setIsSearchSimilarModalOpen(false)}
+          title="유사 질문"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsSearchSimilarModalOpen(false)}>닫기</ModalSecondaryButton>
+            </>
+          }
+        >
+          <div className={styles.similarList}>
+            <div className={styles.similarItem}>
+              <span>예산안 정정 절차가 궁금합니다</span>
+              <span className={styles.relevance}>97% 관련</span>
+            </div>
+            <div className={styles.similarItem}>
+              <span>예산 변경 승인 프로세스는?</span>
+              <span className={styles.relevance}>94% 관련</span>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 6. Question Details Modal */}
+      {isQuestionDetailsModalOpen && (
+        <Modal
+          open
+          onClose={() => setIsQuestionDetailsModalOpen(false)}
+          title="질문 상세"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsQuestionDetailsModalOpen(false)}>닫기</ModalSecondaryButton>
+            </>
+          }
+        >
+          <div className={styles.questionCard}>
+            <h4>이 예산은 언제 사용하나요?</h4>
+            <div className={styles.questionMeta}>
+              <span>시간: 10:42</span>
+              <span>관련 문서: 2개</span>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 7. AI Response Modal */}
+      {isAIResponseModalOpen && (
+        <Modal
+          open
+          onClose={() => setIsAIResponseModalOpen(false)}
+          title="AI 응답"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsAIResponseModalOpen(false)}>닫기</ModalSecondaryButton>
+              <ModalPrimaryButton
+                loading={isPending('ai-chat-1')}
+                onClick={() => run('ai-chat-1', '처리를 완료했습니다.', () => setIsAIResponseModalOpen(false))}
+              >
+                더 알아보기
+              </ModalPrimaryButton>
+            </>
+          }
+        >
+          <div className={styles.responseCard}>
+            <p>행사 예산안 v7.xlsx는 행사 기획 단계에서 최초 예산을 세우고, 변경 내역을 반영하며, 최종 결재를 예산안을 만드는 데 사용합니다.</p>
+            <div className={styles.responseStats}>
+              <div className={styles.stat}>신뢰도: 98%</div>
+              <div className={styles.stat}>출처: 2개</div>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

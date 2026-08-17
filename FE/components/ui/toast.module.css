@@ -1,0 +1,99 @@
+.container {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 1100;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 260px;
+  max-width: 380px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 12px 32px rgba(17, 24, 39, 0.14);
+  font-size: 13px;
+  color: #111827;
+  pointer-events: auto;
+  animation: slideInRight 0.24s ease-out;
+}
+
+.success {
+  border-left: 3px solid #10b981;
+  color: #065f46;
+}
+
+.success svg {
+  color: #10b981;
+  flex-shrink: 0;
+}
+
+.error {
+  border-left: 3px solid #ef4444;
+  color: #991b1b;
+}
+
+.error svg {
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
+.info {
+  border-left: 3px solid #6c46a2;
+  color: #4c1d95;
+}
+
+.info svg {
+  color: #6c46a2;
+  flex-shrink: 0;
+}
+
+.message {
+  flex: 1;
+  line-height: 1.45;
+}
+
+.dismiss {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.dismiss:hover {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}

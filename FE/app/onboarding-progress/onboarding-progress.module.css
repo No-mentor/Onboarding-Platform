@@ -331,3 +331,348 @@
 .aiBtn:hover {
   background-color: #5a3a8c;
 }
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.primaryBtn {
+  background: var(--color-bright-purple);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.primaryBtn:hover {
+  background: var(--color-dark-purple);
+  transform: translateY(-2px);
+}
+
+.cancelBtn {
+  background: var(--color-bg-light);
+  color: var(--color-text-dark);
+  border: 1px solid var(--color-border);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelBtn:hover {
+  background: var(--color-border);
+}
+
+/* Details Card */
+.detailsCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.detailRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.detailRow label {
+  font-size: 13px;
+  color: var(--color-text-medium);
+  font-weight: 500;
+}
+
+.detailRow span {
+  font-size: 13px;
+  color: var(--color-text-dark);
+  font-weight: 600;
+}
+
+/* Progress Section */
+.progressSection {
+  padding: 16px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+}
+
+.progressSection h3 {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-dark);
+}
+
+.progressRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.progressPercent {
+  font-weight: 600;
+  color: var(--color-bright-purple);
+}
+
+.progressBar {
+  width: 100%;
+  height: 8px;
+  background-color: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.progressBar div {
+  height: 100%;
+  background-color: var(--color-bright-purple);
+  transition: width 0.3s ease;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.statItem {
+  padding: 12px;
+  background-color: white;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.statItem label {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-medium);
+  margin-bottom: 6px;
+}
+
+.statValue {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-bright-purple);
+}
+
+/* Overview Card */
+.overviewCard {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.overviewItem {
+  padding: 16px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.overviewLabel {
+  font-size: 12px;
+  color: var(--color-text-medium);
+  margin-bottom: 8px;
+}
+
+.overviewValue {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-bright-purple);
+  margin-bottom: 4px;
+}
+
+.overviewSubtext {
+  font-size: 12px;
+  color: var(--color-text-light);
+}
+
+/* Insight List */
+.insightList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.insightItem {
+  padding: 12px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+}
+
+.insightItem h4 {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-dark);
+}
+
+.insightItem p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-medium);
+}
+
+/* Progress List Item */
+.progressListItem {
+  padding: 12px;
+  margin-bottom: 12px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+}
+
+.progressListHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.nameSpan {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-dark);
+}
+
+.progressListFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--color-text-medium);
+  margin-top: 8px;
+}
+
+/* Stat Card */
+.statCard {
+  padding: 16px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.statLabel {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-medium);
+  margin-bottom: 8px;
+}
+
+.statNumber {
+  display: block;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-bright-purple);
+  margin-bottom: 4px;
+}
+
+.statDesc {
+  display: block;
+  font-size: 11px;
+  color: var(--color-text-light);
+}
+
+/* Action List */
+.actionList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.actionItem {
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--color-bg-light);
+  color: var(--color-text-dark);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.actionItem:hover {
+  background-color: rgba(108, 70, 162, 0.1);
+  color: var(--color-bright-purple);
+}
+
+/* ── 인터랙션 다듬기 ─────────────────────────────── */
+.formGroup input,
+.formGroup select,
+.formGroup textarea,
+.input,
+.select,
+.textarea {
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.actionItem,
+.tabItem,
+.templateItem,
+.memberItem,
+.documentItem,
+.categoryItem {
+  transition: background-color 0.2s, border-color 0.2s, transform 0.15s;
+}
+
+.actionItem:hover,
+.tabItem:hover {
+  transform: translateX(2px);
+}
+
+/* 키보드 사용자에게 포커스를 명확히 보여준다 */
+.actionItem:focus-visible,
+.tabItem:focus-visible {
+  outline: 2px solid var(--color-bright-purple);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actionItem,
+  .tabItem,
+  .templateItem,
+  .memberItem,
+  .documentItem,
+  .categoryItem {
+    transition: none;
+  }
+
+  .actionItem:hover,
+  .tabItem:hover {
+    transform: none;
+  }
+}

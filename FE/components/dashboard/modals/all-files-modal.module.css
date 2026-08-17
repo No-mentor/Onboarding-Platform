@@ -1,181 +1,140 @@
-.overlay {
-  position: fixed;
-  inset: 0;
-  background-color: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-}
-
-.modal {
-  background-color: var(--color-canvas);
-  border-radius: 14px;
-  box-shadow: 0 24px 64px rgba(20, 20, 25, 0.14);
-  width: 95%;
-  max-width: 1200px;
-  max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-  animation: slideUp 0.3s ease-out;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.modalHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 24px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.modalTitle {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0;
-  color: var(--color-text);
-}
-
-.closeBtn {
-  width: 36px;
-  height: 36px;
-  border: none;
-  background-color: transparent;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text);
-  transition: all 0.2s;
-}
-
-.closeBtn:hover {
-  background-color: var(--color-sunk);
-  border-radius: 8px;
-}
-
+/* 모달 프레임은 components/ui/modal.module.css 가 담당하고, 여기서는 본문만 다룬다. */
 .controls {
   display: flex;
   gap: 12px;
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--color-border);
-  background-color: var(--color-canvas);
   align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
 }
 
 .searchBox {
-  flex: 1;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--color-border-strong);
+  flex: 1;
+  min-width: 240px;
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
   border-radius: 10px;
-  background-color: var(--color-canvas);
+  background-color: #f9fafb;
+  color: #6b7280;
 }
 
 .searchBox input {
   flex: 1;
   border: none;
   background: none;
-  font-size: 14px;
-  color: var(--color-text);
-}
-
-.searchBox input::placeholder {
-  color: var(--color-muted);
+  outline: none;
+  font-size: 13px;
+  color: #111827;
 }
 
 .select {
-  padding: 8px 12px;
-  border: 1px solid var(--color-border-strong);
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
   border-radius: 10px;
-  background-color: var(--color-canvas);
-  color: var(--color-text);
+  background-color: #ffffff;
   font-size: 13px;
+  color: #111827;
   cursor: pointer;
 }
 
+.tableWrapper {
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
 .filesTable {
-  flex: 1;
   width: 100%;
   border-collapse: collapse;
-  overflow-y: auto;
   font-size: 13px;
 }
 
-.filesTable thead {
-  background-color: var(--color-sunk);
-  position: sticky;
-  top: 0;
-}
-
 .filesTable th {
-  padding: 12px 16px;
   text-align: left;
+  padding: 12px 16px;
+  background-color: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
   font-weight: 600;
-  color: var(--color-muted);
-  border-bottom: 1px solid var(--color-border);
+  color: #111827;
+  white-space: nowrap;
 }
 
 .filesTable td {
   padding: 12px 16px;
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-text);
+  border-bottom: 1px solid #f3f4f6;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.filesTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.filesTable tbody tr:hover {
+  background-color: #f9fafb;
 }
 
 .fileName {
   font-weight: 500;
+  color: #111827 !important;
 }
 
 .status {
   display: inline-block;
-  padding: 4px 8px;
-  border-radius: 5px;
+  padding: 4px 10px;
+  border-radius: 12px;
   font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
+  font-weight: 700;
 }
 
-.filesTable tr:hover {
-  background-color: var(--color-sunk);
+.statusReady {
+  background-color: #dcfce7;
+  color: #16a34a;
+}
+
+.statusProcessing {
+  background-color: #dbeafe;
+  color: #2563eb;
+}
+
+.statusFailed {
+  background-color: #fee2e2;
+  color: #dc2626;
 }
 
 .aiBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 12px;
   border: none;
   border-radius: 6px;
-  background-color: #6366F1;
-  color: white;
-  font-size: 12px;
+  background-color: #6c46a2;
+  color: #ffffff;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
+  transition: background-color 0.2s;
 }
 
 .aiBtn:hover {
-  background-color: #4F46E5;
+  background-color: #5a3a8c;
 }
 
 .pagination {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
-  border-top: 1px solid var(--color-border);
-  background-color: var(--color-sunk);
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+.totalCount {
   font-size: 13px;
+  color: #6b7280;
 }
 
 .pageNumbers {
@@ -184,33 +143,39 @@
 }
 
 .pageBtn {
-  width: 32px;
+  min-width: 32px;
   height: 32px;
-  border: 1px solid var(--color-border-strong);
+  border: 1px solid #e5e7eb;
   border-radius: 6px;
-  background-color: var(--color-canvas);
-  color: var(--color-text);
-  font-size: 12px;
+  background-color: #ffffff;
+  color: #6b7280;
+  font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .pageBtn:hover {
-  background-color: var(--color-sunk);
+  background-color: #f3f4f6;
+  color: #111827;
 }
 
-.pageBtn.active {
-  background-color: var(--color-primary);
-  color: white;
-  border-color: var(--color-primary);
+.active {
+  background-color: #6c46a2;
+  border-color: #6c46a2;
+  color: #ffffff;
+}
+
+.active:hover {
+  background-color: #5a3a8c;
+  color: #ffffff;
 }
 
 .perPage {
-  padding: 6px 12px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 6px;
-  background-color: var(--color-canvas);
-  color: var(--color-text);
-  font-size: 12px;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background-color: #ffffff;
+  font-size: 13px;
+  color: #111827;
   cursor: pointer;
 }

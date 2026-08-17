@@ -10,6 +10,10 @@ import { FileDetailModal } from './file-detail-modal';
 
 interface DashboardData {
   progressPercent: number;
+  plan?: {
+    currentDay: number;
+    totalDays: number;
+  };
   today?: {
     done: number;
     total: number;

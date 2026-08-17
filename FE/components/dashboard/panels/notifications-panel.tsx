@@ -1,7 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import {
+  X,
+  Bell,
+  BarChart3,
+  Sparkles,
+  CheckCircle2,
+  Users,
+  MessageSquare,
+  ChevronRight,
+} from 'lucide-react';
 import styles from './notifications-panel.module.css';
 
 interface NotificationsPanelProps {
@@ -14,100 +23,122 @@ export function NotificationsPanel({ onClose }: NotificationsPanelProps) {
   const notifications = [
     {
       id: 1,
-      type: 'task',
-      title: '오늘 할 일 미람 30분 전',
-      message: '"행사운영가이드 .pdf 읽기" 미람이 30분 남았습니다.',
+      title: '오늘 할 일 마감 30분 전',
+      message: '"행사운영가이드 .pdf 읽기" 마감이 30분 남았습니다.',
       time: '10:00',
-      icon: '🔔',
+      icon: Bell,
+      unread: true,
     },
     {
       id: 2,
-      type: 'status',
       title: '새 파일이 READY 상태가 되었습니다',
       message: '행사_예산안_v7.xlsx 파일이 READY 상태가 되었습니다.',
       time: '09:45',
-      icon: '📊',
+      icon: BarChart3,
+      unread: true,
     },
     {
       id: 3,
-      type: 'ai',
       title: 'AI 답변이 준비되었습니다',
       message: '"이 예산은 언제 사용합니까?" 질문에 대한 AI 답변이 준비되었습니다.',
       time: '09:30',
-      icon: '✨',
+      icon: Sparkles,
+      unread: true,
     },
     {
       id: 4,
-      type: 'progress',
       title: '체크리스트 항목이 완료되었습니다',
       message: '"거래처 연락망 확인하기" 항목이 완료되었습니다.',
       time: '09:15',
-      icon: '✓',
+      icon: CheckCircle2,
+      unread: false,
     },
     {
       id: 5,
-      type: 'member',
       title: '새 구성원이 추가되었습니다',
       message: '이미현님이 마케팅팀에 추가되었습니다.',
-      time: '08:20',
-      icon: '👥',
+      time: '08:40',
+      icon: Users,
+      unread: false,
     },
     {
       id: 6,
-      type: 'error',
-      title: 'AI 요청이 완료되었습니다',
-      message: '행사운영가이드.pdf 파일의 요청이 완료되었습니다.',
-      time: '08:40',
-      icon: '💬',
+      title: 'AI 요약이 완료되었습니다',
+      message: '행사운영가이드.pdf 파일의 요약이 완료되었습니다.',
+      time: '08:20',
+      icon: MessageSquare,
+      unread: false,
     },
   ];
 
+  const tabs = [
+    { id: 'all', label: '전체' },
+    { id: 'unread', label: '읽지 않음' },
+    { id: 'read', label: '읽음' },
+  ];
+
+  const visible = notifications.filter((n) => {
+    if (activeTab === 'unread') return n.unread;
+    if (activeTab === 'read') return !n.unread;
+    return true;
+  });
+
   return (
-    <div className={styles.panel}>
-      <div className={styles.header}>
-        <h2 className={styles.title}>알림</h2>
-        <div className={styles.tabs}>
-          <button
-            className={`${styles.tab} ${activeTab === 'all' ? styles.active : ''}`}
-            onClick={() => setActiveTab('all')}
-          >
-            전체
-          </button>
-          <button
-            className={`${styles.tab} ${activeTab === 'unread' ? styles.active : ''}`}
-            onClick={() => setActiveTab('unread')}
-          >
-            읽지 않음
-          </button>
-          <button
-            className={`${styles.tab} ${activeTab === 'done' ? styles.active : ''}`}
-            onClick={() => setActiveTab('done')}
-          >
-            모두 읽음
+    <>
+      {/* 패널 밖을 클릭하면 닫히도록 하는 투명 배경 */}
+      <div className={styles.backdrop} onClick={onClose} role="presentation" />
+
+      <aside className={styles.panel}>
+        <div className={styles.header}>
+          <h2 className={styles.panelTitle}>알림</h2>
+          <button className={styles.closeBtn} onClick={onClose} aria-label="닫기">
+            <X size={18} />
           </button>
         </div>
-        <button className={styles.closeBtn} onClick={onClose}>
-          <X size={20} />
-        </button>
-      </div>
 
-      <div className={styles.notificationsList}>
-        {notifications.map((notif) => (
-          <div key={notif.id} className={styles.notification}>
-            <span className={styles.icon}>{notif.icon}</span>
-            <div className={styles.content}>
-              <div className={styles.title}>{notif.title}</div>
-              <div className={styles.message}>{notif.message}</div>
-            </div>
-            <span className={styles.time}>{notif.time}</span>
-            <span className={styles.dot}>●</span>
-          </div>
-        ))}
-      </div>
+        <div className={styles.tabs}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              className={`${styles.tab} ${activeTab === tab.id ? styles.active : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-      <div className={styles.footer}>
-        <button className={styles.moreBtn}>모든 알림 보기 ›</button>
-      </div>
-    </div>
+        <div className={styles.notificationsList}>
+          {visible.length > 0 ? (
+            visible.map((notif) => {
+              const Icon = notif.icon;
+              return (
+                <div key={notif.id} className={styles.notification}>
+                  <span className={styles.icon}>
+                    <Icon size={18} />
+                  </span>
+                  <div className={styles.content}>
+                    <div className={styles.notifTitle}>{notif.title}</div>
+                    <div className={styles.message}>{notif.message}</div>
+                  </div>
+                  <div className={styles.meta}>
+                    <span className={styles.time}>{notif.time}</span>
+                    {notif.unread && <span className={styles.dot} aria-label="읽지 않음" />}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className={styles.empty}>알림이 없습니다.</div>
+          )}
+        </div>
+
+        <div className={styles.footer}>
+          <button className={styles.moreBtn}>
+            모든 알림 보기 <ChevronRight size={14} />
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }

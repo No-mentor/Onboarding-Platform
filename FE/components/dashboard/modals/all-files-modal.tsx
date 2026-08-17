@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Search } from 'lucide-react';
+import { Search, Sparkles } from 'lucide-react';
+import { Modal } from '@/components/ui/modal';
 import styles from './all-files-modal.module.css';
 
 interface AllFilesModalProps {
@@ -23,86 +24,89 @@ export function AllFilesModal({ onClose }: AllFilesModalProps) {
     { id: 8, name: '권고 집합 현황_5월.xlsx', type: 'XLSX', size: '1.9MB', status: 'FAILED', date: '2024.05.17 18:45' },
   ];
 
+  const getStatusClass = (status: string) => {
+    if (status === 'READY') return styles.statusReady;
+    if (status === 'PROCESSING') return styles.statusProcessing;
+    return styles.statusFailed;
+  };
+
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
-          <h2 className={styles.modalTitle}>전체 파일 보기</h2>
-          <button className={styles.closeBtn} onClick={onClose}>
-            <X size={24} />
-          </button>
+    <Modal open onClose={onClose} title="전체 파일 보기" size="xl">
+      <div className={styles.controls}>
+        <div className={styles.searchBox}>
+          <Search size={18} />
+          <input type="text" placeholder="파일명, 키워드, 태그로 검색" />
         </div>
+        <select value={filterBy} onChange={(e) => setFilterBy(e.target.value)} className={styles.select}>
+          <option value="all">파일 유형 전체</option>
+          <option value="pdf">PDF</option>
+          <option value="xlsx">XLSX</option>
+          <option value="docx">DOCX</option>
+        </select>
+        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={styles.select}>
+          <option value="date">상태 전체</option>
+          <option value="ready">READY</option>
+          <option value="processing">PROCESSING</option>
+        </select>
+        <select className={styles.select}>
+          <option value="recent">최신순</option>
+          <option value="oldest">오래된순</option>
+          <option value="size">크기순</option>
+        </select>
+      </div>
 
-        <div className={styles.controls}>
-          <div className={styles.searchBox}>
-            <Search size={18} />
-            <input type="text" placeholder="파일명, 키워드, 태그로 검색" />
-          </div>
-          <select value={filterBy} onChange={(e) => setFilterBy(e.target.value)} className={styles.select}>
-            <option value="all">파일 유형 전체</option>
-            <option value="pdf">PDF</option>
-            <option value="xlsx">XLSX</option>
-            <option value="docx">DOCX</option>
-          </select>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={styles.select}>
-            <option value="date">상태 전체</option>
-            <option value="ready">READY</option>
-            <option value="processing">PROCESSING</option>
-          </select>
-          <select className={styles.select}>
-            <option value="recent">최신순</option>
-            <option value="oldest">오래된순</option>
-            <option value="size">크기순</option>
-          </select>
-        </div>
-
+      <div className={styles.tableWrapper}>
         <table className={styles.filesTable}>
           <thead>
             <tr>
               <th>파일명</th>
               <th>상태</th>
-              <th>공개 범위</th>
-              <th>히용 역할</th>
-              <th>체크</th>
+              <th>유형</th>
+              <th>허용 역할</th>
+              <th>크기</th>
               <th>업데이트</th>
-              <th>관</th>
+              <th>작업</th>
             </tr>
           </thead>
           <tbody>
             {files.map((file) => (
               <tr key={file.id}>
                 <td className={styles.fileName}>{file.name}</td>
-                <td><span className={styles.status}>{file.status}</span></td>
+                <td>
+                  <span className={`${styles.status} ${getStatusClass(file.status)}`}>{file.status}</span>
+                </td>
                 <td>{file.type}</td>
                 <td>-</td>
                 <td>{file.size}</td>
                 <td>{file.date}</td>
                 <td>
-                  <button className={styles.aiBtn}>✨ AI에게 질문</button>
+                  <button className={styles.aiBtn}>
+                    <Sparkles size={14} /> AI에게 질문
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-
-        <div className={styles.pagination}>
-          <span>전체 24개</span>
-          <div className={styles.pageNumbers}>
-            <button className={styles.pageBtn}>«</button>
-            <button className={styles.pageBtn}>‹</button>
-            <button className={`${styles.pageBtn} ${styles.active}`}>1</button>
-            <button className={styles.pageBtn}>2</button>
-            <button className={styles.pageBtn}>3</button>
-            <button className={styles.pageBtn}>›</button>
-            <button className={styles.pageBtn}>»</button>
-          </div>
-          <select className={styles.perPage}>
-            <option>10개씩 보기</option>
-            <option>20개씩 보기</option>
-            <option>50개씩 보기</option>
-          </select>
-        </div>
       </div>
-    </div>
+
+      <div className={styles.pagination}>
+        <span className={styles.totalCount}>전체 24개</span>
+        <div className={styles.pageNumbers}>
+          <button className={styles.pageBtn}>«</button>
+          <button className={styles.pageBtn}>‹</button>
+          <button className={`${styles.pageBtn} ${styles.active}`}>1</button>
+          <button className={styles.pageBtn}>2</button>
+          <button className={styles.pageBtn}>3</button>
+          <button className={styles.pageBtn}>›</button>
+          <button className={styles.pageBtn}>»</button>
+        </div>
+        <select className={styles.perPage}>
+          <option>10개씩 보기</option>
+          <option>20개씩 보기</option>
+          <option>50개씩 보기</option>
+        </select>
+      </div>
+    </Modal>
   );
 }

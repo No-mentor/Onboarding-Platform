@@ -548,3 +548,372 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-medium);
 }
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Buttons */
+.primaryBtn {
+  background: var(--color-bright-purple);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.primaryBtn:hover {
+  background: var(--color-dark-purple);
+  transform: translateY(-2px);
+}
+
+.cancelBtn {
+  background: var(--color-bg-light);
+  color: var(--color-text-dark);
+  border: 1px solid var(--color-border);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelBtn:hover {
+  background: var(--color-border);
+}
+
+/* Task Card */
+.taskCard {
+  padding: 16px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.taskCard h3,
+.taskCard h4 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-dark);
+}
+
+.taskCard p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-medium);
+}
+
+.taskMeta {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.tagBadge {
+  display: inline-block;
+  padding: 4px 12px;
+  background-color: white;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-dark);
+}
+
+.statusBadge {
+  display: inline-block;
+  padding: 4px 12px;
+  background-color: rgba(108, 70, 162, 0.1);
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Task Details */
+.taskDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+}
+
+.detailItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.detailItem label {
+  font-size: 13px;
+  color: var(--color-text-medium);
+  font-weight: 500;
+}
+
+.detailItem span {
+  font-size: 13px;
+  color: var(--color-text-dark);
+  font-weight: 600;
+}
+
+/* Progress Card */
+.progressCard {
+  padding: 20px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.progressLabel {
+  font-size: 12px;
+  color: var(--color-text-medium);
+  margin-bottom: 8px;
+}
+
+.progressValue {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--color-bright-purple);
+  margin-bottom: 12px;
+}
+
+.progressBar {
+  width: 100%;
+  height: 8px;
+  background-color: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.progressBar div {
+  height: 100%;
+  background-color: var(--color-bright-purple);
+  transition: width 0.3s ease;
+}
+
+.progressDetail {
+  font-size: 13px;
+  color: var(--color-text-dark);
+  font-weight: 600;
+}
+
+/* Progress Breakdown */
+.progressBreakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.breakdownItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background-color: white;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.breakdownValue {
+  font-weight: 600;
+}
+
+/* Filter Group */
+.filterGroup {
+  margin-bottom: 20px;
+}
+
+.filterLabel {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-dark);
+  margin-bottom: 8px;
+}
+
+.select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--color-text-dark);
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.select:focus {
+  outline: none;
+  border-color: var(--color-bright-purple);
+  box-shadow: 0 0 0 3px rgba(108, 70, 162, 0.1);
+}
+
+.helpText {
+  padding: 12px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+  margin-top: 16px;
+}
+
+.helpText p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-medium);
+  line-height: 1.4;
+}
+
+/* Action List */
+.actionList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.actionItem {
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--color-bg-light);
+  color: var(--color-text-dark);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.actionItem:hover {
+  background-color: rgba(108, 70, 162, 0.1);
+  color: var(--color-bright-purple);
+}
+
+/* Tabs List */
+.tabsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tabItem {
+  padding: 12px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background-color: var(--color-card-white);
+  color: var(--color-text-dark);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.tabItem:hover {
+  border-color: var(--color-bright-purple);
+  background-color: rgba(108, 70, 162, 0.05);
+}
+
+/* Category List */
+.categoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.categoryItem {
+  padding: 16px;
+  background-color: var(--color-bg-light);
+  border-radius: 8px;
+}
+
+.categoryItem h4 {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-dark);
+}
+
+.categoryItem p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-medium);
+  line-height: 1.4;
+}
+
+/* ── 인터랙션 다듬기 ─────────────────────────────── */
+.formGroup input,
+.formGroup select,
+.formGroup textarea,
+.input,
+.select,
+.textarea {
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.actionItem,
+.tabItem,
+.templateItem,
+.memberItem,
+.documentItem,
+.categoryItem {
+  transition: background-color 0.2s, border-color 0.2s, transform 0.15s;
+}
+
+.actionItem:hover,
+.tabItem:hover {
+  transform: translateX(2px);
+}
+
+/* 키보드 사용자에게 포커스를 명확히 보여준다 */
+.actionItem:focus-visible,
+.tabItem:focus-visible {
+  outline: 2px solid var(--color-bright-purple);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actionItem,
+  .tabItem,
+  .templateItem,
+  .memberItem,
+  .documentItem,
+  .categoryItem {
+    transition: none;
+  }
+
+  .actionItem:hover,
+  .tabItem:hover {
+    transform: none;
+  }
+}

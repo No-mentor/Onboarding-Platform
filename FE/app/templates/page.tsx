@@ -1,10 +1,13 @@
 'use client';
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, X, Search } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, MoreVertical } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
+import { Modal, ModalPrimaryButton, ModalSecondaryButton, ModalDangerButton } from '@/components/ui/modal';
+import { useModalAction } from '@/components/ui/use-modal-action';
 import styles from './templates.module.css';
 
 export default function TemplatesPage() {
+  const { run, isPending } = useModalAction();
   const [selectedTemplateId, setSelectedTemplateId] = useState(1);
   const [isCreationModalOpen, setIsCreationModalOpen] = useState(false);
   const [isListModalOpen, setIsListModalOpen] = useState(false);
@@ -55,7 +58,7 @@ export default function TemplatesPage() {
                     e.stopPropagation();
                     setSelectedTemplateId(t.id);
                     setIsActionsMenuOpen(true);
-                  }}>⋮</button>
+                  }}><MoreVertical size={16} /></button>
                 </div>
               ))}
             </div>
@@ -100,158 +103,139 @@ export default function TemplatesPage() {
 
       {/* 1. Template Creation Modal */}
       {isCreationModalOpen && (
-        <div className={styles.modalOverlay} onClick={() => setIsCreationModalOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>템플릿 생성</h2>
-              <button onClick={() => setIsCreationModalOpen(false)} className={styles.closeBtn}>
-                <X size={20} />
-              </button>
-            </div>
-            <div className={styles.modalBody}>
-              <div className={styles.formGroup}>
-                <label className={styles.label}>템플릿명</label>
-                <input type="text" placeholder="새로운 템플릿 이름" className={styles.input} />
-              </div>
-              <div className={styles.formGroup}>
-                <label className={styles.label}>대상 역할</label>
-                <select className={styles.select}>
-                  <option>NEW_HIRE</option>
-                  <option>MEMBER</option>
-                  <option>MANAGER</option>
-                </select>
-              </div>
-              <div className={styles.formGroup}>
-                <label className={styles.label}>설명</label>
-                <textarea placeholder="템플릿 설명" className={styles.textarea} rows={3} />
-              </div>
-            </div>
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsCreationModalOpen(false)} className={styles.cancelBtn}>취소</button>
-              <button className={styles.primaryBtn}>생성</button>
-            </div>
+        <Modal
+          open
+          onClose={() => setIsCreationModalOpen(false)}
+          title="템플릿 생성"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsCreationModalOpen(false)}>취소</ModalSecondaryButton>
+              <ModalPrimaryButton
+                loading={isPending('templates-0')}
+                onClick={() => run('templates-0', '생성이 완료되었습니다.', () => setIsCreationModalOpen(false))}
+              >
+                생성
+              </ModalPrimaryButton>
+            </>
+          }
+        >
+          <div className={styles.formGroup}>
+            <label className={styles.label}>템플릿명</label>
+            <input type="text" placeholder="새로운 템플릿 이름" className={styles.input} />
           </div>
-        </div>
+          <div className={styles.formGroup}>
+            <label className={styles.label}>대상 역할</label>
+            <select className={styles.select}>
+              <option>NEW_HIRE</option>
+              <option>MEMBER</option>
+              <option>MANAGER</option>
+            </select>
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.label}>설명</label>
+            <textarea placeholder="템플릿 설명" className={styles.textarea} rows={3} />
+          </div>
+        </Modal>
       )}
 
       {/* 2. Template List Modal */}
       {isListModalOpen && (
-        <div className={styles.modalOverlay} onClick={() => setIsListModalOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>템플릿 목록</h2>
-              <button onClick={() => setIsListModalOpen(false)} className={styles.closeBtn}>
-                <X size={20} />
-              </button>
-            </div>
-            <div className={styles.modalBody}>
-              <div className={styles.searchBox}>
-                <Search size={16} />
-                <input type="text" placeholder="템플릿 검색" />
-              </div>
-              {templates.map(t => (
-                <div key={t.id} className={styles.templateItem}>
-                  <div>{t.name} - {t.role}</div>
-                  <span>{t.status}</span>
-                </div>
-              ))}
-            </div>
+        <Modal
+          open
+          onClose={() => setIsListModalOpen(false)}
+          title="템플릿 목록"
+        >
+          <div className={styles.searchBox}>
+            <Search size={16} />
+            <input type="text" placeholder="템플릿 검색" />
           </div>
-        </div>
+          {templates.map(t => (
+            <div key={t.id} className={styles.templateItem}>
+              <div>{t.name} - {t.role}</div>
+              <span>{t.status}</span>
+            </div>
+          ))}
+        </Modal>
       )}
 
       {/* 3. Template Details Modal */}
       {isDetailsModalOpen && selectedTemplate && (
-        <div className={styles.modalOverlay} onClick={() => setIsDetailsModalOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>{selectedTemplate.name}</h2>
-              <button onClick={() => setIsDetailsModalOpen(false)} className={styles.closeBtn}>
-                <X size={20} />
-              </button>
-            </div>
-            <div className={styles.modalBody}>
-              <div className={styles.detail}><strong>역할:</strong> {selectedTemplate.role}</div>
-              <div className={styles.detail}><strong>상태:</strong> {selectedTemplate.status}</div>
-              <div className={styles.detail}><strong>항목 수:</strong> {selectedTemplate.items}</div>
-              <div className={styles.detail}><strong>팀:</strong> {selectedTemplate.team}</div>
-            </div>
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsDetailsModalOpen(false)} className={styles.cancelBtn}>닫기</button>
-            </div>
-          </div>
-        </div>
+        <Modal
+          open
+          onClose={() => setIsDetailsModalOpen(false)}
+          title="{selectedTemplate.name}"
+          footer={<ModalSecondaryButton onClick={() => setIsDetailsModalOpen(false)}>닫기</ModalSecondaryButton>}
+        >
+          <div className={styles.detail}><strong>역할:</strong> {selectedTemplate.role}</div>
+          <div className={styles.detail}><strong>상태:</strong> {selectedTemplate.status}</div>
+          <div className={styles.detail}><strong>항목 수:</strong> {selectedTemplate.items}</div>
+          <div className={styles.detail}><strong>팀:</strong> {selectedTemplate.team}</div>
+        </Modal>
       )}
 
       {/* 4. Template Categories Modal */}
       {isCategoriesModalOpen && selectedTemplate && (
-        <div className={styles.modalOverlay} onClick={() => setIsCategoriesModalOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>카테고리 관리</h2>
-              <button onClick={() => setIsCategoriesModalOpen(false)} className={styles.closeBtn}>
-                <X size={20} />
-              </button>
+        <Modal
+          open
+          onClose={() => setIsCategoriesModalOpen(false)}
+          title="카테고리 관리"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsCategoriesModalOpen(false)}>취소</ModalSecondaryButton>
+              <ModalPrimaryButton
+                loading={isPending('templates-1')}
+                onClick={() => run('templates-1', '변경 내용을 저장했습니다.', () => setIsCategoriesModalOpen(false))}
+              >
+                저장
+              </ModalPrimaryButton>
+            </>
+          }
+        >
+          {['회사 이해', '마케팅 프로세스', '주요 툴 및 시스템', '주요 프로젝트', '커뮤니케이션', '첫날 자료'].map((cat, i) => (
+            <div key={i} className={styles.categoryItem}>
+              <span>{i + 1}. {cat}</span>
+              <button className={styles.editBtn}><Edit2 size={14} /></button>
             </div>
-            <div className={styles.modalBody}>
-              {['회사 이해', '마케팅 프로세스', '주요 툴 및 시스템', '주요 프로젝트', '커뮤니케이션', '첫날 자료'].map((cat, i) => (
-                <div key={i} className={styles.categoryItem}>
-                  <span>{i + 1}. {cat}</span>
-                  <button className={styles.editBtn}><Edit2 size={14} /></button>
-                </div>
-              ))}
-            </div>
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsCategoriesModalOpen(false)} className={styles.cancelBtn}>취소</button>
-              <button className={styles.primaryBtn}>저장</button>
-            </div>
-          </div>
-        </div>
+          ))}
+        </Modal>
       )}
 
       {/* 5. Template Members Modal */}
       {isMembersModalOpen && (
-        <div className={styles.modalOverlay} onClick={() => setIsMembersModalOpen(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>템플릿 멤버</h2>
-              <button onClick={() => setIsMembersModalOpen(false)} className={styles.closeBtn}>
-                <X size={20} />
-              </button>
-            </div>
-            <div className={styles.modalBody}>
-              <div className={styles.memberList}>
-                <div className={styles.member}>김세원 (NEW_HIRE)</div>
-                <div className={styles.member}>이민수 (NEW_HIRE)</div>
-                <div className={styles.member}>최서연 (MEMBER)</div>
-              </div>
-            </div>
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsMembersModalOpen(false)} className={styles.cancelBtn}>닫기</button>
-            </div>
+        <Modal
+          open
+          onClose={() => setIsMembersModalOpen(false)}
+          title="템플릿 멤버"
+          footer={<ModalSecondaryButton onClick={() => setIsMembersModalOpen(false)}>닫기</ModalSecondaryButton>}
+        >
+          <div className={styles.memberList}>
+            <div className={styles.member}>김세원 (NEW_HIRE)</div>
+            <div className={styles.member}>이민수 (NEW_HIRE)</div>
+            <div className={styles.member}>최서연 (MEMBER)</div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* 6. Template Status Modal */}
       {isStatusModalOpen && selectedTemplate && (
-        <div className={styles.modalOverlay} onClick={() => setIsStatusModalOpen(false)}>
-          <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>템플릿 삭제</h2>
-              <button onClick={() => setIsStatusModalOpen(false)} className={styles.closeBtn}>
-                <X size={20} />
-              </button>
-            </div>
-            <div className={styles.modalBody}>
-              <p>'{selectedTemplate.name}'을(를) 삭제하시겠습니까?</p>
-            </div>
-            <div className={styles.modalFooter}>
-              <button onClick={() => setIsStatusModalOpen(false)} className={styles.cancelBtn}>취소</button>
-              <button className={styles.dangerBtn}>삭제</button>
-            </div>
-          </div>
-        </div>
+        <Modal
+          open
+          onClose={() => setIsStatusModalOpen(false)}
+          title="템플릿 삭제"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsStatusModalOpen(false)}>취소</ModalSecondaryButton>
+              <ModalDangerButton
+                loading={isPending('templates-2')}
+                onClick={() => run('templates-2', '삭제했습니다.', () => setIsStatusModalOpen(false))}
+              >
+                삭제
+              </ModalDangerButton>
+            </>
+          }
+        >
+          <p>'{selectedTemplate.name}'을(를) 삭제하시겠습니까?</p>
+        </Modal>
       )}
 
       {/* 7. Template Actions Menu */}
