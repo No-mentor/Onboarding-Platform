@@ -3,7 +3,12 @@ package com.onboardos.onboarding.auth;
 import com.onboardos.onboarding.auth.dto.AuthResponse;
 import com.onboardos.onboarding.auth.dto.LoginRequest;
 import com.onboardos.onboarding.auth.dto.MeResponse;
+import com.onboardos.onboarding.auth.dto.ResendVerificationRequest;
+import com.onboardos.onboarding.auth.dto.ResendVerificationResponse;
 import com.onboardos.onboarding.auth.dto.SignupRequest;
+import com.onboardos.onboarding.auth.dto.SignupResponse;
+import com.onboardos.onboarding.auth.dto.VerifyEmailRequest;
+import com.onboardos.onboarding.auth.dto.VerifyEmailResponse;
 import com.onboardos.onboarding.global.security.SecurityUtils;
 import com.onboardos.onboarding.global.security.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,11 +32,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final EmailVerificationService emailVerificationService;
 
     @Operation(summary = "회원가입")
     @PostMapping("/signup")
     @ResponseStatus(HttpStatus.CREATED)
-    public AuthResponse signup(@Valid @RequestBody SignupRequest request) {
+    public SignupResponse signup(@Valid @RequestBody SignupRequest request) {
         return authService.signup(request);
     }
 
@@ -39,6 +45,18 @@ public class AuthController {
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request);
+    }
+
+    @Operation(summary = "이메일 인증 코드 확인")
+    @PostMapping("/verify-email")
+    public VerifyEmailResponse verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        return emailVerificationService.verify(request);
+    }
+
+    @Operation(summary = "이메일 인증 코드 재발송")
+    @PostMapping("/resend-verification")
+    public ResendVerificationResponse resendVerification(@Valid @RequestBody ResendVerificationRequest request) {
+        return emailVerificationService.resend(request.email());
     }
 
     @Operation(summary = "내 정보")

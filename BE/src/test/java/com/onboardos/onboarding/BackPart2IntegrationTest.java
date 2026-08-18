@@ -9,7 +9,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.onboardos.onboarding.domain.user.EmailVerificationCode;
+import com.onboardos.onboarding.domain.user.EmailVerificationCodeRepository;
 import com.onboardos.onboarding.support.PostgresTestcontainersConfig;
+import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +38,9 @@ class BackPart2IntegrationTest {
     MockMvc mockMvc;
 
     @Autowired
-    ObjectMapper objectMapper;
+    EmailVerificationCodeRepository verificationCodeRepository;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
     void ownerFlow_plan_recommendation_checklist_template_dashboard_progress() throws Exception {
@@ -203,14 +208,33 @@ class BackPart2IntegrationTest {
     }
 
     private String signup(String email, String name) throws Exception {
-        MvcResult signup = mockMvc.perform(post("/api/v1/auth/signup")
+        mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"%s","password":"password1","name":"%s"}
                                 """.formatted(email, name)))
-                .andExpect(status().isCreated())
+                .andExpect(status().isCreated());
+
+        // Verify email using code from DB (DB stores lowercase-normalized email)
+        String normalizedEmail = email.trim().toLowerCase();
+        EmailVerificationCode code = verificationCodeRepository.findByEmail(normalizedEmail)
+                .orElseThrow();
+        mockMvc.perform(post("/api/v1/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","code":"%s"}
+                                """.formatted(normalizedEmail, code.getCode())))
+                .andExpect(status().isOk());
+
+        // Login to get token
+        MvcResult login = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"password1"}
+                                """.formatted(email)))
+                .andExpect(status().isOk())
                 .andReturn();
-        return objectMapper.readTree(signup.getResponse().getContentAsString()).get("accessToken").asText();
+        return objectMapper.readTree(login.getResponse().getContentAsString()).get("accessToken").asText();
     }
 
     private String createWorkspace(String token, String slugPrefix) throws Exception {
@@ -218,8 +242,8 @@ class BackPart2IntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name":"BP2 Corp","slug":"%s-%d"}
-                                """.formatted(slugPrefix, System.currentTimeMillis() % 1000000)))
+                                {"name":"BP2 Corp","slug":"%s-%s"}
+                                """.formatted(slugPrefix, UUID.randomUUID().toString().substring(0, 8))))
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readTree(ws.getResponse().getContentAsString()).get("id").asText();

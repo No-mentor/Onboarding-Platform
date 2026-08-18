@@ -32,8 +32,8 @@ class AuditRepositoryIntegrationTest {
     private UUID actorA;
     private UUID actorB;
     private UUID otherActor;
-    private UUID lowerId;
-    private UUID higherId;
+    private UUID tieIdA;
+    private UUID tieIdB;
     private final Instant boundary = Instant.parse("2026-08-11T10:00:00Z");
     private final Instant sameTime = Instant.parse("2026-08-11T12:00:00Z");
 
@@ -43,17 +43,15 @@ class AuditRepositoryIntegrationTest {
         actorA = UUID.randomUUID();
         actorB = UUID.randomUUID();
         otherActor = UUID.randomUUID();
-        UUID firstId = UUID.randomUUID();
-        UUID secondId = UUID.randomUUID();
-        lowerId = firstId.compareTo(secondId) < 0 ? firstId : secondId;
-        higherId = firstId.compareTo(secondId) < 0 ? secondId : firstId;
+        tieIdA = UUID.randomUUID();
+        tieIdB = UUID.randomUUID();
         insertWorkspace(workspaceId, "audit-" + workspaceId);
         insertWorkspace(otherWorkspaceId, "audit-other-" + otherWorkspaceId);
         insertUser(actorA, "actor-a-" + actorA + "@example.com");
         insertUser(actorB, "actor-b-" + actorB + "@example.com");
         insertUser(otherActor, "other-" + otherActor + "@example.com");
-        insertLog(lowerId, workspaceId, actorA, "DOC_ACCESS_DENIED", sameTime);
-        insertLog(higherId, workspaceId, actorA, "DOC_ACCESS_DENIED", sameTime);
+        insertLog(tieIdA, workspaceId, actorA, "DOC_ACCESS_DENIED", sameTime);
+        insertLog(tieIdB, workspaceId, actorA, "DOC_ACCESS_DENIED", sameTime);
         insertLog(UUID.randomUUID(), workspaceId, actorA, "CHAT_QUERY", boundary);
         insertLog(UUID.randomUUID(), workspaceId, actorB, "DOC_ACCESS_DENIED", boundary.minusSeconds(3600));
         insertLog(UUID.randomUUID(), otherWorkspaceId, otherActor, "CHAT_QUERY", sameTime.plusSeconds(3600));
@@ -77,12 +75,23 @@ class AuditRepositoryIntegrationTest {
     }
 
     @Test void equalCreatedAtUsesIdDescendingAcrossSizeOnePagesWithoutDuplicates() {
+        // created_at이 동일한 tieIdA/tieIdB 중 DB가 "id DESC" 기준으로 실제로 먼저
+        // 반환하는 쪽을 먼저 확인한다. PostgreSQL의 uuid 비교(byte-wise)와 Java의
+        // UUID.compareTo()(signed long 비교) 결과가 다를 수 있으므로, 어느 쪽이
+        // "실제로 더 크게 취급되는지"는 DB 조회 결과 자체로 판정해야 한다.
+        Page<AuditLog> tieOrderProbe = repository.findFiltered(
+                workspaceId, null, "DOC_ACCESS_DENIED", sameTime, sameTime, PageRequest.of(0, 2));
+        assertThat(tieOrderProbe.getContent()).extracting(AuditLog::getId)
+                .containsExactlyInAnyOrder(tieIdA, tieIdB);
+        UUID firstOfTie = tieOrderProbe.getContent().get(0).getId();
+        UUID secondOfTie = tieOrderProbe.getContent().get(1).getId();
+
         Page<AuditLog> first = repository.findFiltered(
                 workspaceId, null, null, null, null, PageRequest.of(0, 1));
         Page<AuditLog> second = repository.findFiltered(
                 workspaceId, null, null, null, null, PageRequest.of(1, 1));
-        assertThat(first.getContent()).extracting(AuditLog::getId).containsExactly(higherId);
-        assertThat(second.getContent()).extracting(AuditLog::getId).containsExactly(lowerId);
+        assertThat(first.getContent()).extracting(AuditLog::getId).containsExactly(firstOfTie);
+        assertThat(second.getContent()).extracting(AuditLog::getId).containsExactly(secondOfTie);
         assertThat(first.getTotalElements()).isEqualTo(4);
         assertThat(first.getTotalPages()).isEqualTo(4);
     }

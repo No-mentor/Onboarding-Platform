@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.onboardos.onboarding.domain.user.EmailVerificationCode;
+import com.onboardos.onboarding.domain.user.EmailVerificationCodeRepository;
 import com.onboardos.onboarding.support.PostgresTestcontainersConfig;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -33,19 +35,38 @@ class TemplateIntegrationTest {
     MockMvc mockMvc;
 
     @Autowired
-    ObjectMapper objectMapper;
+    EmailVerificationCodeRepository verificationCodeRepository;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
     void createAndListTemplate() throws Exception {
         String email = "admin_" + System.currentTimeMillis() + "@example.com";
-        MvcResult signup = mockMvc.perform(post("/api/v1/auth/signup")
+        mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"%s","password":"password1","name":"관리자"}
                                 """.formatted(email)))
-                .andExpect(status().isCreated())
+                .andExpect(status().isCreated());
+
+        // Verify email
+        EmailVerificationCode code = verificationCodeRepository.findByEmail(email).orElseThrow();
+        mockMvc.perform(post("/api/v1/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","code":"%s"}
+                                """.formatted(email, code.getCode())))
+                .andExpect(status().isOk());
+
+        // Login to get token
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"password1"}
+                                """.formatted(email)))
+                .andExpect(status().isOk())
                 .andReturn();
-        String token = objectMapper.readTree(signup.getResponse().getContentAsString())
+        String token = objectMapper.readTree(loginResult.getResponse().getContentAsString())
                 .get("accessToken").asText();
 
         MvcResult ws = mockMvc.perform(post("/api/v1/workspaces")
