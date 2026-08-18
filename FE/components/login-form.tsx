@@ -39,14 +39,23 @@ export function LoginForm() {
         password,
       });
 
+      const workspaces = response.workspaces ?? [];
+      // 워크스페이스가 하나뿐일 때만 자동 선택한다. 없으면 이전 세션 값이 지워진다.
       saveAuthToken(
         response.accessToken,
         response.userId,
         response.email,
         response.name,
-        response.workspaces[0]?.id
+        workspaces.length === 1 ? workspaces[0].id : undefined
       );
-      router.push('/dashboard');
+
+      if (workspaces.length === 0) {
+        router.push('/workspace-create');
+      } else if (workspaces.length === 1) {
+        router.push('/dashboard');
+      } else {
+        router.push('/workspace-selection');
+      }
     } catch (error) {
       if (error instanceof AuthError) {
         if (error.isAuthError()) {

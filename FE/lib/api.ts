@@ -246,11 +246,17 @@ export interface SendMessageRequest {
   sessionId?: string;
 }
 
+/** POST /chat/messages 응답 (서버 SendMessageResponse 와 1:1) */
 export interface SendMessageResponse {
-  id: string;
   sessionId: string;
-  content: string;
-  citations?: Array<{ name: string; type?: string }>;
+  messageId: string;
+  role: string;
+  /** 답변 본문. 서버 필드명이 content 가 아니라 answer 다 */
+  answer: string;
+  citations?: Array<Record<string, unknown>>;
+  /** 권한이 없어 참조하지 못한 문서 */
+  permissionDeniedDocumentIds?: string[];
+  createdAt?: string;
 }
 
 export async function getChatSessions(): Promise<{ items: ChatSessionSummaryResponse[] }> {
@@ -350,13 +356,80 @@ export interface InvitationResponse {
 }
 
 // ===== Document Detail & Upload =====
+export type DocumentStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
+
+/** GET /documents 응답 항목 (서버 DocumentResponse 와 1:1) */
 export interface DocumentResponse {
   id: string;
-  title?: string;
-  fileName?: string;
-  status?: string;
-  size?: string;
+  title: string;
+  status: DocumentStatus;
+  visibility?: string;
+  allowedRoles?: string[];
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+  chunkCount?: number | null;
+  errorMessage?: string | null;
   createdAt?: string;
+  updatedAt?: string;
+}
+
+/** 서버는 items/page/size/totalElements/totalPages 로 내려준다 */
+export interface DocumentPageResponse {
+  items: DocumentResponse[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+export interface DocumentListParams {
+  page?: number;
+  size?: number;
+  status?: DocumentStatus;
+}
+
+export async function getDocuments(params: DocumentListParams = {}): Promise<DocumentPageResponse> {
+  const token = getAuthToken();
+  const wsId = getWorkspaceId();
+  if (!token || !wsId) throw new Error('인증 정보 없음');
+
+  const query = new URLSearchParams({
+    page: String(params.page ?? 0),
+    size: String(params.size ?? 20),
+  });
+  if (params.status) query.set('status', params.status);
+
+  const response = await fetch(`${API_BASE}/documents?${query}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Workspace-Id': wsId,
+    },
+  });
+
+  if (!response.ok) throw new Error('파일 목록 조회 실패');
+  return response.json();
+}
+
+/** 서버가 주는 바이트 크기를 화면용 문자열로 */
+export function formatFileSize(bytes?: number | null): string {
+  if (bytes === null || bytes === undefined) return '-';
+  if (bytes < 1024) return `${bytes}B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)}KB`;
+  return `${(kb / 1024).toFixed(1)}MB`;
+}
+
+/** mimeType 에서 화면에 쓸 확장자 라벨을 뽑는다 */
+export function formatFileType(mimeType?: string | null, title?: string): string {
+  const fromTitle = title?.includes('.') ? title.split('.').pop()?.toUpperCase() : undefined;
+  if (fromTitle && fromTitle.length <= 5) return fromTitle;
+  if (!mimeType) return 'FILE';
+  if (mimeType.includes('pdf')) return 'PDF';
+  if (mimeType.includes('sheet') || mimeType.includes('excel')) return 'XLSX';
+  if (mimeType.includes('word')) return 'DOCX';
+  if (mimeType.includes('presentation')) return 'PPTX';
+  if (mimeType.includes('text')) return 'TXT';
+  return mimeType.split('/').pop()?.toUpperCase() ?? 'FILE';
 }
 
 export async function uploadDocument(formData: FormData): Promise<DocumentResponse> {
@@ -397,12 +470,24 @@ export async function getDocumentDetail(documentId: string): Promise<DocumentRes
 export interface WorkspaceResponse {
   id: string;
   name: string;
+  slug?: string;
   memberCount?: number;
   createdAt?: string;
 }
 
+/** 워크스페이스에서의 내 역할 */
+export type WorkspaceRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER' | 'NEW_HIRE';
+
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  slug: string;
+  role: WorkspaceRole;
+}
+
+/** 서버는 items 로 내려준다 (workspaces 아님) */
 export interface WorkspaceListResponse {
-  workspaces: WorkspaceResponse[];
+  items: WorkspaceSummary[];
 }
 
 export async function getMyWorkspaces(): Promise<WorkspaceListResponse> {
@@ -419,7 +504,7 @@ export async function getMyWorkspaces(): Promise<WorkspaceListResponse> {
   return response.json();
 }
 
-export async function createWorkspace(name: string): Promise<WorkspaceResponse> {
+export async function createWorkspace(name: string, slug: string): Promise<WorkspaceResponse> {
   const token = getAuthToken();
   if (!token) throw new Error('인증 정보 없음');
 
@@ -429,11 +514,26 @@ export async function createWorkspace(name: string): Promise<WorkspaceResponse> 
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, slug }),
   });
 
-  if (!response.ok) throw new Error('Workspace 생성 실패');
+  if (!response.ok) {
+    // slug 중복(409) / 형식 오류(400) 를 구분해서 보여줘야 해서 서버 메시지를 그대로 올린다
+    const error = await response.json().catch(() => ({}));
+    throw new WorkspaceError(response.status, error.message || 'Workspace 생성 실패');
+  }
   return response.json();
+}
+
+export class WorkspaceError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = 'WorkspaceError';
+  }
+
+  isConflict(): boolean {
+    return this.status === 409;
+  }
 }
 
 export async function updateWorkspace(workspaceId: string, name: string): Promise<WorkspaceResponse> {
