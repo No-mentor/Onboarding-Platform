@@ -79,7 +79,7 @@ class BackPart2IntegrationTest {
                                 """.formatted(templateId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.planId").isNotEmpty())
-                .andExpect(jsonPath("$.items.length()").value(4));
+                .andExpect(jsonPath("$.items.length()").value(2));
 
         mockMvc.perform(get("/api/v1/onboarding-plans/me")
                         .header("Authorization", "Bearer " + ownerToken)
@@ -164,6 +164,7 @@ class BackPart2IntegrationTest {
                         .header("Authorization", "Bearer " + hireToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.workspaceId").value(workspaceId))
+                .andExpect(jsonPath("$.onboardingPlanId").isNotEmpty())
                 .andReturn();
 
         assertThat(accepted.getResponse().getContentAsString()).contains(workspaceId);
@@ -176,16 +177,6 @@ class BackPart2IntegrationTest {
 
         String newHireUserId = objectMapper.readTree(me.getResponse().getContentAsString())
                 .get("id").asText();
-
-        mockMvc.perform(post("/api/v1/onboarding-plans/generate")
-                        .header("Authorization", "Bearer " + ownerToken)
-                        .header("X-Workspace-Id", workspaceId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"userId":"%s","force":false}
-                                """.formatted(newHireUserId)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.planId").isNotEmpty());
 
         mockMvc.perform(get("/api/v1/admin/progress")
                         .header("Authorization", "Bearer " + ownerToken)

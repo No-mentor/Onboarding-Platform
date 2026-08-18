@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 
 @Slf4j
 @RestControllerAdvice
@@ -53,6 +54,14 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         return build(ErrorCode.VALIDATION_ERROR, "요청 파라미터 형식이 올바르지 않습니다.", request);
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ErrorResponse> handleMissingHeader(
+            MissingRequestHeaderException ex,
+            HttpServletRequest request
+    ) {
+        return build(ErrorCode.VALIDATION_ERROR, ErrorCode.VALIDATION_ERROR.getDefaultMessage(), request);
     }
 
     @ExceptionHandler({AuthenticationException.class, BadCredentialsException.class})
