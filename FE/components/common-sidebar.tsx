@@ -1,38 +1,31 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Folder, Zap, CheckSquare, Target, BarChart3, Users, Users2, Building, Lock, Settings } from 'lucide-react';
-import { getUserName, getUserEmail } from '@/lib/storage';
+import { Home, Folder, Zap, CheckSquare, Target, BarChart3, Users, Building, Lock, Settings } from 'lucide-react';
+import { useMe } from './require-workspace';
+import type { WorkspaceRole } from '@/lib/auth';
 import styles from './common-sidebar.module.css';
+
+const ROLE_LABEL: Record<WorkspaceRole, string> = {
+  OWNER: '관리자',
+  ADMIN: '관리자',
+  MANAGER: '매니저',
+  MEMBER: '멤버',
+  NEW_HIRE: '신입',
+};
 
 export function CommonSidebar() {
   const pathname = usePathname();
-  const [userName, setUserName] = useState<string>('사용자');
-  const [userInitial, setUserInitial] = useState<string>('S');
-  const [userTeam, setUserTeam] = useState<string>('팀');
+  const me = useMe();
 
-  useEffect(() => {
-    const name = getUserName();
-    const email = getUserEmail();
-
-    if (name) {
-      setUserName(name);
-      setUserInitial(name.charAt(0).toUpperCase());
-    }
-
-    if (email) {
-      const domain = email.split('@')[1];
-      if (domain === 'marketing.company.com') {
-        setUserTeam('마케팅팀');
-      } else if (domain === 'dev.company.com') {
-        setUserTeam('개발팀');
-      } else if (domain === 'design.company.com') {
-        setUserTeam('디자인팀');
-      }
-    }
-  }, []);
+  const userName = me?.name ?? '사용자';
+  const userInitial = userName.trim().charAt(0).toUpperCase() || 'U';
+  const workspace = me?.currentWorkspace;
+  const roleLabel = workspace ? ROLE_LABEL[workspace.role] ?? workspace.role : null;
+  // 부서 정보가 있으면 함께 보여준다
+  const department = me?.profile?.department;
 
   const navItems = [
     { href: '/dashboard', label: '홈', icon: Home },
@@ -48,16 +41,18 @@ export function CommonSidebar() {
     { href: '/templates', label: '템플릿', icon: BarChart3 },
     { href: '/onboarding-progress', label: '진행 현황', icon: Building },
     { href: '/audit-log', label: '감사 로그', icon: Lock },
-    { href: '#', label: '워크스페이스', icon: Settings },
+    { href: '/workspace-settings', label: '워크스페이스', icon: Settings },
   ];
 
   return (
     <aside className={styles.sidebar}>
       <div className={styles.sidebarHeader}>
-        <div className={styles.logo}>M</div>
+        <div className={styles.logo}>{workspace ? workspace.name.trim().charAt(0) : 'O'}</div>
         <div>
-          <div className={styles.brandName}>MENTALK</div>
-          <div className={styles.brandSub}>Mentor + Talk</div>
+          <div className={styles.brandName}>{workspace?.name ?? 'OnboardOS'}</div>
+          <div className={styles.brandSub}>
+            {workspace ? `onboardos.com/${workspace.slug}` : '업무 공간 없음'}
+          </div>
         </div>
       </div>
 
@@ -104,7 +99,9 @@ export function CommonSidebar() {
           <div className={styles.userAvatar}>{userInitial}</div>
           <div className={styles.userInfo}>
             <div className={styles.userName}>{userName}</div>
-            <div className={styles.userRole}>NEW_HIRE · {userTeam}</div>
+            <div className={styles.userRole}>
+              {[roleLabel, department].filter(Boolean).join(' · ') || '역할 정보 없음'}
+            </div>
           </div>
         </div>
         <button className={styles.collapseBtn}>메뉴 접기</button>
