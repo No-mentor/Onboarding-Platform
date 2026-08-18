@@ -742,3 +742,92 @@ export async function inviteMember(email: string, role: string = 'MEMBER'): Prom
 
   return response.json();
 }
+
+// ===== Auth =====
+export interface SignupRequest {
+  email: string;
+  name: string;
+  password: string;
+}
+
+export interface SignupResponse {
+  email: string;
+  success: boolean;
+  message?: string;
+}
+
+export async function signup(request: SignupRequest): Promise<SignupResponse> {
+  const response = await fetch(`${API_BASE}/auth/signup`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email: request.email.trim().toLowerCase(),
+      name: request.name,
+      password: request.password,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || '회원가입 실패');
+  }
+
+  return response.json();
+}
+
+// ===== Email Verification =====
+export interface VerifyEmailRequest {
+  email: string;
+  code: string;
+}
+
+export interface VerifyEmailResponse {
+  email: string;
+  success: boolean;
+}
+
+export interface ResendVerificationResponse {
+  success: boolean;
+  message?: string;
+}
+
+export async function verifyEmail(email: string, code: string): Promise<VerifyEmailResponse> {
+  const response = await fetch(`${API_BASE}/auth/verify-email`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email: email.trim().toLowerCase(),
+      code,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || '이메일 인증 실패');
+  }
+
+  return response.json();
+}
+
+export async function resendVerificationCode(email: string): Promise<ResendVerificationResponse> {
+  const response = await fetch(`${API_BASE}/auth/resend-verification`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email: email.trim().toLowerCase(),
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || '코드 재전송 실패');
+  }
+
+  return response.json();
+}

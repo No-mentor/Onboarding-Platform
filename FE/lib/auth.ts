@@ -9,6 +9,12 @@ export interface SignupPayload {
   name: string;
 }
 
+export interface SignupResponse {
+  email: string;
+  message: string;
+  emailSent: boolean;
+}
+
 export interface LoginPayload {
   email: string;
   password: string;
@@ -16,9 +22,10 @@ export interface LoginPayload {
 
 /**
  * 회원가입 API 호출
+ * 토큰을 즉시 발급하지 않고, email_verified=false 상태로 계정 생성 후 인증 코드 발송
  * @throws {AuthError} API 에러 발생 시
  */
-export async function signup(payload: SignupPayload): Promise<AuthResponse> {
+export async function signup(payload: SignupPayload): Promise<SignupResponse> {
   const response = await fetch(`${AUTH_ENDPOINT}/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

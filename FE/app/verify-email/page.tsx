@@ -1,12 +1,10 @@
+'use client';
+
+import React, { Suspense } from 'react';
 import Image from 'next/image';
 import { EmailVerificationForm } from '@/components/email-verification-form';
 
-export const metadata = {
-  title: 'OnboardOS — 이메일 인증',
-  description: '가입 완료를 위해 이메일 인증 코드를 입력해주세요.',
-};
-
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   return (
     <div className="auth">
       <aside className="brand">
@@ -40,5 +38,13 @@ export default function VerifyEmailPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: '40px', textAlign: 'center' }}>로딩 중...</div>}>
+      <VerifyEmailContent />
+    </Suspense>
   );
 }
