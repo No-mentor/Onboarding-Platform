@@ -1,14 +1,32 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from './ui/toast';
+import { verifyEmail, resendVerificationCode } from '@/lib/api';
 
 export function EmailVerificationForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { showToast } = useToast();
   const [codes, setCodes] = useState(['', '', '', '', '', '']);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [isResending, setIsResending] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    const emailParam = searchParams.get('email');
+    if (emailParam) {
+      setEmail(decodeURIComponent(emailParam));
+    } else {
+      const storedEmail = localStorage.getItem('pending_verification_email');
+      if (storedEmail) {
+        setEmail(storedEmail);
+      }
+    }
+  }, [searchParams]);
 
   const handleChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;
@@ -61,14 +79,44 @@ export function EmailVerificationForm() {
       return;
     }
 
+    if (!email) {
+      setError('이메일 정보가 없습니다.');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      await new Promise((resolve) => window.setTimeout(resolve, 450));
+      await verifyEmail(email, code);
       showToast('이메일이 인증되었습니다.', 'success');
+      localStorage.removeItem('pending_verification_email');
+      setTimeout(() => router.push('/login'), 1500);
     } catch (err) {
-      setError('인증에 실패했습니다. 다시 시도해 주세요.');
+      const errorMsg = err instanceof Error ? err.message : '인증에 실패했습니다';
+      setError(errorMsg);
+      showToast(errorMsg, 'error');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!email) {
+      setError('이메일 정보가 없습니다.');
+      return;
+    }
+
+    setIsResending(true);
+    try {
+      await resendVerificationCode(email);
+      showToast('인증 코드가 재전송되었습니다.', 'success');
+      setCodes(['', '', '', '', '', '']);
+      setError('');
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : '코드 재전송 실패';
+      setError(errorMsg);
+      showToast(errorMsg, 'error');
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -147,8 +195,8 @@ export function EmailVerificationForm() {
       </button>
 
       <p className="foot">
-        코드를 받지 못했나요? <button className="link" type="button" disabled={isLoading}>
-          재전송
+        코드를 받지 못했나요? <button className="link" type="button" disabled={isLoading || isResending} onClick={handleResend}>
+          {isResending ? '재전송 중...' : '재전송'}
         </button>
       </p>
     </form>
