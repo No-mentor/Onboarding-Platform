@@ -1,20 +1,18 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TrendingUp, AlertCircle, Calendar, Users, BarChart3, AlertTriangle, Home, Folder, Zap, CheckSquare, Target, Lock, Settings } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
+import { useToast } from '@/components/ui/toast';
+import { getAdminProgress } from '@/lib/api';
 import styles from './onboarding-progress.module.css';
 
 export default function OnboardingProgressPage() {
   const { run, isPending } = useModalAction();
-  const newbies = [
-    { id: 1, name: '김세원', team: '마케팅팀', day: 'DAY 7', progress: 62, completed: 8, total: 13, status: '없음', activity: '1시간 전' },
-    { id: 2, name: '정하영', team: '마케팅팀', day: 'DAY 5', progress: 38, completed: 4, total: 11, status: '체크리스트 지연', activity: '3시간 전' },
-    { id: 3, name: '오지민', team: '마케팅팀', day: 'DAY 11', progress: 71, completed: 12, total: 17, status: '문서 검금 제한', activity: '30분 전' },
-    { id: 4, name: '윤서은', team: '마케팅팀', day: 'DAY 3', progress: 24, completed: 2, total: 9, status: '주현 미루', activity: '5시간 전' },
-    { id: 5, name: '이수연', team: '마케팅팀', day: 'DAY 9', progress: 50, completed: 6, total: 12, status: '없음', activity: '2시간 전' },
-  ];
+  const { showToast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
+  const [newbies, setNewbies] = useState<any[]>([]);
 
   // Modal states
   const [isProgressDetailModalOpen, setIsProgressDetailModalOpen] = useState(false);
@@ -23,7 +21,24 @@ export default function OnboardingProgressPage() {
   const [isTeamStatisticsModalOpen, setIsTeamStatisticsModalOpen] = useState(false);
   const [isProgressActionModalOpen, setIsProgressActionModalOpen] = useState(false);
 
-  const [selectedNewbie, setSelectedNewbie] = useState<typeof newbies[0] | null>(null);
+  const [selectedNewbie, setSelectedNewbie] = useState<any>(null);
+
+  // Load progress on mount
+  useEffect(() => {
+    const loadProgress = async () => {
+      try {
+        setIsLoading(true);
+        const response = await getAdminProgress();
+        setNewbies(response.content || []);
+      } catch (err) {
+        console.error('신입 진행 현황 로드 실패:', err);
+        showToast('신입 진행 현황을 불러올 수 없습니다', 'error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadProgress();
+  }, []);
 
   return (
     <div className={styles.container}>

@@ -1,73 +1,47 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown, RotateCcw, Bell, HelpCircle, Calendar, Download, Copy } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
+import { useToast } from '@/components/ui/toast';
+import { getAuditLogs } from '@/lib/api';
 import styles from './audit-log.module.css';
 
 export default function AuditLogPage() {
   const { run, isPending } = useModalAction();
+  const { showToast } = useToast();
   const [selectedUser, setSelectedUser] = useState('all');
   const [selectedEvent, setSelectedEvent] = useState('all');
   const [startDate, setStartDate] = useState('2026.08.10 09:00');
   const [endDate, setEndDate] = useState('2026.08.16 18:16');
+  const [isLoading, setIsLoading] = useState(true);
 
   // Modal states
   const [isEventDetailsOpen, setIsEventDetailsOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isPermissionAuditOpen, setIsPermissionAuditOpen] = useState(false);
   const [isTimeRangeOpen, setIsTimeRangeOpen] = useState(false);
-  const [selectedLogId, setSelectedLogId] = useState<number | null>(null);
+  const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
+  const [logs, setLogs] = useState<any[]>([]);
 
-  const logs = [
-    {
-      id: 1,
-      time: '2026.08.16 19:42:13',
-      user: '김세원',
-      event: 'DOC_VIEW',
-      target: '행사운영가이드.pdf',
-      result: 'ALLOW',
-      resultColor: '#10B981',
-    },
-    {
-      id: 2,
-      time: '2026.08.16 19:41:02',
-      user: '김세원',
-      event: 'DOC_ACCESS_DENIED',
-      target: '임원_급여자료.pdf',
-      result: 'DENY',
-      resultColor: '#DC2626',
-    },
-    {
-      id: 3,
-      time: '2026.08.16 19:38:27',
-      user: '김세원',
-      event: 'CHAT_QUERY',
-      target: '예산안 사용 사진',
-      result: 'ALLOW',
-      resultColor: '#10B981',
-    },
-    {
-      id: 4,
-      time: '2026.08.16 19:30:55',
-      user: '이민수',
-      event: 'PLAN_REGENERATE',
-      target: '김세원 30일 계획',
-      result: 'ALLOW',
-      resultColor: '#10B981',
-    },
-    {
-      id: 5,
-      time: '2026.08.16 18:58:40',
-      user: '최서연',
-      event: 'MEMBER_INVITE',
-      target: 'newhire@company.com',
-      result: 'ALLOW',
-      resultColor: '#10B981',
-    },
-  ];
+  // Load audit logs on mount
+  useEffect(() => {
+    const loadLogs = async () => {
+      try {
+        setIsLoading(true);
+        const response = await getAuditLogs();
+        setLogs(response.content || []);
+      } catch (err) {
+        console.error('감사 로그 로드 실패:', err);
+        showToast('감사 로그를 불러올 수 없습니다', 'error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadLogs();
+  }, []);
 
   const eventBgColors: { [key: string]: string } = {
     DOC_VIEW: '#EDE9FE',

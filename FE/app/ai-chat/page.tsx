@@ -1,18 +1,22 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Send, Plus, RefreshCw, Bell, HelpCircle, Zap } from 'lucide-react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFilePdf, faFileExcel } from '@fortawesome/free-solid-svg-icons';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
+import { useToast } from '@/components/ui/toast';
+import { getChatSessions, getChatSessionDetail, sendChatMessage } from '@/lib/api';
 import styles from './ai-chat.module.css';
 
 export default function AIChatPage() {
   const { run, isPending } = useModalAction();
-  const [selectedChat, setSelectedChat] = useState(0);
+  const { showToast } = useToast();
+  const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   // Modal states
   const [isChatContextModalOpen, setIsChatContextModalOpen] = useState(false);
@@ -23,41 +27,30 @@ export default function AIChatPage() {
   const [isQuestionDetailsModalOpen, setIsQuestionDetailsModalOpen] = useState(false);
   const [isAIResponseModalOpen, setIsAIResponseModalOpen] = useState(false);
 
-  const conversations = [
-    { id: 1, title: '예산안 사용 지침', time: '10:42', status: '방금 전' },
-    { id: 2, title: '행사 운영 정책', time: '09:30', status: '어제' },
-    { id: 3, title: '거래처 연락처', time: '16:05', status: '어제' },
-    { id: 4, title: '신입 첫 주 해야 할 일', time: '11:22', status: '2일 전' },
-    { id: 5, title: '원격사 온보딩 가이드', time: '14:18', status: '3일 전' },
-  ];
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
 
-  const chatMessages = [
-    {
-      type: 'user',
-      text: '이 예산은 언제 사용하나요 ?',
-      time: '10:42',
-    },
-    {
-      type: 'ai',
-      text: '행사 예산안 v7.xlsx는 행사 기획 단계에서 최초 예산을 세우고, 변경 내역을 반영하며, 최종 결재를 예산안을 만드는 데 사용합니다.',
-      time: '10:42',
-      citations: [
-        { name: '행사_예산안_v7.xlsx', page: 1, type: 'excel' },
-        { name: '행사운영가이드.pdf', page: 2, type: 'pdf' },
-      ],
-    },
-    {
-      type: 'user',
-      text: '예산 변경이 생기면 어떤 절차를 따라야 하나요 ?',
-      time: '10:43',
-    },
-    {
-      type: 'ai',
-      text: '① 변경 사유 기록 → ② 담당자 검토 → ③ 승인 요청 → ④ 최신본 업로드',
-      time: '10:43',
-      additionalText: '자세한 내용은 행사운영가이드.pdf 2 페이지를 참고해 주세요.',
-    },
-  ];
+  // Load chat sessions on mount
+  useEffect(() => {
+    const loadSessions = async () => {
+      try {
+        setIsLoading(true);
+        const response = await getChatSessions();
+        setConversations(response.items || []);
+        if (response.items && response.items.length > 0) {
+          setSelectedChat(response.items[0].id);
+          const detail = await getChatSessionDetail(response.items[0].id);
+          setChatMessages(detail.messages || []);
+        }
+      } catch (err) {
+        console.error('채팅 세션 로드 실패:', err);
+        showToast('채팅 세션을 불러올 수 없습니다', 'error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadSessions();
+  }, []);
 
   const suggestedQuestions = [
     '예산안 정정절차 기준이 궁금해요',
@@ -118,11 +111,11 @@ export default function AIChatPage() {
             </div>
 
             <div className={styles.conversationList}>
-              {conversations.map((conv, idx) => (
+              {conversations.map((conv) => (
                 <button
                   key={conv.id}
-                  className={`${styles.conversationItem} ${idx === selectedChat ? styles.activeConversation : ''}`}
-                  onClick={() => setSelectedChat(idx)}
+                  className={`${styles.conversationItem} ${conv.id === selectedChat ? styles.activeConversation : ''}`}
+                  onClick={() => setSelectedChat(conv.id)}
                 >
                   <div className={styles.convTitle}>{conv.title}</div>
                   <div className={styles.convMeta}>
