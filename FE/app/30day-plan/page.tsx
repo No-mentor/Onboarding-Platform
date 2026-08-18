@@ -1,16 +1,20 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Zap, Bell, HelpCircle, Check } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
+import { useToast } from '@/components/ui/toast';
+import { getOnboardingPlan } from '@/lib/api';
 import styles from './30day-plan.module.css';
 
 export default function ThirtyDayPlanPage() {
   const { run, isPending } = useModalAction();
+  const { showToast } = useToast();
   const [selectedTab, setSelectedTab] = useState('all');
   const [expandedDays, setExpandedDays] = useState<number[]>([1]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Modal states
   const [isWeekDetailsModalOpen, setIsWeekDetailsModalOpen] = useState(false);
@@ -21,15 +25,27 @@ export default function ThirtyDayPlanPage() {
   const [isTaskBreakdownModalOpen, setIsTaskBreakdownModalOpen] = useState(false);
   const [isPlanActionModalOpen, setIsPlanActionModalOpen] = useState(false);
 
-  const [selectedDay, setSelectedDay] = useState<typeof days[0] | null>(null);
+  const [selectedDay, setSelectedDay] = useState<any>(null);
   const [selectedWeek, setSelectedWeek] = useState('1week');
+  const [days, setDays] = useState<any[]>([]);
 
-  const days = [
-    { day: 1, title: '업무 이해 및 환경 셋업', progress: 25, items: { docs: 2, checklists: 2, practice: 0 }, completed: true },
-    { day: 2, title: '핵심 업무 프로세스 학습', progress: 40, items: { docs: 2, checklists: 3, practice: 0 }, completed: false },
-    { day: 3, title: '주요 프로젝트 및 자료 파악', progress: 30, items: { docs: 3, checklists: 2, practice: 1 }, completed: false },
-    { day: 30, title: '인수인계 완료 및 향후 계획', progress: 0, items: { docs: 1, checklists: 2, practice: 0 }, completed: false },
-  ];
+  // Load plan on mount
+  useEffect(() => {
+    const loadPlan = async () => {
+      try {
+        setIsLoading(true);
+        const response = await getOnboardingPlan(true);
+        const items = response.items || [];
+        setDays(items);
+      } catch (err) {
+        console.error('계획 로드 실패:', err);
+        showToast('계획을 불러올 수 없습니다', 'error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadPlan();
+  }, []);
 
   const toggleDayExpanded = (day: number) => {
     setExpandedDays((prev) =>

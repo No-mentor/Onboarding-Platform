@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown, Bell, HelpCircle } from 'lucide-react';
 import { AiOutlineFilePdf, AiOutlineFileExcel, AiOutlineFile } from 'react-icons/ai';
 import { CommonSidebar } from '@/components/common-sidebar';
@@ -8,6 +8,7 @@ import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui
 import { DailyTasksModal } from '@/components/dashboard/modals/daily-tasks-modal';
 import { AllFilesModal } from '@/components/dashboard/modals/all-files-modal';
 import { NotificationsPanel } from '@/components/dashboard/panels/notifications-panel';
+import { getDashboard } from '@/lib/api';
 import styles from './dashboard.module.css';
 
 export default function DashboardPage() {
@@ -27,53 +28,28 @@ export default function DashboardPage() {
   const [selectedFile, setSelectedFile] = useState<typeof recentFiles[0] | null>(null);
   const [selectedTask, setSelectedTask] = useState<typeof todayTasks[0] | null>(null);
 
-  const todayTasks = [
-    {
-      id: 1,
-      label: '문서',
-      title: '행사운영가이드 .pdf 읽기',
-      time: '10:30 가치',
-    },
-    {
-      id: 2,
-      label: '체크',
-      title: '거래처 연락망 확인하기',
-      time: '14:00 가치',
-    },
-    {
-      id: 3,
-      label: '실습',
-      title: '예산안 설물 업데이트',
-      time: '16:00 가치',
-    },
-  ];
+  const [todayTasks, setTodayTasks] = useState<Array<{ id: string; label: string; title: string; time: string }>>([]);
+  const [recentFiles, setRecentFiles] = useState<Array<{ id: string; name: string; size: string; format: string; status: string; type: string }>>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const recentFiles = [
-    {
-      id: 1,
-      name: '행사운영가이드 .pdf',
-      size: '5.8MB',
-      format: 'PDF',
-      status: 'READY',
-      type: 'pdf',
-    },
-    {
-      id: 2,
-      name: '행사_예산안_v7.xlsx',
-      size: '2.4MB',
-      format: 'XLSX',
-      status: 'READY',
-      type: 'excel',
-    },
-    {
-      id: 3,
-      name: '거래처_연락망.xlsx',
-      size: '1.6MB',
-      format: 'XLSX',
-      status: 'READY',
-      type: 'excel',
-    },
-  ];
+  useEffect(() => {
+    const loadDashboard = async () => {
+      try {
+        setIsLoading(true);
+        const data = await getDashboard();
+        setTodayTasks(data.today || []);
+        // TODO: 파일 목록은 별도 API 호출 (GET /documents)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '데이터 로드 실패');
+        console.error(err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadDashboard();
+  }, []);
 
   const getFileIcon = (type: string) => {
     switch (type) {

@@ -1,20 +1,26 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Download, MoreVertical, RotateCcw, ChevronLeft, ChevronRight, Bell, HelpCircle, X, Cloud, AlertTriangle, Trash2, FileText, Lock, Share2, MessageCircle, Sparkles, Send, Check, Settings } from 'lucide-react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFilePdf, faFileExcel, faFilePowerpoint } from '@fortawesome/free-solid-svg-icons';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton, ModalDangerButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
+import { getDocuments, deleteDocument } from '@/lib/document';
+import { useToast } from '@/components/ui/toast';
+import { getWorkspaceId } from '@/lib/storage';
 import styles from './file-management.module.css';
 
 export default function FileManagementPage() {
   const { run, isPending } = useModalAction();
+  const { showToast } = useToast();
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFile, setSelectedFile] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
+  const [files, setFiles] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Modal states
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -37,88 +43,24 @@ export default function FileManagementPage() {
   const [metadataTags, setMetadataTags] = useState('');
   const [metadataDescription, setMetadataDescription] = useState('');
 
-  const files = [
-    {
-      id: 1,
-      name: '행사운영가이드.pdf',
-      type: 'pdf',
-      status: 'READY',
-      scope: 'WORKSPACE',
-      roles: ['NEW_HIRE', 'MEMBER'],
-      checkCount: 42,
-      date: '08.16 18:21',
-      docId: 'doc_8f3d2a1c',
-      size: '5.8 MB',
-      updatedAt: '2025.08.16 18:21',
-      uploader: '김세원 (NEW_HIRE)',
-      description: '행사 운영 정책 및 체크리스트 상세 내용',
-      tags: ['행사', '운영', '가이드'],
-    },
-    {
-      id: 2,
-      name: '예산안_v7.xlsx',
-      type: 'excel',
-      status: 'PROCESSING',
-      scope: 'ROLE_BASED',
-      roles: ['NEW_HIRE'],
-      checkCount: null,
-      date: '08.16 18:18',
-      docId: 'doc_9g4e3b2d',
-      size: '2.1 MB',
-      updatedAt: '2025.08.16 18:18',
-      uploader: '김세원 (NEW_HIRE)',
-      description: '연간 예산안 및 부서별 배정 내용',
-      tags: ['예산', '재무'],
-    },
-    {
-      id: 3,
-      name: '거래처_연락망.xlsx',
-      type: 'excel',
-      status: 'FAILED',
-      scope: 'WORKSPACE',
-      roles: ['MEMBER'],
-      checkCount: 0,
-      date: '08.16 18:13',
-      docId: 'doc_7h2f1c3e',
-      size: '1.5 MB',
-      updatedAt: '2025.08.16 18:13',
-      uploader: '김세원 (NEW_HIRE)',
-      description: '주요 거래처 연락처 및 담당자 정보',
-      tags: ['거래처', '연락처'],
-    },
-    {
-      id: 4,
-      name: '브랜드가이드.pdf',
-      type: 'pdf',
-      status: 'PENDING',
-      scope: 'ROLE_BASED',
-      roles: ['NEW_HIRE'],
-      checkCount: null,
-      date: '08.16 18:11',
-      docId: 'doc_6i1d2e4f',
-      size: '3.2 MB',
-      updatedAt: '2025.08.16 18:11',
-      uploader: '김세원 (NEW_HIRE)',
-      description: '회사 브랜드 가이드라인 및 사용 규칙',
-      tags: ['브랜드', '가이드'],
-    },
-    {
-      id: 5,
-      name: '주간회의안건.pptx',
-      type: 'pptx',
-      status: 'READY',
-      scope: 'WORKSPACE',
-      roles: ['ALL'],
-      checkCount: 18,
-      date: '08.16 17:44',
-      docId: 'doc_5j0c1f5g',
-      size: '4.7 MB',
-      updatedAt: '2025.08.16 17:44',
-      uploader: '김세원 (NEW_HIRE)',
-      description: '이번 주 전사 회의 안건 및 일정',
-      tags: ['회의', '주간'],
-    },
-  ];
+  // Load files on mount
+  useEffect(() => {
+    const loadFiles = async () => {
+      try {
+        setIsLoading(true);
+        const wsId = getWorkspaceId();
+        if (!wsId) throw new Error('워크스페이스 ID 없음');
+        const response = await getDocuments(wsId);
+        setFiles(response.content || []);
+      } catch (err) {
+        console.error('파일 목록 로드 실패:', err);
+        showToast('파일 목록을 불러올 수 없습니다', 'error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadFiles();
+  }, []);
 
   const getFileIcon = (type: string) => {
     switch (type) {
@@ -586,7 +528,16 @@ export default function FileManagementPage() {
               <ModalSecondaryButton onClick={() => setIsDeleteConfirmOpen(false)}>취소</ModalSecondaryButton>
               <ModalDangerButton
                 loading={isPending('file-management-2')}
-                onClick={() => run('file-management-2', '문서를 휴지통으로 옮겼습니다.', () => setIsDeleteConfirmOpen(false))}
+                onClick={() => {
+                  const wsId = getWorkspaceId();
+                  if (!wsId) return;
+                  run('file-management-2', '문서를 삭제했습니다.', () => {
+                    setIsDeleteConfirmOpen(false);
+                    setFiles(files.filter(f => f.id !== currentFile.id));
+                  }, async () => {
+                    await deleteDocument(wsId, currentFile.id);
+                  });
+                }}
               >
                 휴지통으로 이동
               </ModalDangerButton>

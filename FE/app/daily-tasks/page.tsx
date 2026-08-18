@@ -1,16 +1,20 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronRight, Lightbulb, Bell, HelpCircle, Zap, ClipboardList } from 'lucide-react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFilePdf, faFileExcel } from '@fortawesome/free-solid-svg-icons';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
+import { getRecommendationsToday, completeRecommendation } from '@/lib/api';
+import { useToast } from '@/components/ui/toast';
 import styles from './daily-tasks.module.css';
 
 export default function DailyTasksPage() {
   const { run, isPending } = useModalAction();
+  const { showToast } = useToast();
+
   // Modal states
   const [isDailyGoalsModalOpen, setIsDailyGoalsModalOpen] = useState(false);
   const [isDocumentListModalOpen, setIsDocumentListModalOpen] = useState(false);
@@ -22,21 +26,39 @@ export default function DailyTasksPage() {
 
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [meetingNotes, setMeetingNotes] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   const [tasks, setTasks] = useState({
-    document: [
-      { id: 1, name: '행사운영가이드.pdf 읽기', type: 'pdf', status: 'done', time: '10:30 까지', description: '추천 이유: 오늘 진행 필요', category: 'document' },
-      { id: 2, name: '예산안_v7.xlsx 검토', type: 'excel', status: 'pending', time: '14:00 까지', description: '예상 소요: 20 분', category: 'document' },
-    ],
-    checklist: [
-      { id: 3, name: '신입 계정 권한 확인', type: 'checklist', status: 'in_progress', time: '14:00 까지', description: '추천 이유: 오늘 진행 필요', category: 'checklist' },
-      { id: 4, name: '주간회의 자료 준비', type: 'checklist', status: 'pending', time: '16:00 까지', description: '예상 소요: 20 분', category: 'checklist' },
-    ],
-    practice: [
-      { id: 5, name: '예산 생성 업데이트', type: 'practice', status: 'pending', time: '16:00 까지', description: '추천 이유: 오늘 진행 필요', category: 'practice' },
-      { id: 6, name: '거래처 정보 확인하기', type: 'practice', status: 'pending', time: '17:00 까지', description: '예상 소요: 20 분', category: 'practice' },
-    ],
+    document: [] as any[],
+    checklist: [] as any[],
+    practice: [] as any[],
   });
+
+  // Load recommendations on mount
+  useEffect(() => {
+    const loadRecommendations = async () => {
+      try {
+        setIsLoading(true);
+        const response = await getRecommendationsToday();
+        const items = response.items || [];
+
+        // 카테고리별로 분류 (label 기준)
+        const categorized = {
+          document: items.filter(t => t.label === '문서') as any[],
+          checklist: items.filter(t => t.label === '체크') as any[],
+          practice: items.filter(t => t.label === '실습') as any[],
+        };
+
+        setTasks(categorized);
+      } catch (err) {
+        console.error('할 일 로드 실패:', err);
+        showToast('할 일을 불러올 수 없습니다', 'error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadRecommendations();
+  }, []);
 
   const toggleTaskComplete = (taskId: number, category: 'document' | 'checklist' | 'practice') => {
     setTasks((prevTasks) => ({
