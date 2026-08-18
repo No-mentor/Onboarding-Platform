@@ -493,6 +493,152 @@ export async function deleteTemplate(templateId: string): Promise<void> {
   if (!response.ok) throw new Error('템플릿 삭제 실패');
 }
 
+// ===== Member Role & Invitation =====
+export async function updateMemberRole(memberId: string, role: string): Promise<MemberResponse> {
+  const token = getAuthToken();
+  const wsId = getWorkspaceId();
+  if (!token || !wsId) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/members/${memberId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Workspace-Id': wsId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ role }),
+  });
+
+  if (!response.ok) throw new Error('멤버 역할 변경 실패');
+  return response.json();
+}
+
+export async function acceptMemberInvitation(token: string): Promise<{ success: boolean }> {
+  const response = await fetch(`${API_BASE}/members/invitations/${token}/accept`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) throw new Error('초대 수락 실패');
+  return response.json();
+}
+
+// ===== Recommendation Actions =====
+export async function dismissRecommendation(recommendationId: string): Promise<void> {
+  const token = getAuthToken();
+  const wsId = getWorkspaceId();
+  if (!token || !wsId) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/recommendations/${recommendationId}/dismiss`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Workspace-Id': wsId,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) throw new Error('추천 숨김 실패');
+}
+
+// ===== Document Actions =====
+export async function updateDocumentPermission(documentId: string, allowedRoles: string[]): Promise<DocumentResponse> {
+  const token = getAuthToken();
+  const wsId = getWorkspaceId();
+  if (!token || !wsId) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/documents/${documentId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Workspace-Id': wsId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ allowedRoles }),
+  });
+
+  if (!response.ok) throw new Error('문서 권한 변경 실패');
+  return response.json();
+}
+
+export async function reprocessDocument(documentId: string): Promise<DocumentResponse> {
+  const token = getAuthToken();
+  const wsId = getWorkspaceId();
+  if (!token || !wsId) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/documents/${documentId}/reprocess`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Workspace-Id': wsId,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) throw new Error('문서 재처리 실패');
+  return response.json();
+}
+
+// ===== Plan Updates =====
+export async function updateOnboardingPlan(planId: string, data: any): Promise<PlanResponse> {
+  const token = getAuthToken();
+  const wsId = getWorkspaceId();
+  if (!token || !wsId) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/onboarding-plans/${planId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Workspace-Id': wsId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) throw new Error('계획 수정 실패');
+  return response.json();
+}
+
+export async function regenerateOnboardingPlan(planId: string): Promise<PlanResponse> {
+  const token = getAuthToken();
+  const wsId = getWorkspaceId();
+  if (!token || !wsId) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/onboarding-plans/${planId}/regenerate`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Workspace-Id': wsId,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) throw new Error('계획 재생성 실패');
+  return response.json();
+}
+
+// ===== Template Updates =====
+export async function updateTemplate(templateId: string, data: any): Promise<TemplateResponse> {
+  const token = getAuthToken();
+  const wsId = getWorkspaceId();
+  if (!token || !wsId) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/templates/${templateId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Workspace-Id': wsId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) throw new Error('템플릿 수정 실패');
+  return response.json();
+}
+
 // ===== Audit Logs =====
 export interface AuditLogResponse {
   id: string;
