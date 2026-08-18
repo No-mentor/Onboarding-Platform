@@ -106,6 +106,24 @@ export async function getOnboardingPlan(includeItems: boolean = true): Promise<P
   return response.json();
 }
 
+export async function generateOnboardingPlan(): Promise<PlanResponse> {
+  const token = getAuthToken();
+  const wsId = getWorkspaceId();
+  if (!token || !wsId) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/onboarding-plans/generate`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Workspace-Id': wsId,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) throw new Error('계획 생성 실패');
+  return response.json();
+}
+
 // ===== Checklists =====
 export interface ChecklistItemResponse {
   id: string;
@@ -392,6 +410,23 @@ export async function createWorkspace(name: string): Promise<WorkspaceResponse> 
   return response.json();
 }
 
+export async function updateWorkspace(workspaceId: string, name: string): Promise<WorkspaceResponse> {
+  const token = getAuthToken();
+  if (!token) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/workspaces/${workspaceId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name }),
+  });
+
+  if (!response.ok) throw new Error('Workspace 수정 실패');
+  return response.json();
+}
+
 // ===== Templates =====
 export interface TemplateResponse {
   id: string;
@@ -420,6 +455,25 @@ export async function getTemplates(): Promise<TemplateListResponse> {
   });
 
   if (!response.ok) throw new Error('템플릿 목록 조회 실패');
+  return response.json();
+}
+
+export async function createTemplateAPI(data: { name: string }): Promise<TemplateResponse> {
+  const token = getAuthToken();
+  const wsId = getWorkspaceId();
+  if (!token || !wsId) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/templates`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Workspace-Id': wsId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) throw new Error('템플릿 생성 실패');
   return response.json();
 }
 

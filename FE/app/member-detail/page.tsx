@@ -13,11 +13,19 @@ export default function MemberDetailPage() {
       try {
         const res = await getMembers();
         setMembers(res.content || []);
-      } catch { showToast('로드 실패', 'error'); }
-      finally { setIsLoading(false); }
+      } catch (err) {
+        showToast('멤버 정보를 불러올 수 없습니다', 'error');
+      } finally {
+        setIsLoading(false);
+      }
     };
     load();
   }, []);
 
-  return <div style={{ padding: '40px' }}><h1>멤버 상세</h1>{isLoading ? 'Loading...' : <pre>{JSON.stringify(members, null, 2)}</pre>}</div>;
+  return (
+    <div style={{ padding: '40px' }}>
+      <h1>멤버 상세 정보</h1>
+      {isLoading ? <p>로딩 중...</p> : <pre>{JSON.stringify(members, null, 2)}</pre>}
+    </div>
+  );
 }
