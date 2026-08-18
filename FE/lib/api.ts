@@ -3,10 +3,36 @@ import { getAuthToken, getWorkspaceId } from './storage';
 const API_BASE = 'http://localhost:8080/api/v1';
 
 // ===== Dashboard =====
+export interface DashboardRecommendation {
+  id: string;
+  type: string;
+  title: string;
+  status: string;
+  priority: number;
+  source: string;
+  planItemId: string;
+  documentId: string;
+  personName: string;
+}
+
 export interface DashboardResponse {
-  today: Array<{ id: string; title: string; label: string; time: string }>;
-  progress: { completed: number; total: number };
-  plan: { currentDay: number; totalDays: number };
+  progressPercent: number;
+  today: {
+    total: number;
+    done: number;
+    items: DashboardRecommendation[];
+  };
+  plan: {
+    planId: string;
+    currentDay: number;
+    totalDays: number;
+    status: string;
+  };
+  checklist: {
+    total: number;
+    done: number;
+  };
+  message: string;
 }
 
 export async function getDashboard(): Promise<DashboardResponse> {

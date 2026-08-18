@@ -1,13 +1,38 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Folder, Zap, CheckSquare, Target, BarChart3, Users, Users2, Building, Lock, Settings } from 'lucide-react';
+import { getUserName, getUserEmail } from '@/lib/storage';
 import styles from './common-sidebar.module.css';
 
 export function CommonSidebar() {
   const pathname = usePathname();
+  const [userName, setUserName] = useState<string>('사용자');
+  const [userInitial, setUserInitial] = useState<string>('S');
+  const [userTeam, setUserTeam] = useState<string>('팀');
+
+  useEffect(() => {
+    const name = getUserName();
+    const email = getUserEmail();
+
+    if (name) {
+      setUserName(name);
+      setUserInitial(name.charAt(0).toUpperCase());
+    }
+
+    if (email) {
+      const domain = email.split('@')[1];
+      if (domain === 'marketing.company.com') {
+        setUserTeam('마케팅팀');
+      } else if (domain === 'dev.company.com') {
+        setUserTeam('개발팀');
+      } else if (domain === 'design.company.com') {
+        setUserTeam('디자인팀');
+      }
+    }
+  }, []);
 
   const navItems = [
     { href: '/dashboard', label: '홈', icon: Home },
@@ -76,10 +101,10 @@ export function CommonSidebar() {
 
       <div className={styles.sidebarFooter}>
         <div className={styles.userCard}>
-          <div className={styles.userAvatar}>김</div>
+          <div className={styles.userAvatar}>{userInitial}</div>
           <div className={styles.userInfo}>
-            <div className={styles.userName}>김세원</div>
-            <div className={styles.userRole}>NEW_HIRE · 마케팅팀</div>
+            <div className={styles.userName}>{userName}</div>
+            <div className={styles.userRole}>NEW_HIRE · {userTeam}</div>
           </div>
         </div>
         <button className={styles.collapseBtn}>메뉴 접기</button>
