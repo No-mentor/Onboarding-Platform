@@ -1,14 +1,17 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, MoreVertical } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton, ModalDangerButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
+import { useToast } from '@/components/ui/toast';
+import { getTemplates, deleteTemplate } from '@/lib/api';
 import styles from './templates.module.css';
 
 export default function TemplatesPage() {
   const { run, isPending } = useModalAction();
-  const [selectedTemplateId, setSelectedTemplateId] = useState(1);
+  const { showToast } = useToast();
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [isCreationModalOpen, setIsCreationModalOpen] = useState(false);
   const [isListModalOpen, setIsListModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -16,12 +19,28 @@ export default function TemplatesPage() {
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [templates, setTemplates] = useState<any[]>([]);
 
-  const templates = [
-    { id: 1, name: '마케팅 신입 기본', role: 'NEW_HIRE', status: '사용 중', items: 18, team: '마케팅팀 인수인계', date: '우정팅 2024.05.13' },
-    { id: 2, name: '개발팀 신입', role: 'NEW_HIRE', status: '사용 중', items: 22, team: '개발팀 인수인계', date: '우정팅 2024.05.10' },
-    { id: 3, name: '팀장 전환', role: 'MANAGER', status: '도입', items: 14, team: '리더십 전환', date: '우정팅 2024.05.08' },
-  ];
+  // Load templates on mount
+  useEffect(() => {
+    const loadTemplates = async () => {
+      try {
+        setIsLoading(true);
+        const response = await getTemplates();
+        setTemplates(response.items || []);
+        if (response.items && response.items.length > 0) {
+          setSelectedTemplateId(response.items[0].id);
+        }
+      } catch (err) {
+        console.error('템플릿 로드 실패:', err);
+        showToast('템플릿을 불러올 수 없습니다', 'error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadTemplates();
+  }, []);
 
   const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
 

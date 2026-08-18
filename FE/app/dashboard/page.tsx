@@ -9,10 +9,13 @@ import { DailyTasksModal } from '@/components/dashboard/modals/daily-tasks-modal
 import { AllFilesModal } from '@/components/dashboard/modals/all-files-modal';
 import { NotificationsPanel } from '@/components/dashboard/panels/notifications-panel';
 import { getDashboard } from '@/lib/api';
+import { getUserName, getUserEmail } from '@/lib/storage';
 import styles from './dashboard.module.css';
 
 export default function DashboardPage() {
   const [showDailyTasksModal, setShowDailyTasksModal] = useState(false);
+  const [userName, setUserName] = useState<string>('사용자');
+  const [userTeam, setUserTeam] = useState<string>('팀');
   const [showAllFilesModal, setShowAllFilesModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -28,21 +31,43 @@ export default function DashboardPage() {
   const [selectedFile, setSelectedFile] = useState<typeof recentFiles[0] | null>(null);
   const [selectedTask, setSelectedTask] = useState<typeof todayTasks[0] | null>(null);
 
-  const [todayTasks, setTodayTasks] = useState<Array<{ id: string; label: string; title: string; time: string }>>([]);
+  const [todayTasks, setTodayTasks] = useState<Array<{ id: string; type: string; title: string; status: string; priority: number; source: string; planItemId: string; documentId: string; personName: string }>>([]);
   const [recentFiles, setRecentFiles] = useState<Array<{ id: string; name: string; size: string; format: string; status: string; type: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const name = getUserName();
+    const email = getUserEmail();
+
+    if (name) {
+      setUserName(name);
+    }
+
+    if (email) {
+      const domain = email.split('@')[1];
+      if (domain === 'marketing.company.com') {
+        setUserTeam('마케팅팀');
+      } else if (domain === 'dev.company.com') {
+        setUserTeam('개발팀');
+      } else if (domain === 'design.company.com') {
+        setUserTeam('디자인팀');
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const loadDashboard = async () => {
       try {
         setIsLoading(true);
         const data = await getDashboard();
-        setTodayTasks(data.today || []);
+        const tasks = Array.isArray(data.today.items) ? data.today.items : [];
+        setTodayTasks(tasks);
         // TODO: 파일 목록은 별도 API 호출 (GET /documents)
       } catch (err) {
         setError(err instanceof Error ? err.message : '데이터 로드 실패');
         console.error(err);
+        setTodayTasks([]);
       } finally {
         setIsLoading(false);
       }
@@ -70,10 +95,10 @@ export default function DashboardPage() {
       <main className={styles.main}>
         {/* Header */}
         <header className={styles.header}>
-          <h1 className={styles.greeting}>안녕하세요, 김세원님</h1>
+          <h1 className={styles.greeting}>안녕하세요, {userName}님</h1>
           <div className={styles.headerRight}>
             <button className={styles.workspaceBtn}>
-              마케팅팀 인수인계
+              {userTeam} 인수인계
               <ChevronDown size={16} />
             </button>
             <button className={styles.notifBtn} onClick={() => setShowNotifications(!showNotifications)}>
@@ -99,9 +124,9 @@ export default function DashboardPage() {
               <div className={styles.tasksList}>
                 {todayTasks.map((task) => (
                   <div key={task.id} className={styles.taskItem}>
-                    <span className={`${styles.taskLabel} ${styles[`label_${task.label}`]}`}>{task.label}</span>
+                    <span className={`${styles.taskLabel} ${styles[`label_${task.type.toLowerCase()}`]}`}>{task.type}</span>
                     <span className={styles.taskTitle}>{task.title}</span>
-                    <span className={styles.taskTime}>{task.time}</span>
+                    <span className={styles.taskTime}>{task.source}</span>
                   </div>
                 ))}
               </div>
@@ -293,11 +318,11 @@ export default function DashboardPage() {
             <div className={styles.modalInfoTitle}>{selectedTask.title}</div>
             <div className={styles.modalInfoRow}>
               <span>구분</span>
-              <span>{selectedTask.label}</span>
+              <span>{selectedTask.type}</span>
             </div>
             <div className={styles.modalInfoRow}>
-              <span>마감</span>
-              <span>{selectedTask.time}</span>
+              <span>상태</span>
+              <span>{selectedTask.status}</span>
             </div>
           </div>
         )}

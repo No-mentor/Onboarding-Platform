@@ -6,7 +6,7 @@ import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
 import { useToast } from '@/components/ui/toast';
-import { getOnboardingPlan } from '@/lib/api';
+import { getOnboardingPlan, generateOnboardingPlan } from '@/lib/api';
 import styles from './30day-plan.module.css';
 
 export default function ThirtyDayPlanPage() {
@@ -34,18 +34,42 @@ export default function ThirtyDayPlanPage() {
     const loadPlan = async () => {
       try {
         setIsLoading(true);
-        const response = await getOnboardingPlan(true);
+        let response = await getOnboardingPlan(true);
+
+        // 계획이 없으면 생성
+        if (!response) {
+          console.log('계획이 없어 새로 생성합니다');
+          response = await generateOnboardingPlan();
+        }
+
         const items = response.items || [];
         setDays(items);
+        showToast('계획이 로드되었습니다', 'success');
       } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : '계획을 로드할 수 없습니다';
         console.error('계획 로드 실패:', err);
-        showToast('계획을 불러올 수 없습니다', 'error');
+
+        // 404 에러 (계획 없음) 인 경우 자동으로 생성 시도
+        if (errorMsg.includes('온보딩 계획이 없습니다') || errorMsg.includes('계획 조회 실패')) {
+          try {
+            console.log('계획 생성 시작...');
+            const generatedResponse = await generateOnboardingPlan();
+            const items = generatedResponse.items || [];
+            setDays(items);
+            showToast('계획이 생성되었습니다', 'success');
+          } catch (generateErr) {
+            console.error('계획 생성 실패:', generateErr);
+            showToast('계획 생성에 실패했습니다', 'error');
+          }
+        } else {
+          showToast(errorMsg, 'error');
+        }
       } finally {
         setIsLoading(false);
       }
     };
     loadPlan();
-  }, []);
+  }, [showToast]);
 
   const toggleDayExpanded = (day: number) => {
     setExpandedDays((prev) =>
@@ -102,12 +126,12 @@ export default function ThirtyDayPlanPage() {
           {/* Timeline */}
           <div className={styles.timeline}>
             {days.map((item, idx) => {
-              const isExpanded = expandedDays.includes(item.day);
+              const isExpanded = expandedDays.includes(item.dayIndex);
               return (
-                <div key={item.day} className={styles.timelineItem}>
+                <div key={item.id} className={styles.timelineItem}>
                   <div className={styles.timelineMarker}>
-                    <div className={`${styles.dot} ${item.completed ? styles.completed : ''}`}>
-                      {item.completed && <Check size={14} className={styles.checkmark} />}
+                    <div className={`${styles.dot} ${item.status === 'COMPLETED' ? styles.completed : ''}`}>
+                      {item.status === 'COMPLETED' && <Check size={14} className={styles.checkmark} />}
                     </div>
                     {idx < days.length - 1 && <div className={styles.line} />}
                   </div>
@@ -121,23 +145,22 @@ export default function ThirtyDayPlanPage() {
                       }}
                       style={{ cursor: 'pointer' }}
                     >
-                      <span className={styles.dayLabel}>DAY {item.day}</span>
+                      <span className={styles.dayLabel}>DAY {item.dayIndex}</span>
                       <h3 className={styles.dayTitle}>{item.title}</h3>
                     </div>
 
                     {isExpanded && (
                       <div className={styles.dayItems}>
-                        {item.items.docs > 0 && <span>문서 {item.items.docs}</span>}
-                        {item.items.checklists > 0 && <span>체크리스트 {item.items.checklists}</span>}
-                        {item.items.practice > 0 && <span>실습 {item.items.practice}</span>}
+                        {item.description && <span>{item.description}</span>}
+                        {item.personName && <span>담당자: {item.personName}</span>}
                       </div>
                     )}
 
                     <div className={styles.progressArea}>
-                      <span className={styles.progressPercent}>{item.progress}%</span>
+                      <span className={styles.progressPercent}>{item.status}</span>
                       <button
                         className={styles.expandBtn}
-                        onClick={() => toggleDayExpanded(item.day)}
+                        onClick={() => toggleDayExpanded(item.dayIndex)}
                         style={{
                           transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
                           transition: 'transform 0.3s ease'
@@ -236,15 +259,14 @@ export default function ThirtyDayPlanPage() {
           <div className={styles.dayCard}>
             <h3 className={styles.dayTitle}>{selectedDay.title}</h3>
             <div className={styles.dayMeta}>
-              <span className={selectedDay.completed ? styles.completed : styles.pending}>
-                {selectedDay.completed ? '완료' : '진행 중'}
+              <span className={selectedDay.status === 'COMPLETED' ? styles.completed : styles.pending}>
+                {selectedDay.status === 'COMPLETED' ? '완료' : '진행 중'}
               </span>
-              <span className={styles.progressLabel}>{selectedDay.progress}% 진행</span>
+              <span className={styles.progressLabel}>{selectedDay.type}</span>
             </div>
             <div className={styles.dayBreakdown}>
-              {selectedDay.items.docs > 0 && <div className={styles.breakdownItem}>문서 {selectedDay.items.docs}개</div>}
-              {selectedDay.items.checklists > 0 && <div className={styles.breakdownItem}>체크리스트 {selectedDay.items.checklists}개</div>}
-              {selectedDay.items.practice > 0 && <div className={styles.breakdownItem}>실습 {selectedDay.items.practice}개</div>}
+              {selectedDay.description && <div className={styles.breakdownItem}>{selectedDay.description}</div>}
+              {selectedDay.personName && <div className={styles.breakdownItem}>담당자: {selectedDay.personName}</div>}
             </div>
           </div>
         </Modal>
@@ -361,26 +383,13 @@ export default function ThirtyDayPlanPage() {
           }
         >
           <div className={styles.taskList}>
-            {selectedDay.items.docs > 0 && (
+            {selectedDay.title && (
               <div className={styles.taskGroup}>
-                <h4>문서 읽기 ({selectedDay.items.docs})</h4>
+                <h4>{selectedDay.title}</h4>
                 <div className={styles.taskItems}>
-                  <div className={styles.taskItem}>행사운영가이드.pdf</div>
+                  {selectedDay.description && <div className={styles.taskItem}>{selectedDay.description}</div>}
+                  {selectedDay.personName && <div className={styles.taskItem}>담당자: {selectedDay.personName}</div>}
                 </div>
-              </div>
-            )}
-            {selectedDay.items.checklists > 0 && (
-              <div className={styles.taskGroup}>
-                <h4>체크리스트 ({selectedDay.items.checklists})</h4>
-                <div className={styles.taskItems}>
-                  <div className={styles.taskItem}>계정 및 권한 확인</div>
-                  <div className={styles.taskItem}>자료 위치 파악</div>
-                </div>
-              </div>
-            )}
-            {selectedDay.items.practice > 0 && (
-              <div className={styles.taskGroup}>
-                <h4>실습 ({selectedDay.items.practice})</h4>
               </div>
             )}
           </div>
