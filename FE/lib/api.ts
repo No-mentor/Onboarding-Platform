@@ -305,6 +305,93 @@ export interface InvitationResponse {
   status: string;
 }
 
+// ===== Document Detail & Upload =====
+export interface DocumentResponse {
+  id: string;
+  title?: string;
+  fileName?: string;
+  status?: string;
+  size?: string;
+  createdAt?: string;
+}
+
+export async function uploadDocument(formData: FormData): Promise<DocumentResponse> {
+  const token = getAuthToken();
+  const wsId = getWorkspaceId();
+  if (!token || !wsId) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/documents`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Workspace-Id': wsId,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) throw new Error('파일 업로드 실패');
+  return response.json();
+}
+
+export async function getDocumentDetail(documentId: string): Promise<DocumentResponse> {
+  const token = getAuthToken();
+  const wsId = getWorkspaceId();
+  if (!token || !wsId) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/documents/${documentId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Workspace-Id': wsId,
+    },
+  });
+
+  if (!response.ok) throw new Error('문서 조회 실패');
+  return response.json();
+}
+
+// ===== Workspace =====
+export interface WorkspaceResponse {
+  id: string;
+  name: string;
+  memberCount?: number;
+  createdAt?: string;
+}
+
+export interface WorkspaceListResponse {
+  workspaces: WorkspaceResponse[];
+}
+
+export async function getMyWorkspaces(): Promise<WorkspaceListResponse> {
+  const token = getAuthToken();
+  if (!token) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/workspaces/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) throw new Error('Workspace 목록 조회 실패');
+  return response.json();
+}
+
+export async function createWorkspace(name: string): Promise<WorkspaceResponse> {
+  const token = getAuthToken();
+  if (!token) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/workspaces`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name }),
+  });
+
+  if (!response.ok) throw new Error('Workspace 생성 실패');
+  return response.json();
+}
+
 // ===== Templates =====
 export interface TemplateResponse {
   id: string;
