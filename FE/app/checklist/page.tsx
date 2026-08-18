@@ -1,16 +1,20 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown, RotateCcw, Bell, HelpCircle } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
+import { useToast } from '@/components/ui/toast';
+import { getChecklists } from '@/lib/api';
 import styles from './checklist.module.css';
 
 export default function ChecklistPage() {
   const { run, isPending } = useModalAction();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState('all');
-  const [checkedItems, setCheckedItems] = useState<number[]>([1, 2]);
+  const [checkedItems, setCheckedItems] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Modal states
   const [isTaskOverviewModalOpen, setIsTaskOverviewModalOpen] = useState(false);
@@ -21,64 +25,31 @@ export default function ChecklistPage() {
   const [isTaskCategoriesModalOpen, setIsTaskCategoriesModalOpen] = useState(false);
 
   // Selected item state
-  const [selectedItem, setSelectedItem] = useState<typeof checklistItems[0] | null>(null);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
 
   // Filter states
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterDay, setFilterDay] = useState('all');
+  const [checklistItems, setChecklistItems] = useState<any[]>([]);
 
-  const checklistItems = [
-    {
-      id: 1,
-      title: '팀수 계정 및 권한 확인',
-      day: 'DAY 1',
-      status: 'complete',
-      statusText: '완료',
-      statusColor: '#10B981',
-    },
-    {
-      id: 2,
-      title: '주간의 자료 위치 파악',
-      day: 'DAY 1',
-      status: 'complete',
-      statusText: '완료',
-      statusColor: '#10B981',
-    },
-    {
-      id: 3,
-      title: '예산안 작성 규칙 확인',
-      day: 'DAY 2',
-      status: 'pending',
-      statusText: '진행 중',
-      statusColor: '#0066FF',
-    },
-    {
-      id: 4,
-      title: '거래처 연락망 최신화',
-      day: 'DAY 3',
-      status: 'pending',
-      statusText: '대기',
-      statusColor: '#9CA3AF',
-    },
-    {
-      id: 5,
-      title: '마케팅 결과 보고 템플릿 확인',
-      day: 'DAY 4',
-      status: 'pending',
-      statusText: '대기',
-      statusColor: '#9CA3AF',
-    },
-    {
-      id: 6,
-      title: '첫 주 인수인계 피드백 작성',
-      day: 'DAY 5',
-      status: 'pending',
-      statusText: '대기',
-      statusColor: '#9CA3AF',
-    },
-  ];
+  // Load checklists on mount
+  useEffect(() => {
+    const loadChecklists = async () => {
+      try {
+        setIsLoading(true);
+        const response = await getChecklists();
+        setChecklistItems(response.items || []);
+      } catch (err) {
+        console.error('체크리스트 로드 실패:', err);
+        showToast('체크리스트를 불러올 수 없습니다', 'error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadChecklists();
+  }, []);
 
-  const toggleCheck = (id: number) => {
+  const toggleCheck = (id: string) => {
     setCheckedItems((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );

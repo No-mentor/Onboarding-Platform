@@ -1,16 +1,20 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown, Mail, Bell, HelpCircle } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
+import { useToast } from '@/components/ui/toast';
+import { getMembers } from '@/lib/api';
 import styles from './members.module.css';
 
 export default function MembersPage() {
   const { run, isPending } = useModalAction();
+  const { showToast } = useToast();
   const [activeRole, setActiveRole] = useState('all');
-  const [selectedMember, setSelectedMember] = useState<typeof members[0] | null>(null);
+  const [selectedMember, setSelectedMember] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Modal states
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -26,8 +30,26 @@ export default function MembersPage() {
   // Form states for role assignment
   const [newMemberRole, setNewMemberRole] = useState('MEMBER');
   const [newMemberStatus, setNewMemberStatus] = useState('ACTIVE');
+  const [members, setMembers] = useState<any[]>([]);
 
-  const members = [
+  // Load members on mount
+  useEffect(() => {
+    const loadMembers = async () => {
+      try {
+        setIsLoading(true);
+        const response = await getMembers();
+        setMembers(response.content || []);
+      } catch (err) {
+        console.error('멤버 로드 실패:', err);
+        showToast('멤버 목록을 불러올 수 없습니다', 'error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadMembers();
+  }, []);
+
+  const mockMembers = [
     {
       id: 1,
       name: '김세원',
