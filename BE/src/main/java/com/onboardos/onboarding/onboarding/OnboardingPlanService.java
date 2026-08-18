@@ -88,7 +88,7 @@ public class OnboardingPlanService {
                         throw new BusinessException(ErrorCode.CONFLICT, "이미 활성 온보딩 계획이 있습니다. force=true로 재생성하세요.");
                     }
                     existing.archive();
-                    planRepository.save(existing);
+                    planRepository.saveAndFlush(existing);
                 });
 
         OnboardingPlan plan = OnboardingPlan.create(workspaceId, userId, LocalDate.now(), templateId);
