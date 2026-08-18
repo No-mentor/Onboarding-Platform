@@ -748,3 +748,81 @@
     flex-direction: column;
   }
 }
+
+/* Header - 로그인 상태 영역 */
+.authArea {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.profileChip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  padding: 6px 12px 6px 6px;
+  border-radius: 999px;
+  transition: background 0.25s ease;
+}
+
+.profileChip:hover {
+  background: var(--surface-sunk);
+}
+
+.avatar {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--text);
+  color: var(--surface);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.userName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logoutBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-sub);
+  cursor: pointer;
+  transition: color 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+}
+
+.logoutBtn:hover {
+  color: var(--text);
+  border-color: var(--text);
+  background: var(--surface-sunk);
+}
+
+@media (max-width: 640px) {
+  .userName {
+    display: none;
+  }
+
+  .authArea {
+    gap: 10px;
+  }
+}
