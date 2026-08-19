@@ -153,6 +153,13 @@ export class AuthError extends Error {
   }
 
   /**
+   * 이메일 미인증 여부
+   */
+  isEmailNotVerified(): boolean {
+    return this.status === 403 && (this.message.includes('인증') || this.message.includes('email_verified') || this.message.includes('이메일'));
+  }
+
+  /**
    * 리소스 충돌 여부
    */
   isConflict(): boolean {
