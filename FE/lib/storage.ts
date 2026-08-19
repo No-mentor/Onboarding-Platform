@@ -44,13 +44,22 @@ export function getUserEmail(): string | null {
   return localStorage.getItem(USER_EMAIL_KEY);
 }
 
+export function saveWorkspaceId(workspaceId: string): void {
+  if (typeof window === 'undefined') return;
+
+  localStorage.setItem(WORKSPACE_ID_KEY, workspaceId);
+  localStorage.setItem('workspaceId', workspaceId);
+}
+
+export const setWorkspaceId = saveWorkspaceId;
+
 /**
  * localStorage에서 워크스페이스 ID 조회
  */
 export function getWorkspaceId(): string | null {
   if (typeof window === 'undefined') return null;
 
-  return localStorage.getItem(WORKSPACE_ID_KEY);
+  return localStorage.getItem(WORKSPACE_ID_KEY) || localStorage.getItem('workspaceId');
 }
 
 /**
