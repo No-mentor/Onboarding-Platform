@@ -78,7 +78,7 @@ export function HomeDashboard({ data, isLoading = false, error = null, workspace
     if (!workspaceId) return;
     try {
       const response = await getDocuments(workspaceId, 0, 4);
-      setFiles(response.content || []);
+      setFiles(response.items ?? []);
     } catch (error) {
       console.error('파일 조회 실패:', error);
     }

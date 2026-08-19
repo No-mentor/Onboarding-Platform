@@ -28,9 +28,31 @@ export function saveAuthToken(
   if (name) {
     localStorage.setItem(USER_NAME_KEY, name);
   }
+  // 워크스페이스가 없는 계정으로 로그인하면 이전 세션의 값이 남지 않도록 지운다
   if (workspaceId) {
     localStorage.setItem(WORKSPACE_ID_KEY, workspaceId);
+  } else {
+    localStorage.removeItem(WORKSPACE_ID_KEY);
   }
+  notifyAuthChange();
+}
+
+/**
+ * 현재 워크스페이스를 저장한다.
+ * 워크스페이스 선택/생성 후에는 반드시 이 함수를 쓴다. (키를 직접 다루지 말 것)
+ */
+export function saveWorkspaceId(workspaceId: string): void {
+  if (typeof window === 'undefined') return;
+
+  localStorage.setItem(WORKSPACE_ID_KEY, workspaceId);
+  notifyAuthChange();
+}
+
+/** 저장된 워크스페이스를 지운다 (권한이 사라졌거나 선택 전 상태) */
+export function clearWorkspaceId(): void {
+  if (typeof window === 'undefined') return;
+
+  localStorage.removeItem(WORKSPACE_ID_KEY);
   notifyAuthChange();
 }
 

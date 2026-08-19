@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { X, RefreshCw, Trash2, AlertCircle } from 'lucide-react';
 import { DocumentResponse, reprocessDocument, deleteDocument } from '@/lib/document';
+import { formatFileSize, formatFileType } from '@/lib/api';
 import styles from './file-detail-modal.module.css';
 
 interface FileDetailModalProps {
@@ -58,7 +59,7 @@ export function FileDetailModal({ file, isOpen, workspaceId, onClose, onRefresh 
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
-          <h2 className={styles.title}>{file.name}</h2>
+          <h2 className={styles.title}>{file.title}</h2>
           <button className={styles.closeBtn} onClick={onClose}>
             <X size={20} />
           </button>
@@ -71,28 +72,28 @@ export function FileDetailModal({ file, isOpen, workspaceId, onClose, onRefresh 
             <div className={styles.infoGrid}>
               <div className={styles.infoItem}>
                 <span className={styles.label}>파일명</span>
-                <span className={styles.value}>{file.name}</span>
+                <span className={styles.value}>{file.title}</span>
               </div>
               <div className={styles.infoItem}>
                 <span className={styles.label}>파일 타입</span>
-                <span className={styles.value}>{file.type}</span>
+                <span className={styles.value}>{formatFileType(file.mimeType, file.title)}</span>
               </div>
               <div className={styles.infoItem}>
                 <span className={styles.label}>크기</span>
-                <span className={styles.value}>{(file.size / 1024).toFixed(2)} KB</span>
+                <span className={styles.value}>{formatFileSize(file.sizeBytes)}</span>
               </div>
               <div className={styles.infoItem}>
-                <span className={styles.label}>업로드자</span>
-                <span className={styles.value}>{file.uploadedBy}</span>
+                <span className={styles.label}>학습 조각</span>
+                <span className={styles.value}>{file.chunkCount ?? '-'}</span>
               </div>
               <div className={styles.infoItem}>
-                <span className={styles.label}>업로드 날짜</span>
-                <span className={styles.value}>{file.uploadedAt}</span>
+                <span className={styles.label}>등록일</span>
+                <span className={styles.value}>{file.createdAt ?? '-'}</span>
               </div>
-              {file.processedAt && (
+              {file.updatedAt && (
                 <div className={styles.infoItem}>
-                  <span className={styles.label}>처리 완료</span>
-                  <span className={styles.value}>{file.processedAt}</span>
+                  <span className={styles.label}>최근 갱신</span>
+                  <span className={styles.value}>{file.updatedAt}</span>
                 </div>
               )}
             </div>

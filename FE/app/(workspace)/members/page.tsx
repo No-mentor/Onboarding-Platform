@@ -6,14 +6,14 @@ import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
 import { useToast } from '@/components/ui/toast';
-import { getMembers } from '@/lib/api';
+import { getMembers, type MemberResponse } from '@/lib/api';
 import styles from './members.module.css';
 
 export default function MembersPage() {
   const { run, isPending } = useModalAction();
   const { showToast } = useToast();
   const [activeRole, setActiveRole] = useState('all');
-  const [selectedMember, setSelectedMember] = useState<any>(null);
+  const [selectedMember, setSelectedMember] = useState<MemberResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Modal states
@@ -30,7 +30,7 @@ export default function MembersPage() {
   // Form states for role assignment
   const [newMemberRole, setNewMemberRole] = useState('MEMBER');
   const [newMemberStatus, setNewMemberStatus] = useState('ACTIVE');
-  const [members, setMembers] = useState<any[]>([]);
+  const [members, setMembers] = useState<MemberResponse[]>([]);
 
   // Load members on mount
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function MembersPage() {
       try {
         setIsLoading(true);
         const response = await getMembers();
-        setMembers(response.content || []);
+        setMembers(response.items ?? []);
       } catch (err) {
         console.error('멤버 로드 실패:', err);
         showToast('멤버 목록을 불러올 수 없습니다', 'error');
@@ -49,63 +49,11 @@ export default function MembersPage() {
     loadMembers();
   }, []);
 
-  const mockMembers = [
-    {
-      id: 1,
-      name: '김세원',
-      initials: '김',
-      bgColor: '#6C46A2',
-      team: '마케팅팀',
-      email: 'example@company.com',
-      role: 'NEW_HIRE',
-      status: 'ACTIVE',
-      joinDate: '2024.05.20 10:30',
-    },
-    {
-      id: 2,
-      name: '이민수',
-      initials: '이',
-      bgColor: '#F97316',
-      team: '마케팅팀',
-      email: 'example@company.com',
-      role: 'MANAGER',
-      status: 'ACTIVE',
-      joinDate: '2024.05.10 09:15',
-    },
-    {
-      id: 3,
-      name: '박지은',
-      initials: '박',
-      bgColor: '#10B981',
-      team: '브랜드팀',
-      email: 'example@company.com',
-      role: 'MEMBER',
-      status: 'ACTIVE',
-      joinDate: '2024.05.08 14:20',
-    },
-    {
-      id: 4,
-      name: '최서연',
-      initials: '최',
-      bgColor: '#3B82F6',
-      team: 'People',
-      email: 'example@company.com',
-      role: 'ADMIN',
-      status: 'ACTIVE',
-      joinDate: '2024.05.01 11:05',
-    },
-    {
-      id: 5,
-      name: '정하늘',
-      initials: '정',
-      bgColor: '#EC4899',
-      team: '마케팅팀',
-      email: 'example@company.com',
-      role: 'NEW_HIRE',
-      status: 'PENDING',
-      joinDate: '2024.05.24 16:40',
-    },
-  ];
+  const avatarColors = ['#6C46A2', '#F97316', '#10B981', '#3B82F6', '#EC4899'];
+  const avatarColorOf = (name: string) => {
+    const sum = Array.from(name).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+    return avatarColors[sum % avatarColors.length];
+  };
 
   const roleColors: { [key: string]: string } = {
     NEW_HIRE: '#6C46A2',
@@ -230,10 +178,10 @@ export default function MembersPage() {
                 <thead>
                   <tr>
                     <th>이름</th>
-                    <th>팀</th>
+                    <th>부서</th>
                     <th>역할</th>
                     <th>상태</th>
-                    <th>초대일</th>
+                    <th>직함</th>
                     <th>액션</th>
                   </tr>
                 </thead>
@@ -251,17 +199,17 @@ export default function MembersPage() {
                         <div className={styles.nameCell}>
                           <div
                             className={styles.avatar}
-                            style={{ backgroundColor: member.bgColor }}
+                            style={{ backgroundColor: avatarColorOf(member.name) }}
                           >
-                            {member.initials}
+                            {member.name.trim().charAt(0)}
                           </div>
                           <div className={styles.nameInfo}>
                             <div className={styles.memberName}>{member.name}</div>
-                            <div className={styles.memberTeamSmall}>{member.team}</div>
+                            <div className={styles.memberTeamSmall}>{member.email}</div>
                           </div>
                         </div>
                       </td>
-                      <td>{member.team}</td>
+                      <td>{member.department ?? '-'}</td>
                       <td>
                         <span
                           className={styles.roleBadge}
@@ -278,7 +226,7 @@ export default function MembersPage() {
                           <span className={styles.statusDot} /> {member.status}
                         </span>
                       </td>
-                      <td className={styles.dateCell}>{member.joinDate}</td>
+                      <td className={styles.dateCell}>{member.title ?? '-'}</td>
                       <td>
                         <select
                           className={styles.actionSelect}
@@ -380,12 +328,12 @@ export default function MembersPage() {
           <div className={styles.memberCard}>
             <div
               className={styles.memberAvatar}
-              style={{ backgroundColor: selectedMember.bgColor }}
+              style={{ backgroundColor: avatarColorOf(selectedMember.name) }}
             >
-              {selectedMember.initials}
+              {selectedMember.name.trim().charAt(0)}
             </div>
             <h3 className={styles.memberCardName}>{selectedMember.name}</h3>
-            <p className={styles.memberCardTeam}>{selectedMember.team}</p>
+            <p className={styles.memberCardTeam}>{selectedMember.department ?? '-'}</p>
           </div>
 
           <div className={styles.detailsGroup}>
@@ -406,8 +354,8 @@ export default function MembersPage() {
               </span>
             </div>
             <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>초대일</span>
-              <span className={styles.detailValue}>{selectedMember.joinDate}</span>
+              <span className={styles.detailLabel}>직함</span>
+              <span className={styles.detailValue}>{selectedMember.title ?? '-'}</span>
             </div>
           </div>
         </Modal>
@@ -434,9 +382,9 @@ export default function MembersPage() {
           <div className={styles.memberCard}>
             <div
               className={styles.memberAvatar}
-              style={{ backgroundColor: selectedMember.bgColor }}
+              style={{ backgroundColor: avatarColorOf(selectedMember.name) }}
             >
-              {selectedMember.initials}
+              {selectedMember.name.trim().charAt(0)}
             </div>
             <h3 className={styles.memberCardName}>{selectedMember.name}</h3>
           </div>
@@ -519,9 +467,9 @@ export default function MembersPage() {
           <div className={styles.memberCard}>
             <div
               className={styles.memberAvatar}
-              style={{ backgroundColor: selectedMember.bgColor }}
+              style={{ backgroundColor: avatarColorOf(selectedMember.name) }}
             >
-              {selectedMember.initials}
+              {selectedMember.name.trim().charAt(0)}
             </div>
             <h3 className={styles.memberCardName}>{selectedMember.name}</h3>
           </div>
