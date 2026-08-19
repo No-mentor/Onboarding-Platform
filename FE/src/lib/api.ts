@@ -1,4 +1,11 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api/v1';
+const rawUrl = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  'http://localhost:8080'
+).trim().replace(/\/+$/, '');
+
+const cleanBaseUrl = rawUrl.replace(/\/api\/v1\/?$/, '');
+const API_BASE_URL = `${cleanBaseUrl}/api/v1`;
 
 export async function fetchApi<T = unknown>(
   endpoint: string,

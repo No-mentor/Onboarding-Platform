@@ -1,11 +1,14 @@
 import { getAuthToken } from './storage';
 import type { DocumentResponse } from './api';
 
-const API_BASE = (
-  process.env.NEXT_PUBLIC_API_URL
-    ? `${process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, '')}/api/v1`
-    : (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api/v1')
-).replace(/\/+$/, '');
+const rawUrl = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  'http://localhost:8080'
+).trim().replace(/\/+$/, '');
+
+const cleanBaseUrl = rawUrl.replace(/\/api\/v1\/?$/, '');
+const API_BASE = `${cleanBaseUrl}/api/v1`;
 
 // 문서 타입은 lib/api.ts 를 단일 출처로 쓴다 (서버 스펙과 1:1)
 export type { DocumentResponse, DocumentStatus } from './api';

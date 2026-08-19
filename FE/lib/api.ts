@@ -1,10 +1,13 @@
 import { getAuthToken, getWorkspaceId, clearAuthToken } from './storage';
 
-const API_BASE = (
-  process.env.NEXT_PUBLIC_API_URL
-    ? `${process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, '')}/api/v1`
-    : (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api/v1')
-).replace(/\/+$/, '');
+const rawUrl = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  'http://localhost:8080'
+).trim().replace(/\/+$/, '');
+
+const cleanBaseUrl = rawUrl.replace(/\/api\/v1\/?$/, '');
+const API_BASE = `${cleanBaseUrl}/api/v1`;
 
 /**
  * 공통 fetch 래퍼: 401 Unauthorized 발생 시 인증 정보를 삭제하고 로그인 페이지로 자동 리다이렉트
