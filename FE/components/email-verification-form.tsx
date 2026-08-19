@@ -2,7 +2,6 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Mail, CheckCircle, RefreshCw, AlertCircle, Info } from 'lucide-react';
 import { useToast } from './ui/toast';
 import { verifyEmail, resendVerificationCode } from '@/lib/api';
 
@@ -88,9 +87,9 @@ export function EmailVerificationForm() {
     setIsLoading(true);
     try {
       await verifyEmail(email, code);
-      showToast('이메일이 성공적으로 인증되었습니다.', 'success');
+      showToast('이메일이 인증되었습니다.', 'success');
       localStorage.removeItem('pending_verification_email');
-      router.push(`/signup-complete?email=${encodeURIComponent(email)}`);
+      setTimeout(() => router.push('/login'), 1500);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '인증에 실패했습니다';
       setError(errorMsg);
@@ -109,7 +108,7 @@ export function EmailVerificationForm() {
     setIsResending(true);
     try {
       await resendVerificationCode(email);
-      showToast('인증 코드가 이메일로 재전송되었습니다.', 'success');
+      showToast('인증 코드가 재전송되었습니다.', 'success');
       setCodes(['', '', '', '', '', '']);
       setError('');
     } catch (err) {
@@ -124,83 +123,23 @@ export function EmailVerificationForm() {
   const isFilled = codes.every(code => code !== '');
 
   return (
-    <form onSubmit={handleSubmit} style={{ width: '100%' }}>
-      {/* Icon Badge */}
-      <div
-        style={{
-          width: '52px',
-          height: '52px',
-          borderRadius: '14px',
-          backgroundColor: '#EEF2FF',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#4F46E5',
-          marginBottom: '20px',
-        }}
-      >
-        <Mail size={26} />
-      </div>
-
-      <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#111827', letterSpacing: '-0.02em', margin: '0 0 6px' }}>
-        이메일 인증
-      </h2>
-      <p style={{ fontSize: '14px', color: '#6B7280', lineHeight: 1.5, margin: 0 }}>
-        회원가입을 완료하기 위해 전송된 6자리 코드를 입력해 주세요.
+    <form onSubmit={handleSubmit}>
+      <h2 className="title">이메일 인증</h2>
+      <p className="subtitle">
+        입력하신 이메일로 전송된 6자리 코드를 입력해 주세요.
       </p>
 
-      {/* Target Email Badge */}
-      {email && (
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            margin: '16px 0 24px',
-            padding: '8px 16px',
-            background: '#F3F4F6',
-            border: '1px solid #E5E7EB',
-            borderRadius: '24px',
-            fontSize: '13.5px',
-            color: '#374151',
-            fontWeight: 500,
-          }}
-        >
-          <Mail size={15} color="#4F46E5" />
-          <span>{email}</span>
-        </div>
-      )}
-
       {error && (
-        <div
-          style={{
-            marginBottom: '20px',
-            padding: '12px 14px',
-            background: '#FEF2F2',
-            border: '1px solid #FEE2E2',
-            borderRadius: '10px',
-            fontSize: '13px',
-            color: '#DC2626',
-            lineHeight: 1.5,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <AlertCircle size={16} />
-          <span>{error}</span>
+        <div style={{ marginBottom: '26px', padding: '13px 14px', background: 'rgba(180,52,47,0.07)', borderRadius: 'var(--r-md)', fontSize: '12.5px', color: 'var(--danger)', lineHeight: '1.65' }}>
+          {error}
         </div>
       )}
 
-      <div style={{ marginBottom: '28px', marginTop: email ? '0' : '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>
-            6자리 인증 코드
-          </label>
-          <span style={{ fontSize: '12px', color: '#9CA3AF' }}>유효시간 5분</span>
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'space-between' }}>
+      <div style={{ marginBottom: '26px' }}>
+        <label style={{ display: 'block', fontSize: '12.5px', fontWeight: '600', color: 'var(--text-sub)', marginBottom: '12px' }}>
+          인증 코드
+        </label>
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
           {codes.map((code, index) => (
             <input
               key={index}
@@ -216,97 +155,50 @@ export function EmailVerificationForm() {
               onPaste={handlePaste}
               disabled={isLoading}
               style={{
-                width: '50px',
-                height: '56px',
+                width: '44px',
+                height: '44px',
                 padding: '0',
-                fontSize: '22px',
-                fontWeight: 700,
+                fontSize: '18px',
+                fontWeight: '600',
                 textAlign: 'center',
-                border: code ? '1.5px solid #4F46E5' : '1.5px solid #D1D5DB',
-                borderRadius: '12px',
-                background: code ? '#F5F3FF' : '#FFFFFF',
-                color: code ? '#4F46E5' : '#111827',
+                border: `1px solid var(--border-strong)`,
+                borderRadius: 'var(--r-md)',
+                background: 'var(--surface)',
+                color: 'var(--text)',
                 outline: 'none',
-                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
-                transition: 'all 0.16s ease',
+                transition: 'border-color 0.16s ease, box-shadow 0.16s ease',
               }}
               onFocus={e => {
-                e.target.style.borderColor = '#4F46E5';
-                e.target.style.boxShadow = '0 0 0 3px rgba(79, 70, 229, 0.15)';
+                e.target.style.borderColor = 'var(--accent)';
+                e.target.style.boxShadow = '0 0 0 3px rgba(7, 101, 252, 0.11)';
               }}
               onBlur={e => {
-                e.target.style.borderColor = code ? '#4F46E5' : '#D1D5DB';
-                e.target.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.04)';
+                e.target.style.borderColor = 'var(--border-strong)';
+                e.target.style.boxShadow = 'none';
               }}
               aria-label={`코드 ${index + 1}번째 자리`}
             />
           ))}
         </div>
+        <p style={{ marginTop: '7px', fontSize: '12px', color: 'var(--text-faint)', lineHeight: '1.5' }}>
+          붙여넣기(Ctrl+V)로 한 번에 입력할 수도 있습니다.
+        </p>
       </div>
 
       <button
+        className="submit"
         type="submit"
         disabled={isLoading || !isFilled}
-        style={{
-          width: '100%',
-          height: '48px',
-          backgroundColor: isFilled ? '#4F46E5' : '#9CA3AF',
-          color: '#FFFFFF',
-          border: 'none',
-          borderRadius: '10px',
-          fontSize: '15px',
-          fontWeight: 600,
-          cursor: isFilled ? 'pointer' : 'not-allowed',
-          transition: 'all 0.16s ease',
-          boxShadow: isFilled ? '0 2px 8px rgba(79, 70, 229, 0.3)' : 'none',
-        }}
+        style={{ opacity: !isFilled ? 0.5 : 1 }}
       >
-        {isLoading ? '인증 진행 중...' : '인증 완료'}
+        {isLoading ? '인증 중...' : '인증 완료'}
       </button>
 
-      {/* Resend Action */}
-      <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '13.5px', color: '#6B7280' }}>
-        이메일이 오지 않았나요?{' '}
-        <button
-          type="button"
-          disabled={isLoading || isResending}
-          onClick={handleResend}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#4F46E5',
-            fontWeight: 600,
-            cursor: 'pointer',
-            textDecoration: 'underline',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-          }}
-        >
-          <RefreshCw size={13} className={isResending ? 'animate-spin' : ''} />
-          {isResending ? '재전송 중...' : '인증 코드 다시 받기'}
+      <p className="foot">
+        코드를 받지 못했나요? <button className="link" type="button" disabled={isLoading || isResending} onClick={handleResend}>
+          {isResending ? '재전송 중...' : '재전송'}
         </button>
-      </div>
-
-      {/* Notice box */}
-      <div
-        style={{
-          marginTop: '24px',
-          padding: '12px 14px',
-          background: '#F9FAFB',
-          border: '1px solid #E5E7EB',
-          borderRadius: '10px',
-          fontSize: '12.5px',
-          color: '#6B7280',
-          lineHeight: 1.5,
-          display: 'flex',
-          gap: '8px',
-          alignItems: 'flex-start',
-        }}
-      >
-        <Info size={15} color="#9CA3AF" style={{ marginTop: '2px', flexShrink: 0 }} />
-        <span>스팸 메일함도 확인해 보세요. 인증 코드는 발송 후 5분간 유효합니다.</span>
-      </div>
+      </p>
     </form>
   );
 }

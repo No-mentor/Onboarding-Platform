@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import { X, RefreshCw, Trash2, AlertCircle } from 'lucide-react';
 import { DocumentResponse, reprocessDocument, deleteDocument } from '@/lib/document';
-import { formatFileSize, formatFileType } from '@/lib/api';
 import styles from './file-detail-modal.module.css';
+import { getDisplayLabel } from '@/lib/display-labels';
 
 interface FileDetailModalProps {
   file: DocumentResponse | null;
@@ -59,7 +59,7 @@ export function FileDetailModal({ file, isOpen, workspaceId, onClose, onRefresh 
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
-          <h2 className={styles.title}>{file.title}</h2>
+          <h2 className={styles.title}>{file.name}</h2>
           <button className={styles.closeBtn} onClick={onClose}>
             <X size={20} />
           </button>
@@ -72,28 +72,28 @@ export function FileDetailModal({ file, isOpen, workspaceId, onClose, onRefresh 
             <div className={styles.infoGrid}>
               <div className={styles.infoItem}>
                 <span className={styles.label}>파일명</span>
-                <span className={styles.value}>{file.title}</span>
+                <span className={styles.value}>{file.name}</span>
               </div>
               <div className={styles.infoItem}>
                 <span className={styles.label}>파일 타입</span>
-                <span className={styles.value}>{formatFileType(file.mimeType, file.title)}</span>
+                <span className={styles.value}>{getDisplayLabel(file.type)}</span>
               </div>
               <div className={styles.infoItem}>
                 <span className={styles.label}>크기</span>
-                <span className={styles.value}>{formatFileSize(file.sizeBytes)}</span>
+                <span className={styles.value}>{(file.size / 1024).toFixed(2)} KB</span>
               </div>
               <div className={styles.infoItem}>
-                <span className={styles.label}>학습 조각</span>
-                <span className={styles.value}>{file.chunkCount ?? '-'}</span>
+                <span className={styles.label}>업로드자</span>
+                <span className={styles.value}>{file.uploadedBy}</span>
               </div>
               <div className={styles.infoItem}>
-                <span className={styles.label}>등록일</span>
-                <span className={styles.value}>{file.createdAt ?? '-'}</span>
+                <span className={styles.label}>업로드 날짜</span>
+                <span className={styles.value}>{file.uploadedAt}</span>
               </div>
-              {file.updatedAt && (
+              {file.processedAt && (
                 <div className={styles.infoItem}>
-                  <span className={styles.label}>최근 갱신</span>
-                  <span className={styles.value}>{file.updatedAt}</span>
+                  <span className={styles.label}>처리 완료</span>
+                  <span className={styles.value}>{file.processedAt}</span>
                 </div>
               )}
             </div>
@@ -107,7 +107,7 @@ export function FileDetailModal({ file, isOpen, workspaceId, onClose, onRefresh 
                 {file.status === 'READY' ? '준비됨' : file.status === 'PROCESSING' ? '분석중' : file.status === 'PENDING' ? '대기중' : '실패'}
               </span>
               {file.status === 'PROCESSING' && (
-                <p className={styles.statusNote}>현재 AI가 문서를 분석중입니다. 잠시 후 다시 확인해주세요.</p>
+                <p className={styles.statusNote}>현재 인공지능이 문서를 분석중입니다. 잠시 후 다시 확인해주세요.</p>
               )}
               {file.status === 'FAILED' && (
                 <p className={styles.statusNote}>문서 분석에 실패했습니다. 다시 시도해주세요.</p>

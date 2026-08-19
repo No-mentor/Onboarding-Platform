@@ -117,7 +117,9 @@ export function SignupForm() {
         name: formData.name.trim(),
       });
 
-      localStorage.setItem('pending_verification_email', formData.email.trim());
+      // 디버깅용 로그
+      console.log('[Signup Response]', response);
+      console.log('emailSent:', response.emailSent);
 
       if (response.emailSent) {
         showToast('인증 코드가 발송되었습니다. 이메일을 확인해주세요.', 'success');
@@ -159,8 +161,7 @@ export function SignupForm() {
     try {
       await verifyEmail(formData.email.trim(), code);
       showToast('이메일이 인증되었습니다.', 'success');
-      localStorage.removeItem('pending_verification_email');
-      router.push(`/signup-complete?email=${encodeURIComponent(formData.email.trim())}`);
+      setTimeout(() => router.push('/login'), 1500);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : '인증에 실패했습니다';
       showToast(errorMsg, 'error');
@@ -226,7 +227,7 @@ export function SignupForm() {
                 }}
                 onFocus={e => {
                   e.target.style.borderColor = 'var(--accent)';
-                  e.target.style.boxShadow = '0 0 0 3px rgba(78, 78, 82, 0.11)';
+                  e.target.style.boxShadow = '0 0 0 3px rgba(7, 101, 252, 0.11)';
                 }}
                 onBlur={e => {
                   e.target.style.borderColor = 'var(--border-strong)';

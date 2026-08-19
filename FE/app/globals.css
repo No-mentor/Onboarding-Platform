@@ -10,15 +10,27 @@
   --text: #17171a;
   --text-sub: #6b6b72;
   --text-faint: #9a9aa1;
-  --accent: #4e4e52;
-  --accent-hover: #363639;
-  --danger: #b4342f;
-  --warning: #d97706;
-  --success: #10b981;
-  --info: #3b82f6;
-  --priority-high: #dc2626;
-  --priority-medium: #f59e0b;
+  --accent: #0765FC;
+  --accent-hover: #0555D8;
+  --danger: #985050;
+  --warning: #80683d;
+  --success: #287456;
+  --info: #0765FC;
+  --priority-high: #985050;
+  --priority-medium: #80683d;
   --priority-low: #6b7280;
+  --status-success-text: #287456;
+  --status-success-bg: #edf5f1;
+  --status-warning-text: #80683d;
+  --status-warning-bg: #f6f2e9;
+  --status-danger-text: #985050;
+  --status-danger-bg: #f8eeee;
+  --status-info-text: #45658a;
+  --status-info-bg: #edf2f7;
+  --font-weight-page-title: 700;
+  --font-weight-page-description: 400;
+  --font-weight-section-title: 600;
+  --app-header-height: 120px;
   --r-sm: 8px;
   --r-md: 10px;
   --r-lg: 14px;
@@ -42,6 +54,45 @@ body {
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.01em;
+}
+
+/* 모든 업무 화면의 제목 계층을 동일하게 유지한다. */
+main h1 {
+  font-weight: var(--font-weight-page-title) !important;
+}
+
+main h1 + p,
+main header p {
+  font-weight: var(--font-weight-page-description) !important;
+}
+
+main section h2,
+main article h2,
+main aside h2 {
+  font-weight: var(--font-weight-section-title) !important;
+}
+
+/* 주요 업무 화면의 상단 영역 높이와 여백을 동일하게 유지한다. */
+main > header:first-child,
+main > div:first-child[class*='header'] {
+  width: 100%;
+  height: var(--app-header-height) !important;
+  min-height: var(--app-header-height) !important;
+  max-height: var(--app-header-height) !important;
+  flex: 0 0 var(--app-header-height) !important;
+  align-items: center !important;
+  padding: 24px 40px !important;
+}
+
+@media (max-width: 760px) {
+  main > header:first-child,
+  main > div:first-child[class*='header'] {
+    height: auto !important;
+    min-height: 112px !important;
+    max-height: none !important;
+    flex-basis: auto !important;
+    padding: 20px 24px !important;
+  }
 }
 
 @keyframes slideIn {
@@ -434,7 +485,7 @@ body {
 
 .control input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(78, 78, 82, 0.11);
+  box-shadow: 0 0 0 3px rgba(7, 101, 252, 0.11);
 }
 
 .control:has(input[type='password']) input,
@@ -552,7 +603,7 @@ body {
 }
 
 .check input:focus-visible + .mark {
-  box-shadow: 0 0 0 3px rgba(78, 78, 82, 0.16);
+  box-shadow: 0 0 0 3px rgba(7, 101, 252, 0.16);
 }
 
 .check a {

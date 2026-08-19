@@ -92,8 +92,8 @@
 }
 
 .active {
-  background-color: #f3e8ff;
-  color: #6c46a2;
+  background-color: #EDF4FF;
+  color: #0765FC;
 }
 
 .notificationsList {
@@ -124,8 +124,8 @@
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background-color: #f3e8ff;
-  color: #6c46a2;
+  background-color: #EDF4FF;
+  color: #0765FC;
   flex-shrink: 0;
 }
 
@@ -165,7 +165,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background-color: #6c46a2;
+  background-color: #0765FC;
   flex-shrink: 0;
 }
 
@@ -192,7 +192,7 @@
   padding: 8px;
   border: none;
   background: none;
-  color: #6c46a2;
+  color: #0765FC;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -201,5 +201,5 @@
 }
 
 .moreBtn:hover {
-  background-color: #f3e8ff;
+  background-color: #EDF4FF;
 }

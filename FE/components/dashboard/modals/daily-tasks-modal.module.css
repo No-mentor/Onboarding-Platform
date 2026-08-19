@@ -18,13 +18,13 @@
 }
 
 .tab:hover {
-  border-color: #6c46a2;
+  border-color: #0765FC;
   color: #111827;
 }
 
 .active {
-  background-color: #6c46a2;
-  border-color: #6c46a2;
+  background-color: #0765FC;
+  border-color: #0765FC;
   color: #ffffff;
 }
 
@@ -63,18 +63,18 @@
 }
 
 .catDocument {
-  background-color: #dbeafe;
-  color: #2563eb;
+  background-color: #E7F0FF;
+  color: #0765FC;
 }
 
 .catChecklist {
-  background-color: #d1fae5;
-  color: #059669;
+  background-color: #edf5f1;
+  color: #287456;
 }
 
 .catPractice {
-  background-color: #ffedd5;
-  color: #ea580c;
+  background-color: #f6f2e9;
+  color: #80683d;
 }
 
 .taskContent {
@@ -127,7 +127,7 @@
   padding: 8px 14px;
   border: none;
   border-radius: 6px;
-  background-color: #6c46a2;
+  background-color: #0765FC;
   color: #ffffff;
   font-size: 12px;
   font-weight: 600;
@@ -137,7 +137,7 @@
 }
 
 .actionBtnPrimary:hover {
-  background-color: #5a3a8c;
+  background-color: #0555D8;
 }
 
 .empty {
@@ -150,8 +150,8 @@
 .note {
   margin-top: 20px;
   padding: 12px 16px;
-  background-color: #f0f9ff;
-  border: 1px solid #dbeafe;
+  background-color: #F3F7FF;
+  border: 1px solid #E7F0FF;
   border-radius: 8px;
   font-size: 12px;
   color: #6b7280;

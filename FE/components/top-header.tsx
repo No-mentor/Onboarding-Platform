@@ -9,7 +9,7 @@ interface TopHeaderProps {
   workspaceName?: string;
 }
 
-export function TopHeader({ userName = '사용자님', workspaceName = 'My Workspace' }: TopHeaderProps) {
+export function TopHeader({ userName = '사용자님', workspaceName = '내 워크스페이스' }: TopHeaderProps) {
   return (
     <header className={styles.header}>
       <div className={styles.left}>

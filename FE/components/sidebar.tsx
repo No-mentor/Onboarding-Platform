@@ -10,10 +10,10 @@ const navItems = [
   { id: 'home', label: '홈', icon: Home, href: '/' },
   { id: 'roles', label: '내 업무 공간', icon: User, href: '#' },
   { id: 'tasks', label: '파일 탐색', icon: Folder, href: '#' },
-  { id: 'ai', label: 'AI 가이드', icon: Zap, href: '#' },
+  { id: 'ai', label: '인공지능이이드', icon: Zap, href: '#' },
   { id: 'today', label: '오늘 할 일', icon: CheckSquare, href: '#' },
   { id: 'roadmap', label: '인수인계 로드맵', icon: Users, href: '#' },
-  { id: 'chat', label: 'AI에게 질문', icon: MessageCircle, href: '#' },
+  { id: 'chat', label: 'AI에게 질문', icon: MessageCircle, href: '/ai-chat' },
 ];
 
 const adminItems = [
@@ -38,7 +38,7 @@ export function Sidebar({ userName = '사용자', userEmail = 'user@company.com'
       <div className={styles.header}>
         <Image
           src="/logo.png"
-          alt="OnboardOS Logo"
+          alt="OnboardOS 로고"
           width={40}
           height={40}
           className={styles.logo}

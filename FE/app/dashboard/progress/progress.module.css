@@ -160,12 +160,12 @@
 
 .severity-high {
   border-left-color: var(--priority-high);
-  background: rgba(220, 38, 38, 0.05);
+  background: #fbf6f6;
 }
 
 .severity-medium {
   border-left-color: var(--priority-medium);
-  background: rgba(245, 158, 11, 0.05);
+  background: #faf8f3;
 }
 
 .severity-low {
@@ -196,12 +196,12 @@
 }
 
 .severity-high .itemSeverity {
-  background: rgba(220, 38, 38, 0.1);
+  background: #f8eeee;
   color: var(--priority-high);
 }
 
 .severity-medium .itemSeverity {
-  background: rgba(245, 158, 11, 0.1);
+  background: #f6f2e9;
   color: var(--priority-medium);
 }
 
