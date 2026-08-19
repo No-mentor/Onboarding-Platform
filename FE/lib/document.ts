@@ -1,34 +1,14 @@
 import { getAuthToken } from './storage';
+import { API_BASE } from './config';
+import type { DocumentResponse } from './api';
 
-const rawUrl = (
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  'http://localhost:8080'
-).trim().replace(/\/+$/, '');
+// 문서 타입은 lib/api.ts 를 단일 출처로 쓴다 (서버 스펙과 1:1)
+export type { DocumentResponse, DocumentStatus } from './api';
+import type { DocumentPageResponse } from './api';
 
-const cleanBaseUrl = rawUrl.replace(/\/api\/v1\/?$/, '');
-const API_BASE = `${cleanBaseUrl}/api/v1`;
+/** @deprecated lib/api.ts 의 DocumentPageResponse 를 쓰세요 */
+export type DocumentListResponse = DocumentPageResponse;
 
-export interface DocumentResponse {
-  id: string;
-  name: string;
-  type: string;
-  status: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
-  uploadedAt: string;
-  processedAt?: string;
-  uploadedBy: string;
-  size: number;
-  visibility: string;
-  url?: string;
-}
-
-export interface DocumentListResponse {
-  content: DocumentResponse[];
-  totalElements: number;
-  totalPages: number;
-  currentPage: number;
-  pageSize: number;
-}
 
 export async function uploadDocument(
   workspaceId: string,

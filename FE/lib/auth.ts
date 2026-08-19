@@ -1,13 +1,5 @@
 import { AuthResponse } from '@/types/auth';
-
-const rawUrl = (
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  'http://localhost:8080'
-).trim().replace(/\/+$/, '');
-
-const API_BASE_URL = rawUrl.replace(/\/api\/v1\/?$/, '');
-const AUTH_ENDPOINT = `${API_BASE_URL}/api/v1/auth`;
+import { API_BASE_URL, AUTH_ENDPOINT } from './config';
 
 export interface SignupPayload {
   email: string;

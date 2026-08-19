@@ -1,13 +1,31 @@
-import { getAuthToken, getWorkspaceId } from './storage';
+import { getAuthToken, getWorkspaceId, clearAuthToken } from './storage';
+import { API_BASE } from './config';
 
-const rawUrl = (
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  'http://localhost:8080'
-).trim().replace(/\/+$/, '');
+/**
+ * 공통 fetch 래퍼: 401 Unauthorized 발생 시 인증 정보를 삭제하고 로그인 페이지로 자동 리다이렉트
+ */
+export async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  const response = await fetch(input, init);
+  if (response.status === 401) {
+    clearAuthToken();
+    if (typeof window !== 'undefined') {
+      const pathname = window.location.pathname;
+      if (!pathname.startsWith('/login') && !pathname.startsWith('/signup') && !pathname.startsWith('/verify-email')) {
+        window.location.href = '/login?expired=true';
+      }
+    }
+  }
+  return response;
+}
 
-const cleanBaseUrl = rawUrl.replace(/\/api\/v1\/?$/, '');
-const API_BASE = `${cleanBaseUrl}/api/v1`;
+export interface PageResponse<T> {
+  items?: T[];
+  content?: T[];
+  page?: number;
+  size?: number;
+  totalElements?: number;
+  totalPages?: number;
+}
 
 // ===== Dashboard =====
 export interface DashboardRecommendation {
@@ -357,14 +375,29 @@ export interface InvitationResponse {
 }
 
 // ===== Document Detail & Upload =====
+export type DocumentStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
+
 export interface DocumentResponse {
   id: string;
+  name?: string;
   title?: string;
   fileName?: string;
-  status?: string;
-  size?: string;
+  type?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  size?: number | string | any;
+  status: DocumentStatus | string;
+  chunkCount?: number | null;
+  errorMessage?: string | null;
+  uploadedBy?: string;
+  uploadedAt?: string;
+  processedAt?: string;
   createdAt?: string;
+  updatedAt?: string;
+  allowedRoles?: string[];
 }
+
+export type DocumentPageResponse = PageResponse<DocumentResponse>;
 
 export async function uploadDocument(formData: FormData): Promise<DocumentResponse> {
   const token = getAuthToken();
