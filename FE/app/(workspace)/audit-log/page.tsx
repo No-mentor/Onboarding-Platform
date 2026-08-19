@@ -6,7 +6,7 @@ import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
 import { useToast } from '@/components/ui/toast';
-import { getAuditLogs } from '@/lib/api';
+import { getAuditLogs, type AuditLogResponse } from '@/lib/api';
 import styles from './audit-log.module.css';
 
 export default function AuditLogPage() {
@@ -24,7 +24,7 @@ export default function AuditLogPage() {
   const [isPermissionAuditOpen, setIsPermissionAuditOpen] = useState(false);
   const [isTimeRangeOpen, setIsTimeRangeOpen] = useState(false);
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<AuditLogResponse[]>([]);
 
   // Load audit logs on mount
   useEffect(() => {
@@ -32,7 +32,7 @@ export default function AuditLogPage() {
       try {
         setIsLoading(true);
         const response = await getAuditLogs();
-        setLogs(response.content || []);
+        setLogs(response.items ?? []);
       } catch (err) {
         console.error('감사 로그 로드 실패:', err);
         showToast('감사 로그를 불러올 수 없습니다', 'error');
@@ -42,6 +42,17 @@ export default function AuditLogPage() {
     };
     loadLogs();
   }, []);
+
+  /** 서버는 ISO 문자열로 내려준다 */
+  const formatLogTime = (value?: string) => {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleString('ko-KR', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+  };
 
   const eventBgColors: { [key: string]: string } = {
     DOC_VIEW: '#EDE9FE',
@@ -60,8 +71,8 @@ export default function AuditLogPage() {
   };
 
   const filteredLogs = logs.filter((log) => {
-    const userMatch = selectedUser === 'all' || log.user === selectedUser;
-    const eventMatch = selectedEvent === 'all' || log.event === selectedEvent;
+    const userMatch = selectedUser === 'all' || log.actorId === selectedUser;
+    const eventMatch = selectedEvent === 'all' || log.eventType === selectedEvent;
     return userMatch && eventMatch;
   });
 
@@ -175,24 +186,26 @@ export default function AuditLogPage() {
                       setSelectedLogId(log.id);
                       setIsEventDetailsOpen(true);
                     }} style={{ cursor: 'pointer' }}>
-                      <td className={styles.timeCell}>{log.time}</td>
-                      <td className={styles.userCell}>{log.user}</td>
+                      <td className={styles.timeCell}>{formatLogTime(log.createdAt)}</td>
+                      <td className={styles.userCell}>{log.actorId ?? '-'}</td>
                       <td>
                         <span
                           className={styles.eventBadge}
                           style={{
-                            backgroundColor: eventBgColors[log.event] || '#EDE9FE',
-                            color: eventColors[log.event] || '#A78BFA',
+                            backgroundColor: eventBgColors[log.eventType] || '#EDE9FE',
+                            color: eventColors[log.eventType] || '#A78BFA',
                           }}
                         >
-                          {log.event}
+                          {log.eventType}
                         </span>
                       </td>
-                      <td className={styles.targetCell}>{log.target}</td>
+                      <td className={styles.targetCell}>
+                        {[log.resourceType, log.resourceId].filter(Boolean).join(' · ') || '-'}
+                      </td>
                       <td>
                         <span
                           className={styles.resultBadge}
-                          style={{ color: log.resultColor }}
+                          style={{ color: log.result === 'DENY' ? '#ef4444' : '#10B981' }}
                         >
                           {log.result}
                         </span>
@@ -246,12 +259,12 @@ export default function AuditLogPage() {
             <>
               <div className={styles.detailRow}>
                 <span className={styles.detailLabel}>시간</span>
-                <span className={styles.detailValue}>{logs.find(l => l.id === selectedLogId)?.time}</span>
+                <span className={styles.detailValue}>{formatLogTime(logs.find(l => l.id === selectedLogId)?.createdAt)}</span>
               </div>
               <div className={styles.detailRow}>
                 <span className={styles.detailLabel}>행위자</span>
                 <span className={styles.detailValue}>
-                  {logs.find(l => l.id === selectedLogId)?.user}
+                  {logs.find(l => l.id === selectedLogId)?.actorId ?? '-'}
                   <span className={styles.badge}>NEW_HIRE · 마케팅팀</span>
                 </span>
               </div>
@@ -260,22 +273,29 @@ export default function AuditLogPage() {
                 <span
                   className={styles.eventBadge}
                   style={{
-                    backgroundColor: eventBgColors[logs.find(l => l.id === selectedLogId)?.event!] || '#EDE9FE',
-                    color: eventColors[logs.find(l => l.id === selectedLogId)?.event!] || '#A78BFA',
+                    backgroundColor: eventBgColors[logs.find(l => l.id === selectedLogId)?.eventType ?? ''] || '#EDE9FE',
+                    color: eventColors[logs.find(l => l.id === selectedLogId)?.eventType ?? ''] || '#A78BFA',
                   }}
                 >
-                  {logs.find(l => l.id === selectedLogId)?.event}
+                  {logs.find(l => l.id === selectedLogId)?.eventType}
                 </span>
               </div>
               <div className={styles.detailRow}>
                 <span className={styles.detailLabel}>대상</span>
-                <span className={styles.detailValue}>{logs.find(l => l.id === selectedLogId)?.target}</span>
+                <span className={styles.detailValue}>
+                  {(() => {
+                    const log = logs.find(l => l.id === selectedLogId);
+                    return [log?.resourceType, log?.resourceId].filter(Boolean).join(' · ') || '-';
+                  })()}
+                </span>
               </div>
               <div className={styles.detailRow}>
                 <span className={styles.detailLabel}>결과</span>
                 <span
                   className={styles.resultBadge}
-                  style={{ color: logs.find(l => l.id === selectedLogId)?.resultColor }}
+                  style={{
+                    color: logs.find(l => l.id === selectedLogId)?.result === 'DENY' ? '#ef4444' : '#10B981',
+                  }}
                 >
                   {logs.find(l => l.id === selectedLogId)?.result}
                 </span>
