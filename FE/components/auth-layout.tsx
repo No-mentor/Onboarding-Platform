@@ -4,7 +4,7 @@ import React from 'react';
 import Image from 'next/image';
 import { AuthTabs } from './auth-tabs';
 
-export function AuthLayout() {
+export function AuthLayout({ initialTab = 'login' }: { initialTab?: 'login' | 'signup' }) {
   return (
     <div className="auth">
       <aside className="brand">
@@ -76,7 +76,7 @@ export function AuthLayout() {
 
       <main className="pane">
         <div className="card">
-          <AuthTabs />
+          <AuthTabs initialTab={initialTab} />
         </div>
       </main>
     </div>

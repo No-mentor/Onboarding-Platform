@@ -3,15 +3,22 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { login, AuthError } from '@/lib/auth';
+import { resendVerificationCode } from '@/lib/api';
 import { saveAuthToken } from '@/lib/storage';
+import { Modal, ModalPrimaryButton, ModalSecondaryButton } from './ui/modal';
+import { useToast } from './ui/toast';
 
 export function LoginForm() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
+  // 이메일 인증이 안 된 계정으로 로그인했을 때 띄우는 확인 모달
+  const [showVerifyPrompt, setShowVerifyPrompt] = useState(false);
+  const [isSendingCode, setIsSendingCode] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,27 +43,20 @@ export function LoginForm() {
         response.accessToken,
         response.userId,
         response.email,
+        response.name,
         response.workspaces[0]?.id
       );
       router.push('/dashboard');
     } catch (error) {
-      // 디버깅용 로그
-      console.log('[Login Error]', error);
-      if (error instanceof AuthError) {
-        console.log('Error Status:', error.status);
-        console.log('Error Message:', error.message);
-      }
-
       if (error instanceof AuthError) {
         if (error.isAuthError()) {
           setErrors({ form: '이메일 또는 비밀번호가 올바르지 않습니다.' });
+        } else if (error.isEmailNotVerified()) {
+          // 인증 링크 대신 인증 폼으로 안내한다
+          setErrors({});
+          setShowVerifyPrompt(true);
         } else if (error.isForbidden()) {
-          // email_verified 체크
-          if (error.message && error.message.includes('이메일 인증')) {
-            setErrors({ form: '이메일 인증이 완료되지 않았습니다. 가입 시 제공된 링크를 확인해주세요.' });
-          } else {
-            setErrors({ form: '비활성화된 계정입니다.' });
-          }
+          setErrors({ form: '비활성화된 계정입니다.' });
         } else {
           setErrors({ form: error.message });
         }
@@ -68,7 +68,31 @@ export function LoginForm() {
     }
   };
 
+  /** 확인 모달을 닫았을 때: 왜 로그인이 막혔는지 폼에 남겨 둔다 */
+  const handleDismissVerifyPrompt = () => {
+    setShowVerifyPrompt(false);
+    setErrors({ form: '이메일 인증이 완료되지 않아 로그인할 수 없습니다. 인증을 먼저 진행해 주세요.' });
+  };
+
+  /** 확인 모달에서 "진행하기" 를 눌렀을 때: 코드 재전송 후 인증 폼으로 이동 */
+  const handleStartVerification = async () => {
+    const targetEmail = email.trim();
+    setIsSendingCode(true);
+    try {
+      await resendVerificationCode(targetEmail);
+      localStorage.setItem('pending_verification_email', targetEmail);
+      showToast('인증 코드가 전송되었습니다. 이메일을 확인해 주세요.', 'success');
+      setShowVerifyPrompt(false);
+      router.push(`/verify-email?email=${encodeURIComponent(targetEmail)}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '인증 코드 전송에 실패했습니다.';
+      showToast(message, 'error');
+      setIsSendingCode(false);
+    }
+  };
+
   return (
+    <>
     <form onSubmit={handleSubmit}>
       <h2 className="title">다시 오셨네요</h2>
       <p className="subtitle">오늘 할 일과 인수인계 진행 상황이 기다리고 있어요.</p>
@@ -158,5 +182,30 @@ export function LoginForm() {
         아직 계정이 없으신가요? <button className="link" type="button" disabled={isLoading}>회원가입</button>
       </p>
     </form>
+
+    <Modal
+      open={showVerifyPrompt}
+      onClose={handleDismissVerifyPrompt}
+      title="이메일 인증이 진행되지 않았습니다"
+      subtitle={email.trim()}
+      size="sm"
+      closeOnBackdrop={!isSendingCode}
+      footer={
+        <>
+          <ModalSecondaryButton onClick={handleDismissVerifyPrompt} disabled={isSendingCode}>
+            나중에 하기
+          </ModalSecondaryButton>
+          <ModalPrimaryButton onClick={handleStartVerification} loading={isSendingCode}>
+            진행하기
+          </ModalPrimaryButton>
+        </>
+      }
+    >
+      <p style={{ fontSize: '13.5px', color: 'var(--text-sub)', lineHeight: '1.7' }}>
+        아직 이메일 인증이 완료되지 않아 로그인할 수 없습니다.<br />
+        지금 인증을 진행하시겠습니까? 진행하면 새 인증 코드를 다시 보내드립니다.
+      </p>
+    </Modal>
+    </>
   );
 }

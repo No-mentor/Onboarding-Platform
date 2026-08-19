@@ -2,10 +2,29 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, FileText, Users, Zap, TrendingUp, Clock, CheckCircle2, BarChart3 } from 'lucide-react';
+import { ArrowRight, FileText, Users, Zap, TrendingUp, Clock, CheckCircle2, BarChart3, LogOut, User } from 'lucide-react';
+import { logout } from '@/lib/auth';
+import { clearAuthToken, getAuthToken } from '@/lib/storage';
+import { useAuthUser } from '@/lib/use-auth-user';
 import styles from './page.module.css';
 
 export default function LandingPage() {
+  const authUser = useAuthUser();
+
+  const handleLogout = async () => {
+    const token = getAuthToken();
+    if (token) {
+      // 서버 로그아웃이 실패해도 로컬 세션은 반드시 정리한다
+      try {
+        await logout(token);
+      } catch {
+        // 무시
+      }
+    }
+    // clearAuthToken 이 변경을 알려 주므로 헤더가 즉시 로그아웃 상태로 바뀐다
+    clearAuthToken();
+  };
+
   const stats = [
     { label: '30일', description: '체계적인 온보딩 기간' },
     { label: '80%', description: '신입 적응률 증가' },
@@ -51,12 +70,29 @@ export default function LandingPage() {
             <Link href="#features" className={styles.navLink}>
               기능
             </Link>
-            <Link href="/login" className={styles.navLink}>
-              로그인
-            </Link>
-            <Link href="/login" className={styles.navLink}>
-              회원가입
-            </Link>
+            {authUser ? (
+              <div className={styles.authArea}>
+                <Link href="/dashboard" className={styles.profileChip}>
+                  <span className={styles.avatar} aria-hidden="true">
+                    {authUser.name.trim().charAt(0) || <User size={16} strokeWidth={2} />}
+                  </span>
+                  <span className={styles.userName}>{authUser.name}님</span>
+                </Link>
+                <button type="button" className={styles.logoutBtn} onClick={handleLogout}>
+                  <LogOut size={15} strokeWidth={2} />
+                  로그아웃
+                </button>
+              </div>
+            ) : (
+              <div className={styles.authArea}>
+                <Link href="/login" className={styles.navLink}>
+                  로그인
+                </Link>
+                <Link href="/signup" className={styles.navLink}>
+                  회원가입
+                </Link>
+              </div>
+            )}
           </nav>
         </div>
       </header>
@@ -78,13 +114,22 @@ export default function LandingPage() {
             신입 직원의 빠른 적응과 팀의 효율성을 동시에 달성하세요.
           </p>
           <div className={styles.heroCTA}>
-            <Link href="/login" className={styles.ctaPrimary}>
-              지금 시작하기
-              <ArrowRight size={18} />
-            </Link>
-            <Link href="/login" className={styles.ctaSecondary}>
-              로그인
-            </Link>
+            {authUser ? (
+              <Link href="/dashboard" className={styles.ctaPrimary}>
+                대시보드로 이동
+                <ArrowRight size={18} />
+              </Link>
+            ) : (
+              <>
+                <Link href="/signup" className={styles.ctaPrimary}>
+                  지금 시작하기
+                  <ArrowRight size={18} />
+                </Link>
+                <Link href="/login" className={styles.ctaSecondary}>
+                  로그인
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -205,12 +250,20 @@ export default function LandingPage() {
             OnboardOS로 조직의 온보딩 문화를 개선하고 팀의 성장을 가속화하세요.
           </p>
           <div className={styles.ctaButtons}>
-            <Link href="/login" className={styles.ctaButton}>
-              무료로 시작하기
-            </Link>
-            <Link href="/login" className={styles.ctaButtonSecond}>
-              로그인
-            </Link>
+            {authUser ? (
+              <Link href="/dashboard" className={styles.ctaButton}>
+                대시보드로 이동
+              </Link>
+            ) : (
+              <>
+                <Link href="/signup" className={styles.ctaButton}>
+                  무료로 시작하기
+                </Link>
+                <Link href="/login" className={styles.ctaButtonSecond}>
+                  로그인
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -238,7 +291,7 @@ export default function LandingPage() {
                 <Link href="/login">로그인</Link>
               </li>
               <li>
-                <Link href="/login">회원가입</Link>
+                <Link href="/signup">회원가입</Link>
               </li>
             </ul>
           </div>

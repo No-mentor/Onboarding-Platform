@@ -117,9 +117,7 @@ export function SignupForm() {
         name: formData.name.trim(),
       });
 
-      // 디버깅용 로그
-      console.log('[Signup Response]', response);
-      console.log('emailSent:', response.emailSent);
+      localStorage.setItem('pending_verification_email', formData.email.trim());
 
       if (response.emailSent) {
         showToast('인증 코드가 발송되었습니다. 이메일을 확인해주세요.', 'success');
@@ -161,7 +159,8 @@ export function SignupForm() {
     try {
       await verifyEmail(formData.email.trim(), code);
       showToast('이메일이 인증되었습니다.', 'success');
-      setTimeout(() => router.push('/login'), 1500);
+      localStorage.removeItem('pending_verification_email');
+      router.push(`/signup-complete?email=${encodeURIComponent(formData.email.trim())}`);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : '인증에 실패했습니다';
       showToast(errorMsg, 'error');

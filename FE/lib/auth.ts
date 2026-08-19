@@ -160,4 +160,15 @@ export class AuthError extends Error {
   isConflict(): boolean {
     return this.status === 409;
   }
+
+  /**
+   * 이메일 인증 미완료 여부
+   * BE 는 403 + code=EMAIL_NOT_VERIFIED 로 응답한다.
+   */
+  isEmailNotVerified(): boolean {
+    return (
+      this.status === 403 &&
+      (this.code === 'EMAIL_NOT_VERIFIED' || this.message.includes('이메일 인증'))
+    );
+  }
 }
