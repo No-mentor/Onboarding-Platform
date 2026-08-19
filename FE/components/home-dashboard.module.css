@@ -101,7 +101,7 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--accent);
-  background: linear-gradient(135deg, rgba(78, 78, 82, 0.1), rgba(78, 78, 82, 0.05));
+  background: linear-gradient(135deg, rgba(7, 101, 252, 0.1), rgba(7, 101, 252, 0.05));
   padding: 4px 10px;
   border-radius: 6px;
   display: inline-block;
@@ -228,7 +228,7 @@
 
 .checkbox:hover {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(78, 78, 82, 0.1);
+  box-shadow: 0 0 0 3px rgba(7, 101, 252, 0.1);
 }
 
 .checkbox:checked {
@@ -260,12 +260,12 @@
 }
 
 .priority-high {
-  background-color: rgba(220, 38, 38, 0.1);
+  background-color: #f8eeee;
   color: var(--priority-high);
 }
 
 .priority-medium {
-  background-color: rgba(245, 158, 11, 0.1);
+  background-color: #f6f2e9;
   color: var(--priority-medium);
 }
 
@@ -432,7 +432,7 @@
 
 .fileCard:hover {
   border-color: var(--accent);
-  box-shadow: 0 8px 24px rgba(78, 78, 82, 0.15);
+  box-shadow: 0 8px 24px rgba(7, 101, 252, 0.15);
   transform: translateY(-4px);
 }
 
@@ -476,13 +476,13 @@
 }
 
 .status-ready {
-  background-color: rgba(16, 185, 129, 0.1);
+  background-color: #edf5f1;
   color: var(--success);
 }
 
 .status-processing {
-  background-color: rgba(245, 158, 11, 0.1);
-  color: var(--priority-medium);
+  background-color: #edf2f7;
+  color: var(--status-info-text);
 }
 
 .status-pending {

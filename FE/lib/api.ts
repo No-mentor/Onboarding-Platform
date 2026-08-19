@@ -2,18 +2,6 @@ import { getAuthToken, getWorkspaceId } from './storage';
 
 const API_BASE = 'http://localhost:8080/api/v1';
 
-/**
- * 서버 공통 페이지네이션 응답 (global/web/PageResponse).
- * 목록 키는 content 가 아니라 items 다.
- */
-export interface PageResponse<T> {
-  items: T[];
-  page: number;
-  size: number;
-  totalElements: number;
-  totalPages: number;
-}
-
 // ===== Dashboard =====
 export interface DashboardRecommendation {
   id: string;
@@ -193,18 +181,25 @@ export async function getChecklists(): Promise<ChecklistSummaryResponse> {
 }
 
 // ===== Progress =====
-/** GET /admin/progress 항목 (서버 AdminProgressItemResponse 와 1:1) */
 export interface AdminProgressItemResponse {
-  userId: string;
+  id: string;
   name: string;
-  email: string;
-  progressPercent: number;
+  team: string;
+  day: number;
+  progress: number;
+  completed: number;
+  total: number;
   status: string;
-  planId: string | null;
-  currentDay: number;
+  activity?: string;
 }
 
-export type AdminProgressListResponse = PageResponse<AdminProgressItemResponse>;
+export interface AdminProgressListResponse {
+  content: AdminProgressItemResponse[];
+  totalElements: number;
+  totalPages: number;
+  currentPage: number;
+  pageSize: number;
+}
 
 export async function getAdminProgress(page: number = 0, size: number = 20): Promise<AdminProgressListResponse> {
   const token = getAuthToken();
@@ -251,17 +246,11 @@ export interface SendMessageRequest {
   sessionId?: string;
 }
 
-/** POST /chat/messages 응답 (서버 SendMessageResponse 와 1:1) */
 export interface SendMessageResponse {
+  id: string;
   sessionId: string;
-  messageId: string;
-  role: string;
-  /** 답변 본문. 서버 필드명이 content 가 아니라 answer 다 */
-  answer: string;
-  citations?: Array<Record<string, unknown>>;
-  /** 권한이 없어 참조하지 못한 문서 */
-  permissionDeniedDocumentIds?: string[];
-  createdAt?: string;
+  content: string;
+  citations?: Array<{ name: string; type?: string }>;
 }
 
 export async function getChatSessions(): Promise<{ items: ChatSessionSummaryResponse[] }> {
@@ -316,22 +305,22 @@ export async function sendChatMessage(message: string, sessionId?: string): Prom
 }
 
 // ===== Members =====
-export type MembershipStatus = 'ACTIVE' | 'INVITED' | 'SUSPENDED' | 'LEFT';
-
-/** GET /members 항목 (서버 MemberResponse 와 1:1) */
 export interface MemberResponse {
   id: string;
-  userId: string;
-  name: string;
   email: string;
-  role: WorkspaceRole;
-  status: MembershipStatus;
-  department: string | null;
-  careerLevel: string | null;
-  title: string | null;
+  name: string;
+  role: 'OWNER' | 'ADMIN' | 'MEMBER';
+  status: string;
+  joinedAt?: string;
 }
 
-export type MemberListResponse = PageResponse<MemberResponse>;
+export interface MemberListResponse {
+  content: MemberResponse[];
+  totalElements: number;
+  totalPages: number;
+  currentPage: number;
+  pageSize: number;
+}
 
 export async function getMembers(page: number = 0, size: number = 20): Promise<MemberListResponse> {
   const token = getAuthToken();
@@ -361,73 +350,13 @@ export interface InvitationResponse {
 }
 
 // ===== Document Detail & Upload =====
-export type DocumentStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
-
-/** GET /documents 응답 항목 (서버 DocumentResponse 와 1:1) */
 export interface DocumentResponse {
   id: string;
-  title: string;
-  status: DocumentStatus;
-  visibility?: string;
-  allowedRoles?: string[];
-  mimeType?: string | null;
-  sizeBytes?: number | null;
-  chunkCount?: number | null;
-  errorMessage?: string | null;
+  title?: string;
+  fileName?: string;
+  status?: string;
+  size?: string;
   createdAt?: string;
-  updatedAt?: string;
-}
-
-export type DocumentPageResponse = PageResponse<DocumentResponse>;
-
-export interface DocumentListParams {
-  page?: number;
-  size?: number;
-  status?: DocumentStatus;
-}
-
-export async function getDocuments(params: DocumentListParams = {}): Promise<DocumentPageResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const query = new URLSearchParams({
-    page: String(params.page ?? 0),
-    size: String(params.size ?? 20),
-  });
-  if (params.status) query.set('status', params.status);
-
-  const response = await fetch(`${API_BASE}/documents?${query}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-    },
-  });
-
-  if (!response.ok) throw new Error('파일 목록 조회 실패');
-  return response.json();
-}
-
-/** 서버가 주는 바이트 크기를 화면용 문자열로 */
-export function formatFileSize(bytes?: number | null): string {
-  if (bytes === null || bytes === undefined) return '-';
-  if (bytes < 1024) return `${bytes}B`;
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(1)}KB`;
-  return `${(kb / 1024).toFixed(1)}MB`;
-}
-
-/** mimeType 에서 화면에 쓸 확장자 라벨을 뽑는다 */
-export function formatFileType(mimeType?: string | null, title?: string): string {
-  const fromTitle = title?.includes('.') ? title.split('.').pop()?.toUpperCase() : undefined;
-  if (fromTitle && fromTitle.length <= 5) return fromTitle;
-  if (!mimeType) return 'FILE';
-  if (mimeType.includes('pdf')) return 'PDF';
-  if (mimeType.includes('sheet') || mimeType.includes('excel')) return 'XLSX';
-  if (mimeType.includes('word')) return 'DOCX';
-  if (mimeType.includes('presentation')) return 'PPTX';
-  if (mimeType.includes('text')) return 'TXT';
-  return mimeType.split('/').pop()?.toUpperCase() ?? 'FILE';
 }
 
 export async function uploadDocument(formData: FormData): Promise<DocumentResponse> {
@@ -468,24 +397,12 @@ export async function getDocumentDetail(documentId: string): Promise<DocumentRes
 export interface WorkspaceResponse {
   id: string;
   name: string;
-  slug?: string;
   memberCount?: number;
   createdAt?: string;
 }
 
-/** 워크스페이스에서의 내 역할 */
-export type WorkspaceRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER' | 'NEW_HIRE';
-
-export interface WorkspaceSummary {
-  id: string;
-  name: string;
-  slug: string;
-  role: WorkspaceRole;
-}
-
-/** 서버는 items 로 내려준다 (workspaces 아님) */
 export interface WorkspaceListResponse {
-  items: WorkspaceSummary[];
+  workspaces: WorkspaceResponse[];
 }
 
 export async function getMyWorkspaces(): Promise<WorkspaceListResponse> {
@@ -498,11 +415,11 @@ export async function getMyWorkspaces(): Promise<WorkspaceListResponse> {
     },
   });
 
-  if (!response.ok) throw new Error('Workspace 목록 조회 실패');
+  if (!response.ok) throw new Error('워크스페이스 목록 조회 실패');
   return response.json();
 }
 
-export async function createWorkspace(name: string, slug: string): Promise<WorkspaceResponse> {
+export async function createWorkspace(name: string): Promise<WorkspaceResponse> {
   const token = getAuthToken();
   if (!token) throw new Error('인증 정보 없음');
 
@@ -512,26 +429,11 @@ export async function createWorkspace(name: string, slug: string): Promise<Works
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ name, slug }),
+    body: JSON.stringify({ name }),
   });
 
-  if (!response.ok) {
-    // slug 중복(409) / 형식 오류(400) 를 구분해서 보여줘야 해서 서버 메시지를 그대로 올린다
-    const error = await response.json().catch(() => ({}));
-    throw new WorkspaceError(response.status, error.message || 'Workspace 생성 실패');
-  }
+  if (!response.ok) throw new Error('워크스페이스 생성 실패');
   return response.json();
-}
-
-export class WorkspaceError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-    this.name = 'WorkspaceError';
-  }
-
-  isConflict(): boolean {
-    return this.status === 409;
-  }
 }
 
 export async function updateWorkspace(workspaceId: string, name: string): Promise<WorkspaceResponse> {
@@ -547,7 +449,7 @@ export async function updateWorkspace(workspaceId: string, name: string): Promis
     body: JSON.stringify({ name }),
   });
 
-  if (!response.ok) throw new Error('Workspace 수정 실패');
+  if (!response.ok) throw new Error('워크스페이스 수정 실패');
   return response.json();
 }
 
@@ -764,19 +666,26 @@ export async function updateTemplate(templateId: string, data: any): Promise<Tem
 }
 
 // ===== Audit Logs =====
-/** GET /admin/audit-logs 항목 (서버 AuditLogResponse 와 1:1) */
 export interface AuditLogResponse {
   id: string;
+  timestamp: string;
+  actorId: string;
+  actorName?: string;
   eventType: string;
-  actorId: string | null;
-  resourceType: string | null;
-  resourceId: string | null;
-  result: string;
-  metadata: Record<string, unknown> | null;
-  createdAt: string;
+  targetType?: string;
+  targetId?: string;
+  targetName?: string;
+  result: 'ALLOW' | 'DENY';
+  details?: string;
 }
 
-export type AuditLogPageResponse = PageResponse<AuditLogResponse>;
+export interface AuditLogPageResponse {
+  content: AuditLogResponse[];
+  totalElements: number;
+  totalPages: number;
+  currentPage: number;
+  pageSize: number;
+}
 
 export async function getAuditLogs(
   page: number = 0,

@@ -4,10 +4,8 @@ import React, { useState } from 'react';
 import { LoginForm } from './login-form';
 import { SignupForm } from './signup-form';
 
-type AuthTab = 'login' | 'signup';
-
-export function AuthTabs({ initialTab = 'login' }: { initialTab?: AuthTab }) {
-  const [activeTab, setActiveTab] = useState<AuthTab>(initialTab);
+export function AuthTabs() {
+  const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
 
   return (
     <>

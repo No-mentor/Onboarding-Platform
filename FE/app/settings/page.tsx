@@ -32,7 +32,7 @@ export default function SettingsPage() {
           다크 모드
         </label>
       </div>
-      <button onClick={handleSave} disabled={isLoading} style={{ padding: '12px', backgroundColor: '#6366f1', color: 'white' }}>
+      <button onClick={handleSave} disabled={isLoading} style={{ padding: '12px', backgroundColor: '#0765FC', color: 'white' }}>
         {isLoading ? '저장 중...' : '저장'}
       </button>
     </div>

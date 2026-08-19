@@ -1,31 +1,40 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { Home, Folder, Zap, CheckSquare, Target, BarChart3, Users, Building, Lock, Settings } from 'lucide-react';
-import { useMe } from './require-workspace';
-import type { WorkspaceRole } from '@/lib/auth';
+import { getUserName, getUserEmail } from '@/lib/storage';
 import styles from './common-sidebar.module.css';
-
-const ROLE_LABEL: Record<WorkspaceRole, string> = {
-  OWNER: '관리자',
-  ADMIN: '관리자',
-  MANAGER: '매니저',
-  MEMBER: '멤버',
-  NEW_HIRE: '신입',
-};
 
 export function CommonSidebar() {
   const pathname = usePathname();
-  const me = useMe();
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [userName, setUserName] = useState<string>('사용자');
+  const [userInitial, setUserInitial] = useState<string>('S');
+  const [userTeam, setUserTeam] = useState<string>('팀');
 
-  const userName = me?.name ?? '사용자';
-  const userInitial = userName.trim().charAt(0).toUpperCase() || 'U';
-  const workspace = me?.currentWorkspace;
-  const roleLabel = workspace ? ROLE_LABEL[workspace.role] ?? workspace.role : null;
-  // 부서 정보가 있으면 함께 보여준다
-  const department = me?.profile?.department;
+  useEffect(() => {
+    const name = getUserName();
+    const email = getUserEmail();
+
+    if (name) {
+      setUserName(name);
+      setUserInitial(name.charAt(0).toUpperCase());
+    }
+
+    if (email) {
+      const domain = email.split('@')[1];
+      if (domain === 'marketing.company.com') {
+        setUserTeam('마케팅팀');
+      } else if (domain === 'dev.company.com') {
+        setUserTeam('개발팀');
+      } else if (domain === 'design.company.com') {
+        setUserTeam('디자인팀');
+      }
+    }
+  }, []);
 
   const navItems = [
     { href: '/dashboard', label: '홈', icon: Home },
@@ -45,15 +54,26 @@ export function CommonSidebar() {
   ];
 
   return (
-    <aside className={styles.sidebar}>
+    <aside className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ''}`}>
       <div className={styles.sidebarHeader}>
-        <div className={styles.logo}>{workspace ? workspace.name.trim().charAt(0) : 'O'}</div>
-        <div>
-          <div className={styles.brandName}>{workspace?.name ?? 'OnboardOS'}</div>
-          <div className={styles.brandSub}>
-            {workspace ? `onboardos.com/${workspace.slug}` : '업무 공간 없음'}
-          </div>
+        <div className={styles.mainLogo}>
+          <Image
+            src="/logo-main.png"
+            alt="MENTALK 메인 로고"
+            width={2008}
+            height={1337}
+            className={styles.mainLogoImage}
+            priority
+          />
         </div>
+        <Image
+          src="/mentalk-logo.png"
+          alt="MENTALK"
+          width={1200}
+          height={199}
+          className={styles.mentalkLogo}
+          priority
+        />
       </div>
 
       <nav className={styles.navMenu}>
@@ -99,12 +119,12 @@ export function CommonSidebar() {
           <div className={styles.userAvatar}>{userInitial}</div>
           <div className={styles.userInfo}>
             <div className={styles.userName}>{userName}</div>
-            <div className={styles.userRole}>
-              {[roleLabel, department].filter(Boolean).join(' · ') || '역할 정보 없음'}
-            </div>
+            <div className={styles.userRole}>신입 구성원 · {userTeam}</div>
           </div>
         </div>
-        <button className={styles.collapseBtn}>메뉴 접기</button>
+        <button className={styles.collapseBtn} onClick={() => setIsCollapsed((value) => !value)}>
+          {isCollapsed ? '메뉴 펼치기' : '메뉴 접기'}
+        </button>
       </div>
     </aside>
   );

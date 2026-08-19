@@ -11,7 +11,7 @@ function VerifyEmailContent() {
         <div>
           <Image
             src="/logo.png"
-            alt="OnboardOS Logo"
+            alt="OnboardOS 로고"
             width={64}
             height={64}
             className="logo"

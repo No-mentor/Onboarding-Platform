@@ -17,6 +17,16 @@ interface ToastContextValue {
   showToast: (message: string, kind?: ToastKind) => void;
 }
 
+const FRIENDLY_MESSAGES: Record<string, string> = {
+  '인증 정보 없음': '로그인이 필요해요. 다시 로그인해 주세요.',
+  Unauthorized: '로그인이 필요해요. 다시 로그인해 주세요.',
+  'Failed to fetch': '연결이 원활하지 않아요. 잠시 후 다시 시도해 주세요.',
+};
+
+function getFriendlyMessage(message: string) {
+  return FRIENDLY_MESSAGES[message.trim()] ?? message;
+}
+
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const ICONS: Record<ToastKind, React.ComponentType<{ size?: number }>> = {
@@ -34,8 +44,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const showToast = useCallback(
     (message: string, kind: ToastKind = 'success') => {
+      const friendlyMessage = getFriendlyMessage(message);
       const id = Date.now() + Math.random();
-      setToasts((prev) => [...prev, { id, kind, message }]);
+      setToasts((prev) => {
+        const withoutDuplicate = prev.filter(
+          (toast) => !(toast.kind === kind && toast.message === friendlyMessage)
+        );
+        return [...withoutDuplicate.slice(-2), { id, kind, message: friendlyMessage }];
+      });
       window.setTimeout(() => dismiss(id), 3000);
     },
     [dismiss]

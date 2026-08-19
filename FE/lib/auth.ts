@@ -67,47 +67,17 @@ export async function login(payload: LoginPayload): Promise<AuthResponse> {
   return response.json();
 }
 
-export type WorkspaceRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER' | 'NEW_HIRE';
-
-export interface MeWorkspace {
-  id: string;
-  name: string;
-  slug: string;
-  role: WorkspaceRole;
-}
-
-/** GET /auth/me 응답 (서버 MeResponse 와 1:1) */
-export interface MeResponse {
-  id: string;
-  email: string;
-  name: string;
-  /** X-Workspace-Id 를 보내면 그 워크스페이스, 아니면 목록의 첫 번째 */
-  currentWorkspace: MeWorkspace | null;
-  profile: {
-    department: string | null;
-    careerLevel: string | null;
-    title: string | null;
-  } | null;
-  workspaces: MeWorkspace[];
-}
-
 /**
  * 현재 사용자 정보 조회
- * @param workspaceId 넘기면 해당 워크스페이스 기준으로 currentWorkspace/profile 이 채워진다
  * @throws {AuthError} 인증 실패 또는 API 에러
  */
-export async function fetchMe(token: string, workspaceId?: string | null): Promise<MeResponse> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
-  if (workspaceId) {
-    headers['X-Workspace-Id'] = workspaceId;
-  }
-
+export async function fetchMe(token: string): Promise<any> {
   const response = await fetch(`${AUTH_ENDPOINT}/me`, {
     method: 'GET',
-    headers,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
   });
 
   if (!response.ok) {
@@ -189,16 +159,5 @@ export class AuthError extends Error {
    */
   isConflict(): boolean {
     return this.status === 409;
-  }
-
-  /**
-   * 이메일 인증 미완료 여부
-   * BE 는 403 + code=EMAIL_NOT_VERIFIED 로 응답한다.
-   */
-  isEmailNotVerified(): boolean {
-    return (
-      this.status === 403 &&
-      (this.code === 'EMAIL_NOT_VERIFIED' || this.message.includes('이메일 인증'))
-    );
   }
 }

@@ -2,29 +2,10 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, FileText, Users, Zap, TrendingUp, Clock, CheckCircle2, BarChart3, LogOut, User } from 'lucide-react';
-import { logout } from '@/lib/auth';
-import { clearAuthToken, getAuthToken } from '@/lib/storage';
-import { useAuthUser } from '@/lib/use-auth-user';
+import { ArrowRight, FileText, Users, Zap, TrendingUp, Clock, CheckCircle2, BarChart3 } from 'lucide-react';
 import styles from './page.module.css';
 
 export default function LandingPage() {
-  const authUser = useAuthUser();
-
-  const handleLogout = async () => {
-    const token = getAuthToken();
-    if (token) {
-      // 서버 로그아웃이 실패해도 로컬 세션은 반드시 정리한다
-      try {
-        await logout(token);
-      } catch {
-        // 무시
-      }
-    }
-    // clearAuthToken 이 변경을 알려 주므로 헤더가 즉시 로그아웃 상태로 바뀐다
-    clearAuthToken();
-  };
-
   const stats = [
     { label: '30일', description: '체계적인 온보딩 기간' },
     { label: '80%', description: '신입 적응률 증가' },
@@ -40,9 +21,9 @@ export default function LandingPage() {
     },
     {
       icon: Zap,
-      title: 'AI 기반 맞춤 추천',
-      description: 'AI가 학습한 업무 자료를 바탕으로 필요한 내용을 정확하게 추천합니다.',
-      highlights: ['RAG 기술 적용', 'Context 기반 추천', '실시간 학습'],
+      title: '인공지능 기반 맞춤 추천',
+      description: '인공지능이 학습한 업무 자료를 바탕으로 필요한 내용을 정확하게 추천합니다.',
+      highlights: ['문서 검색 증강 적용', '맥락 기반 추천', '실시간 학습'],
     },
     {
       icon: Users,
@@ -60,7 +41,7 @@ export default function LandingPage() {
           <div className={styles.logo}>
             <Image
               src="/logo.png"
-              alt="OnboardOS Logo"
+              alt="OnboardOS 로고"
               width={40}
               height={40}
             />
@@ -70,29 +51,12 @@ export default function LandingPage() {
             <Link href="#features" className={styles.navLink}>
               기능
             </Link>
-            {authUser ? (
-              <div className={styles.authArea}>
-                <Link href="/dashboard" className={styles.profileChip}>
-                  <span className={styles.avatar} aria-hidden="true">
-                    {authUser.name.trim().charAt(0) || <User size={16} strokeWidth={2} />}
-                  </span>
-                  <span className={styles.userName}>{authUser.name}님</span>
-                </Link>
-                <button type="button" className={styles.logoutBtn} onClick={handleLogout}>
-                  <LogOut size={15} strokeWidth={2} />
-                  로그아웃
-                </button>
-              </div>
-            ) : (
-              <div className={styles.authArea}>
-                <Link href="/login" className={styles.navLink}>
-                  로그인
-                </Link>
-                <Link href="/signup" className={styles.navLink}>
-                  회원가입
-                </Link>
-              </div>
-            )}
+            <Link href="/login" className={styles.navLink}>
+              로그인
+            </Link>
+            <Link href="/login" className={styles.navLink}>
+              회원가입
+            </Link>
           </nav>
         </div>
       </header>
@@ -106,30 +70,21 @@ export default function LandingPage() {
             신입 인수인계의 미래
           </div>
           <h1 className={styles.heroTitle}>
-            AI가 설계하는<br />
+            인공지능이 설계하는<br />
             <span className={styles.highlight}>신입 온보딩 플랫폼</span>
           </h1>
           <p className={styles.heroSubtitle}>
-            체계적인 온보딩 프로세스와 AI 기반 추천으로
+            체계적인 온보딩 프로세스와 인공지능 기반 추천으로
             신입 직원의 빠른 적응과 팀의 효율성을 동시에 달성하세요.
           </p>
           <div className={styles.heroCTA}>
-            {authUser ? (
-              <Link href="/dashboard" className={styles.ctaPrimary}>
-                대시보드로 이동
-                <ArrowRight size={18} />
-              </Link>
-            ) : (
-              <>
-                <Link href="/signup" className={styles.ctaPrimary}>
-                  지금 시작하기
-                  <ArrowRight size={18} />
-                </Link>
-                <Link href="/login" className={styles.ctaSecondary}>
-                  로그인
-                </Link>
-              </>
-            )}
+            <Link href="/login" className={styles.ctaPrimary}>
+              지금 시작하기
+              <ArrowRight size={18} />
+            </Link>
+            <Link href="/login" className={styles.ctaSecondary}>
+              로그인
+            </Link>
           </div>
         </div>
       </section>
@@ -193,7 +148,7 @@ export default function LandingPage() {
                 <Clock size={20} />
                 <div>
                   <div className={styles.valueItemTitle}>효율적인 학습</div>
-                  <div className={styles.valueItemDesc}>AI가 추천하는 맞춤형 업무로 빠른 적응</div>
+                  <div className={styles.valueItemDesc}>인공지능이 추천하는 맞춤형 업무로 빠른 적응</div>
                 </div>
               </li>
               <li className={styles.valueItem}>
@@ -250,20 +205,12 @@ export default function LandingPage() {
             OnboardOS로 조직의 온보딩 문화를 개선하고 팀의 성장을 가속화하세요.
           </p>
           <div className={styles.ctaButtons}>
-            {authUser ? (
-              <Link href="/dashboard" className={styles.ctaButton}>
-                대시보드로 이동
-              </Link>
-            ) : (
-              <>
-                <Link href="/signup" className={styles.ctaButton}>
-                  무료로 시작하기
-                </Link>
-                <Link href="/login" className={styles.ctaButtonSecond}>
-                  로그인
-                </Link>
-              </>
-            )}
+            <Link href="/login" className={styles.ctaButton}>
+              무료로 시작하기
+            </Link>
+            <Link href="/login" className={styles.ctaButtonSecond}>
+              로그인
+            </Link>
           </div>
         </div>
       </section>
@@ -279,7 +226,7 @@ export default function LandingPage() {
               </div>
               <p className={styles.footerTagline}>
                 신입·인수인계 담당자의 조직 적응을
-                AI가 설계·운영·분석하는 엔터프라이즈 SaaS
+                인공지능이 설계·운영·분석하는 엔터프라이즈 SaaS
               </p>
             </div>
           </div>
@@ -291,7 +238,7 @@ export default function LandingPage() {
                 <Link href="/login">로그인</Link>
               </li>
               <li>
-                <Link href="/signup">회원가입</Link>
+                <Link href="/login">회원가입</Link>
               </li>
             </ul>
           </div>

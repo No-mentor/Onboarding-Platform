@@ -89,7 +89,7 @@ export function EmailVerificationForm() {
       await verifyEmail(email, code);
       showToast('이메일이 인증되었습니다.', 'success');
       localStorage.removeItem('pending_verification_email');
-      router.push(`/signup-complete?email=${encodeURIComponent(email)}`);
+      setTimeout(() => router.push('/login'), 1500);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '인증에 실패했습니다';
       setError(errorMsg);
@@ -170,7 +170,7 @@ export function EmailVerificationForm() {
               }}
               onFocus={e => {
                 e.target.style.borderColor = 'var(--accent)';
-                e.target.style.boxShadow = '0 0 0 3px rgba(78, 78, 82, 0.11)';
+                e.target.style.boxShadow = '0 0 0 3px rgba(7, 101, 252, 0.11)';
               }}
               onBlur={e => {
                 e.target.style.borderColor = 'var(--border-strong)';

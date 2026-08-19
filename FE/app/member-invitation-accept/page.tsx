@@ -27,7 +27,7 @@ function MemberInvitationAcceptContent() {
   return (
     <div style={{ padding: '40px', textAlign: 'center' }}>
       <h1>멤버 초대 수락</h1>
-      <button onClick={handleAccept} disabled={isLoading} style={{ padding: '12px 24px', backgroundColor: '#6366f1', color: 'white', borderRadius: '8px' }}>
+      <button onClick={handleAccept} disabled={isLoading} style={{ padding: '12px 24px', backgroundColor: '#0765FC', color: 'white', borderRadius: '8px' }}>
         {isLoading ? '처리 중...' : '초대 수락'}
       </button>
     </div>

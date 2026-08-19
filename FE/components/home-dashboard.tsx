@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { FileText, FileSpreadsheet, Cloud, ArrowRight, ChevronRight, Upload, AlertCircle } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import styles from './home-dashboard.module.css';
+import { getDisplayLabel } from '@/lib/display-labels';
 import { uploadDocument, getDocuments, getDocument, DocumentResponse } from '@/lib/document';
 import { FileDetailModal } from './file-detail-modal';
 
@@ -57,7 +58,7 @@ export function HomeDashboard({ data, isLoading = false, error = null, workspace
 
   const handleFileUpload = async (file: File) => {
     if (!workspaceId) {
-      setUploadError('Workspace ID가 없습니다');
+      setUploadError('워크스페이스 식별 정보가 없습니다');
       return;
     }
 
@@ -78,7 +79,7 @@ export function HomeDashboard({ data, isLoading = false, error = null, workspace
     if (!workspaceId) return;
     try {
       const response = await getDocuments(workspaceId, 0, 4);
-      setFiles(response.items ?? []);
+      setFiles(response.content || []);
     } catch (error) {
       console.error('파일 조회 실패:', error);
     }
@@ -280,7 +281,7 @@ export function HomeDashboard({ data, isLoading = false, error = null, workspace
               </div>
               <h4 className={styles.fileName}>{file.name}</h4>
               <div className={styles.fileMeta}>
-                <span className={styles.fileType}>{file.type}</span>
+                <span className={styles.fileType}>{getDisplayLabel(file.type)}</span>
                 <span className={`${styles.fileStatus} ${styles[`status-${file.status?.toLowerCase()}`]}`}>
                   {file.status === 'READY' ? '준비됨' : file.status === 'PROCESSING' ? '분석중' : '대기중'}
                 </span>
@@ -306,7 +307,7 @@ export function HomeDashboard({ data, isLoading = false, error = null, workspace
               <div className={styles.uploadText}>
                 {uploadingFile ? `업로드 중... ${uploadingFile}` : '파일 업로드'}
               </div>
-              <div className={styles.uploadHint}>업무 자료를 업로드하면<br />AI가 분석하여 인수인계에 도움이 됩니다.</div>
+              <div className={styles.uploadHint}>업무 자료를 업로드하면<br />인공지능이 분석하여 인수인계에 도움이 됩니다.</div>
               <button
                 className={styles.uploadBtn}
                 onClick={() => fileInputRef.current?.click()}
