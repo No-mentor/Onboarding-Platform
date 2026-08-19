@@ -92,13 +92,15 @@ export function getUserEmail(): string | null {
   return localStorage.getItem(USER_EMAIL_KEY);
 }
 
+export const setWorkspaceId = saveWorkspaceId;
+
 /**
  * localStorage에서 워크스페이스 ID 조회
  */
 export function getWorkspaceId(): string | null {
   if (typeof window === 'undefined') return null;
 
-  return localStorage.getItem(WORKSPACE_ID_KEY);
+  return localStorage.getItem(WORKSPACE_ID_KEY) || localStorage.getItem('workspaceId');
 }
 
 /**

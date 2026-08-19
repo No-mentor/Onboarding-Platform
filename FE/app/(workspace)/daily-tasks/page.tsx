@@ -1,17 +1,20 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, Lightbulb, Bell, HelpCircle, Zap, ClipboardList } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ChevronRight, Lightbulb, Bell, HelpCircle, Zap, ClipboardList, BookOpen, CheckSquare, Briefcase } from 'lucide-react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFilePdf, faFileExcel } from '@fortawesome/free-solid-svg-icons';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
 import { getRecommendationsToday, completeRecommendation } from '@/lib/api';
+import { getUserName } from '@/lib/storage';
 import { useToast } from '@/components/ui/toast';
 import styles from './daily-tasks.module.css';
 
 export default function DailyTasksPage() {
+  const router = useRouter();
   const { run, isPending } = useModalAction();
   const { showToast } = useToast();
 
@@ -27,6 +30,7 @@ export default function DailyTasksPage() {
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [meetingNotes, setMeetingNotes] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [userName, setUserName] = useState('사용자');
 
   const [tasks, setTasks] = useState({
     document: [] as any[],
@@ -36,17 +40,30 @@ export default function DailyTasksPage() {
 
   // Load recommendations on mount
   useEffect(() => {
+    const name = getUserName();
+    if (name) setUserName(name);
+
     const loadRecommendations = async () => {
       try {
         setIsLoading(true);
         const response = await getRecommendationsToday();
-        const items = response.items || [];
+        const rawItems = response.items || [];
 
-        // 카테고리별로 분류 (label 기준)
+        const normalizedItems = rawItems.map((t: any) => ({
+          id: t.id,
+          name: t.title || '할 일 항목',
+          title: t.title || '할 일 항목',
+          type: (t.type || 'document').toLowerCase(),
+          rawType: t.type,
+          status: (t.status || 'PENDING').toLowerCase(),
+          time: t.source === 'PLAN' ? '30일 계획' : (t.source || '오늘'),
+          description: t.description || (t.personName ? `담당자 / 멘토: ${t.personName}` : '온보딩 추천 과제'),
+        }));
+
         const categorized = {
-          document: items.filter(t => t.label === '문서') as any[],
-          checklist: items.filter(t => t.label === '체크') as any[],
-          practice: items.filter(t => t.label === '실습') as any[],
+          document: normalizedItems.filter((t: any) => t.type === 'document'),
+          checklist: normalizedItems.filter((t: any) => t.type === 'checklist'),
+          practice: normalizedItems.filter((t: any) => t.type === 'practice' || t.type === 'person'),
         };
 
         setTasks(categorized);
@@ -60,15 +77,29 @@ export default function DailyTasksPage() {
     loadRecommendations();
   }, []);
 
-  const toggleTaskComplete = (taskId: number, category: 'document' | 'checklist' | 'practice') => {
+  const toggleTaskComplete = async (taskId: string, category: 'document' | 'checklist' | 'practice') => {
+    const currentTask = tasks[category].find(t => t.id === taskId);
+    const nextStatus = currentTask?.status === 'done' ? 'pending' : 'done';
+
     setTasks((prevTasks) => ({
       ...prevTasks,
       [category]: prevTasks[category].map((task) =>
         task.id === taskId
-          ? { ...task, status: task.status === 'done' ? 'pending' : 'done' }
+          ? { ...task, status: nextStatus }
           : task
       ),
     }));
+
+    try {
+      if (nextStatus === 'done') {
+        await completeRecommendation(taskId);
+        showToast('할 일을 완료했습니다.', 'success');
+      } else {
+        showToast('할 일을 미완료로 변경했습니다.', 'info');
+      }
+    } catch (err) {
+      console.error('완료 상태 변경 실패:', err);
+    }
   };
 
   const getProgress = () => {
@@ -93,8 +124,12 @@ export default function DailyTasksPage() {
         return <FontAwesomeIcon icon={faFilePdf} className={styles.iconPdf} />;
       case 'excel':
         return <FontAwesomeIcon icon={faFileExcel} className={styles.iconExcel} />;
+      case 'document':
+        return <BookOpen size={16} className={styles.iconDefault} />;
+      case 'checklist':
+        return <CheckSquare size={16} className={styles.iconDefault} />;
       default:
-        return <ClipboardList size={16} className={styles.iconDefault} />;
+        return <Briefcase size={16} className={styles.iconDefault} />;
     }
   };
 
@@ -107,7 +142,7 @@ export default function DailyTasksPage() {
       case 'pending':
         return '대기';
       case 'skipped':
-        return '건너뜨림';
+        return '건너뜀';
       default:
         return '대기';
     }
@@ -130,7 +165,7 @@ export default function DailyTasksPage() {
 
   const progress = getProgress();
   const statusInfo = getStatusInfo();
-  const progressPercentage = (progress.completed / progress.total) * 100;
+  const progressPercentage = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
 
   const renderTaskSection = (title: string, icon: string, category: 'document' | 'checklist' | 'practice', items?: any[]) => (
     <div className={styles.taskSection}>
@@ -145,9 +180,7 @@ export default function DailyTasksPage() {
             <div className={styles.taskHeader}>
               <div className={styles.taskNameArea}>
                 <div className={styles.taskIcon}>
-                  {task.type === 'document' || task.type === 'pdf' || task.type === 'excel'
-                    ? getFileIcon(task.type === 'document' ? 'pdf' : task.type)
-                    : <ClipboardList size={16} className={styles.iconDefault} />}
+                  {getFileIcon(task.type)}
                 </div>
                 <span className={styles.taskName}>{task.name}</span>
                 <span
@@ -169,7 +202,12 @@ export default function DailyTasksPage() {
           </div>
         )) : <div style={{ padding: '16px', color: '#9CA3AF', textAlign: 'center' }}>항목이 없습니다</div>}
 
-        <button className={styles.addMoreBtn}>+ 항목 추천 받기</button>
+        <button
+          className={styles.addMoreBtn}
+          onClick={() => router.push('/ai-chat?q=' + encodeURIComponent('오늘 할 일 추천해줘'))}
+        >
+          + AI에게 추가 과제 추천받기
+        </button>
       </div>
     </div>
   );
@@ -182,17 +220,17 @@ export default function DailyTasksPage() {
       <main className={styles.main}>
         <div className={styles.header}>
           <div>
-            <h1 className={styles.greeting}>안녕하세요, 김세원님</h1>
-            <p className={styles.description}>AI 가 30 일 계획과 현재 진행 상황을 바탕으로 오늘 해야 할 일을 추천합니다.</p>
+            <h1 className={styles.greeting}>안녕하세요, {userName}님</h1>
+            <p className={styles.description}>AI가 30일 계획과 현재 진행 상황을 바탕으로 오늘 해야 할 일을 추천합니다.</p>
           </div>
           <div className={styles.headerRight}>
-            <select className={styles.workspaceBtn}>
-              <option>마케팅팀 인수인계</option>
-            </select>
-            <button className={styles.notifBtn}>
+            <button className={styles.workspaceBtn} onClick={() => router.push('/workspace-selection')}>
+              워크스페이스 전환
+            </button>
+            <button className={styles.notifBtn} onClick={() => router.push('/notification-center')}>
               <Bell size={20} />
             </button>
-            <button className={styles.helpBtn}>
+            <button className={styles.helpBtn} onClick={() => router.push('/ai-chat')}>
               <HelpCircle size={18} />
             </button>
           </div>
@@ -248,7 +286,7 @@ export default function DailyTasksPage() {
           </div>
 
           {/* AI Question Button */}
-          <button className={styles.aiQuestionBtn} onClick={() => setIsDailyGoalsModalOpen(true)}>
+          <button className={styles.aiQuestionBtn} onClick={() => router.push('/ai-chat')}>
             <Zap size={16} /> AI에게 질문하기
           </button>
         </div>
@@ -261,30 +299,32 @@ export default function DailyTasksPage() {
         <Modal
           open
           onClose={() => setIsDailyGoalsModalOpen(false)}
-          title="오늘의 목표"
+          title="오늘의 온보딩 가이드"
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsDailyGoalsModalOpen(false)}>닫기</ModalSecondaryButton>
               <ModalPrimaryButton
-                loading={isPending('daily-tasks-0')}
-                onClick={() => run('daily-tasks-0', '처리를 완료했습니다.', () => setIsDailyGoalsModalOpen(false))}
+                onClick={() => {
+                  setIsDailyGoalsModalOpen(false);
+                  router.push('/ai-chat');
+                }}
               >
-                AI 질문 시작
+                AI 어시스턴트에게 질문하기
               </ModalPrimaryButton>
             </>
           }
         >
           <div className={styles.goalsCard}>
             <div className={styles.goalItem}>
-              <h4>주요 목표</h4>
-              <p>팀 프로젝트 마감 전 현재까지의 진행 상황을 보고하세요.</p>
+              <h4>오늘의 핵심 목표</h4>
+              <p>추천된 온보딩 문서 확인 및 당일 체크리스트 과제를 수행하세요.</p>
             </div>
             <div className={styles.goalItem}>
-              <h4>추천 순서</h4>
+              <h4>추천 학습 순서</h4>
               <p>
-                1. 행사운영가이드 읽기<br/>
-                2. 신입 계정 권한 확인<br/>
-                3. 예산안 검토
+                1. 추천 사내 가이드 및 업무 문서 열람<br/>
+                2. 계정 권한 및 업무 툴 설정 확인<br/>
+                3. 담당 멘토와의 온보딩 체크리스트 점검
               </p>
             </div>
           </div>
@@ -296,23 +336,30 @@ export default function DailyTasksPage() {
         <Modal
           open
           onClose={() => setIsDocumentListModalOpen(false)}
-          title="문서 목록"
+          title="오늘의 추천 문서"
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsDocumentListModalOpen(false)}>닫기</ModalSecondaryButton>
+              <ModalPrimaryButton onClick={() => router.push('/file-management')}>
+                파일 탐색기로 이동
+              </ModalPrimaryButton>
             </>
           }
         >
           <div className={styles.documentList}>
-            {tasks.document.map((doc) => (
-              <div key={doc.id} className={styles.documentItem}>
-                <div className={styles.docName}>{doc.name}</div>
-                <div className={styles.docMeta}>
-                  <span className={styles.docTime}>{doc.time}</span>
-                  <span className={styles.docDesc}>{doc.description}</span>
+            {tasks.document.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#9CA3AF', margin: '20px 0' }}>오늘 확인해야 할 추천 문서가 없습니다.</p>
+            ) : (
+              tasks.document.map((doc) => (
+                <div key={doc.id} className={styles.documentItem}>
+                  <div className={styles.docName}>{doc.name}</div>
+                  <div className={styles.docMeta}>
+                    <span className={styles.docTime}>{doc.time}</span>
+                    <span className={styles.docDesc}>{doc.description}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Modal>
       )}
@@ -322,15 +369,12 @@ export default function DailyTasksPage() {
         <Modal
           open
           onClose={() => setIsChecklistItemsModalOpen(false)}
-          title="체크리스트 항목"
+          title="오늘의 체크리스트 항목"
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsChecklistItemsModalOpen(false)}>닫기</ModalSecondaryButton>
-              <ModalPrimaryButton
-                loading={isPending('daily-tasks-1')}
-                onClick={() => run('daily-tasks-1', '변경 내용을 저장했습니다.', () => setIsChecklistItemsModalOpen(false))}
-              >
-                저장
+              <ModalPrimaryButton onClick={() => router.push('/checklist')}>
+                체크리스트 전체보기
               </ModalPrimaryButton>
             </>
           }
@@ -338,9 +382,15 @@ export default function DailyTasksPage() {
           <div className={styles.checklistList}>
             {tasks.checklist.map((item) => (
               <div key={item.id} className={styles.checklistItemModal}>
-                <input type="checkbox" />
+                <input
+                  type="checkbox"
+                  checked={item.status === 'done'}
+                  onChange={() => toggleTaskComplete(item.id, 'checklist')}
+                />
                 <div>
-                  <div className={styles.itemName}>{item.name}</div>
+                  <div className={styles.itemName} style={{ textDecoration: item.status === 'done' ? 'line-through' : 'none' }}>
+                    {item.name}
+                  </div>
                   <div className={styles.itemDesc}>{item.description}</div>
                 </div>
               </div>
@@ -354,7 +404,7 @@ export default function DailyTasksPage() {
         <Modal
           open
           onClose={() => setIsTaskCategoriesModalOpen(false)}
-          title="업무 카테고리"
+          title="업무 카테고리 안내"
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsTaskCategoriesModalOpen(false)}>닫기</ModalSecondaryButton>
@@ -363,16 +413,16 @@ export default function DailyTasksPage() {
         >
           <div className={styles.categoryList}>
             <div className={styles.categoryItem}>
-              <h4>문서 읽기</h4>
-              <p>업무 관련 문서 및 참고 자료 검토</p>
+              <h4>문서 읽기 (Documentation)</h4>
+              <p>업무 관련 규정, 가이드라인 및 사내 참고 자료 검토</p>
             </div>
             <div className={styles.categoryItem}>
-              <h4>체크리스트</h4>
-              <p>완료해야 할 주요 업무 항목</p>
+              <h4>체크리스트 (Checklist)</h4>
+              <p>환경 설정, 권한 획득 등 필수로 완료해야 할 실무 항목</p>
             </div>
             <div className={styles.categoryItem}>
-              <h4>실습 / 업무</h4>
-              <p>실제 업무 수행 및 학습</p>
+              <h4>실습 / 멘토링 (Practice & Mentoring)</h4>
+              <p>실제 실무 과제 수행 및 멘토 피드백 세션</p>
             </div>
           </div>
         </Modal>
@@ -391,11 +441,33 @@ export default function DailyTasksPage() {
           }
         >
           <div className={styles.actionList}>
-            <button className={styles.actionItem}>완료 처리</button>
-            <button className={styles.actionItem}>미루기</button>
-            <button className={styles.actionItem}>메모 추가</button>
-            <button className={styles.actionItem}>일정 변경</button>
-            <button className={styles.actionItem} style={{ color: '#dc2626' }}>건너뛰기</button>
+            <button
+              className={styles.actionItem}
+              onClick={() => {
+                toggleTaskComplete(selectedTask.id, selectedTask.type || 'checklist');
+                setIsTaskActionsModalOpen(false);
+              }}
+            >
+              {selectedTask.status === 'done' ? '미완료로 변경' : '완료 처리'}
+            </button>
+            <button
+              className={styles.actionItem}
+              onClick={() => {
+                setIsTaskActionsModalOpen(false);
+                router.push(`/ai-chat?q=${encodeURIComponent(selectedTask.title || selectedTask.name)}`);
+              }}
+            >
+              AI에게 관련 질문하기
+            </button>
+            <button
+              className={styles.actionItem}
+              onClick={() => {
+                setIsTaskActionsModalOpen(false);
+                router.push('/30day-plan');
+              }}
+            >
+              30일 계획에서 확인
+            </button>
           </div>
         </Modal>
       )}
@@ -408,10 +480,17 @@ export default function DailyTasksPage() {
           title="회의 메모"
           footer={
             <>
-              <ModalSecondaryButton onClick={() => setIsMeetingNotesModalOpen(false)}>닫기</ModalSecondaryButton>
+              <ModalSecondaryButton onClick={() => setIsMeetingNotesModalOpen(false)}>취소</ModalSecondaryButton>
               <ModalPrimaryButton
-                loading={isPending('daily-tasks-2')}
-                onClick={() => run('daily-tasks-2', '변경 내용을 저장했습니다.', () => setIsMeetingNotesModalOpen(false))}
+                onClick={() => {
+                  try {
+                    localStorage.setItem('daily_meeting_notes', meetingNotes);
+                    showToast('회의 메모가 안전하게 저장되었습니다.', 'success');
+                  } catch (e) {
+                    showToast('메모 저장 실패', 'error');
+                  }
+                  setIsMeetingNotesModalOpen(false);
+                }}
               >
                 저장
               </ModalPrimaryButton>
@@ -419,11 +498,11 @@ export default function DailyTasksPage() {
           }
         >
           <div className={styles.formGroup}>
-            <label className={styles.label}>메모</label>
+            <label className={styles.label}>메모 내용</label>
             <textarea
               value={meetingNotes}
               onChange={(e) => setMeetingNotes(e.target.value)}
-              placeholder="회의 중 나눈 내용을 메모하세요."
+              placeholder="회의 중 나눈 주요 피드백이나 질문을 메모하세요."
               className={styles.textarea}
               rows={6}
             />

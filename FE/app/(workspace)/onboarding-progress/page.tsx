@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { TrendingUp, AlertCircle, Calendar, Users, BarChart3, AlertTriangle, Home, Folder, Zap, CheckSquare, Target, Lock, Settings } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
@@ -9,6 +10,7 @@ import { getAdminProgress, type AdminProgressItemResponse } from '@/lib/api';
 import styles from './onboarding-progress.module.css';
 
 export default function OnboardingProgressPage() {
+  const router = useRouter();
   const { run, isPending } = useModalAction();
   const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
@@ -40,22 +42,26 @@ export default function OnboardingProgressPage() {
     loadProgress();
   }, []);
 
+  const totalNewbies = newbies.length;
+  const avgProgress = totalNewbies > 0 ? Math.round(newbies.reduce((acc, n) => acc + Number(n.progressPercent ?? 0), 0) / totalNewbies) : 0;
+  const activeCount = newbies.filter((n) => n.status === 'ACTIVE').length;
+  const issueCount = totalNewbies - activeCount;
+
   return (
     <div className={styles.container}>
       <CommonSidebar />
 
       <main className={styles.main}>
         <header className={styles.header}>
-          <div><h1>신입 진행 현황</h1><p>관리자가 신입별 진행률과 병목을 확인하는 화면입니다.</p></div>
-          <select><option>마케팅팀 인수인계</option></select>
+          <div><h1>신입 진행 현황</h1><p>관리자가 신입별 진행률과 온보딩 현황을 한눈에 확인하는 화면입니다.</p></div>
         </header>
 
         <div className={styles.content}>
           <div className={styles.statsWrapper}>
-            <div className={styles.stat}><Users size={24} /><div><div>8</div><div>명</div></div></div>
-            <div className={styles.stat}><BarChart3 size={24} /><div><div>46%</div><div>완료율</div></div></div>
-            <div className={styles.stat}><AlertTriangle size={24} /><div><div>5</div><div>건</div></div></div>
-            <div className={styles.stat}><Calendar size={24} /><div><div>12</div><div>건</div></div></div>
+            <div className={styles.stat}><Users size={24} /><div><div>{totalNewbies}</div><div>명</div></div></div>
+            <div className={styles.stat}><BarChart3 size={24} /><div><div>{avgProgress}%</div><div>평균 완료율</div></div></div>
+            <div className={styles.stat}><AlertTriangle size={24} /><div><div>{issueCount}</div><div>건 (주의)</div></div></div>
+            <div className={styles.stat}><Calendar size={24} /><div><div>{activeCount}</div><div>명 (정상 진행)</div></div></div>
           </div>
 
           <div className={styles.mainLayout}>
@@ -64,31 +70,38 @@ export default function OnboardingProgressPage() {
             <table className={styles.table}>
               <thead><tr><th>신입</th><th>진행 일차</th><th>전체 진행률</th><th>계획 상태</th><th>작업</th></tr></thead>
               <tbody>
-                {newbies.map(n => {
-                  const percent = Math.round(Number(n.progressPercent ?? 0));
-                  return (
-                  <tr key={n.userId}>
-                    <td><div className={styles.name}><div className={styles.avatar}>{n.name.trim().charAt(0)}</div><div><div>{n.name}</div><div>{n.email}</div></div></div></td>
-                    <td>{n.currentDay}일차</td>
-                    <td><div style={{color: '#6C46A2'}}>{percent}%</div><div className={styles.bar}><div style={{width: `${percent}%`}}></div></div></td>
-                    <td><span className={n.status === 'ACTIVE' ? styles.ok : styles.issue}>{n.status}</span></td>
-                    <td><button onClick={() => {
-                      setSelectedNewbie(n);
-                      setIsProgressDetailModalOpen(true);
-                    }}>상세 보기</button></td>
+                {newbies.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'center', padding: '32px', color: '#9CA3AF' }}>
+                      등록된 신입 멤버 데이터가 없습니다.
+                    </td>
                   </tr>
-                  );
-                })}
+                ) : (
+                  newbies.map(n => {
+                    const percent = Math.round(Number(n.progressPercent ?? 0));
+                    return (
+                    <tr key={n.userId}>
+                      <td><div className={styles.name}><div className={styles.avatar}>{n.name.trim().charAt(0)}</div><div><div>{n.name}</div><div>{n.email}</div></div></div></td>
+                      <td>{n.currentDay}일차</td>
+                      <td><div style={{color: '#6C46A2'}}>{percent}%</div><div className={styles.bar}><div style={{width: `${percent}%`}}></div></div></td>
+                      <td><span className={n.status === 'ACTIVE' ? styles.ok : styles.issue}>{n.status}</span></td>
+                      <td><button onClick={() => {
+                        setSelectedNewbie(n);
+                        setIsProgressDetailModalOpen(true);
+                      }}>상세 보기</button></td>
+                    </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
-            <div className={styles.pagination}>1-5 / 8</div>
           </div>
 
           <aside className={styles.insights}>
             <h3>인사이트</h3>
-            <div className={styles.insight}><TrendingUp size={20} /><div><div>평균 완료율 46%</div><div>지난 주 대비 6%p ↑</div></div></div>
-            <div className={styles.insight}><AlertCircle size={20} /><div><div>병목 항목 심위</div><div>문서 접금 지연 5건</div></div></div>
-            <button className={styles.aiBtn} onClick={() => setIsOnboardingOverviewModalOpen(true)}>AI 인사이트 보기</button>
+            <div className={styles.insight}><TrendingUp size={20} /><div><div>평균 완료율 {avgProgress}%</div><div>총 {totalNewbies}명의 신입 진행 중</div></div></div>
+            <div className={styles.insight}><AlertCircle size={20} /><div><div>주의 필요 {issueCount}건</div><div>지연 또는 미시작 인원</div></div></div>
+            <button className={styles.aiBtn} onClick={() => setIsOnboardingOverviewModalOpen(true)}>AI 인사이트 요약</button>
           </aside>
           </div>
         </div>
@@ -102,15 +115,17 @@ export default function OnboardingProgressPage() {
         <Modal
           open
           onClose={() => setIsProgressDetailModalOpen(false)}
-          title="신입 상세 정보"
+          title={`${selectedNewbie.name} 님의 온보딩 상세 현황`}
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsProgressDetailModalOpen(false)}>닫기</ModalSecondaryButton>
               <ModalPrimaryButton
-                loading={isPending('onboarding-progress-0')}
-                onClick={() => run('onboarding-progress-0', '처리를 완료했습니다.', () => setIsProgressDetailModalOpen(false))}
+                onClick={() => {
+                  setIsProgressDetailModalOpen(false);
+                  router.push('/30day-plan');
+                }}
               >
-                상세 보고서 보기
+                온보딩 로드맵 보기
               </ModalPrimaryButton>
             </>
           }
@@ -165,40 +180,23 @@ export default function OnboardingProgressPage() {
         <Modal
           open
           onClose={() => setIsOnboardingOverviewModalOpen(false)}
-          title="인수인계 개요"
+          title="인수인계 및 온보딩 개요"
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsOnboardingOverviewModalOpen(false)}>닫기</ModalSecondaryButton>
-              <ModalPrimaryButton
-                loading={isPending('onboarding-progress-1')}
-                onClick={() => run('onboarding-progress-1', '처리를 완료했습니다.', () => setIsOnboardingOverviewModalOpen(false))}
-              >
-                상세 분석 보기
-              </ModalPrimaryButton>
             </>
           }
         >
           <div className={styles.overviewCard}>
             <div className={styles.overviewItem}>
-              <div className={styles.overviewLabel}>평균 완료율</div>
-              <div className={styles.overviewValue}>46%</div>
-              <div className={styles.overviewSubtext}>지난 주 대비 6%p ↑</div>
+              <div className={styles.overviewLabel}>전체 평균 완료율</div>
+              <div className={styles.overviewValue}>{avgProgress}%</div>
+              <div className={styles.overviewSubtext}>총 {totalNewbies}명 참여 중</div>
             </div>
             <div className={styles.overviewItem}>
-              <div className={styles.overviewLabel}>병목 항목</div>
-              <div className={styles.overviewValue}>5건</div>
-              <div className={styles.overviewSubtext}>문서 접금 지연</div>
-            </div>
-          </div>
-
-          <div className={styles.insightList}>
-            <div className={styles.insightItem}>
-              <h4>마케팅팀</h4>
-              <p>신입 5명 중 3명이 예정 진행률을 달성했습니다.</p>
-            </div>
-            <div className={styles.insightItem}>
-              <h4>병목 분석</h4>
-              <p>문서 검금 지연이 가장 큰 병목입니다. 담당자에게 알림을 발송하세요.</p>
+              <div className={styles.overviewLabel}>정상 진행 인원</div>
+              <div className={styles.overviewValue}>{activeCount}명</div>
+              <div className={styles.overviewSubtext}>주의 필요 {issueCount}명</div>
             </div>
           </div>
         </Modal>
@@ -242,7 +240,7 @@ export default function OnboardingProgressPage() {
         <Modal
           open
           onClose={() => setIsTeamStatisticsModalOpen(false)}
-          title="팀 통계"
+          title="팀 온보딩 통계"
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsTeamStatisticsModalOpen(false)}>닫기</ModalSecondaryButton>
@@ -252,22 +250,22 @@ export default function OnboardingProgressPage() {
           <div className={styles.statsGrid}>
             <div className={styles.statCard}>
               <div className={styles.statLabel}>총 인원</div>
-              <div className={styles.statNumber}>8</div>
+              <div className={styles.statNumber}>{totalNewbies}</div>
               <div className={styles.statDesc}>명</div>
             </div>
             <div className={styles.statCard}>
-              <div className={styles.statLabel}>완료율</div>
-              <div className={styles.statNumber}>46%</div>
+              <div className={styles.statLabel}>평균 완료율</div>
+              <div className={styles.statNumber}>{avgProgress}%</div>
               <div className={styles.statDesc}>평균</div>
             </div>
             <div className={styles.statCard}>
-              <div className={styles.statLabel}>병목</div>
-              <div className={styles.statNumber}>5</div>
-              <div className={styles.statDesc}>건</div>
+              <div className={styles.statLabel}>정상 진행</div>
+              <div className={styles.statNumber}>{activeCount}</div>
+              <div className={styles.statDesc}>명</div>
             </div>
             <div className={styles.statCard}>
-              <div className={styles.statLabel}>지연</div>
-              <div className={styles.statNumber}>12</div>
+              <div className={styles.statLabel}>주의 필요</div>
+              <div className={styles.statNumber}>{issueCount}</div>
               <div className={styles.statDesc}>건</div>
             </div>
           </div>
@@ -287,10 +285,42 @@ export default function OnboardingProgressPage() {
           }
         >
           <div className={styles.actionList}>
-            <button className={styles.actionItem}>진행도 리셋</button>
-            <button className={styles.actionItem}>체크리스트 재할당</button>
-            <button className={styles.actionItem}>진행 일정 변경</button>
-            <button className={styles.actionItem}>알림 발송</button>
+            <button
+              className={styles.actionItem}
+              onClick={() => {
+                setIsProgressActionModalOpen(false);
+                router.push('/30day-plan');
+              }}
+            >
+              30일 온보딩 계획 보기
+            </button>
+            <button
+              className={styles.actionItem}
+              onClick={() => {
+                setIsProgressActionModalOpen(false);
+                router.push('/daily-tasks');
+              }}
+            >
+              오늘 할 일 과제 확인
+            </button>
+            <button
+              className={styles.actionItem}
+              onClick={() => {
+                setIsProgressActionModalOpen(false);
+                router.push('/members');
+              }}
+            >
+              멤버 역할/권한 관리
+            </button>
+            <button
+              className={styles.actionItem}
+              onClick={() => {
+                showToast(`${selectedNewbie.name} 님에게 온보딩 리마인더 알림을 발송했습니다.`, 'success');
+                setIsProgressActionModalOpen(false);
+              }}
+            >
+              알림 발송하기
+            </button>
           </div>
         </Modal>
       )}

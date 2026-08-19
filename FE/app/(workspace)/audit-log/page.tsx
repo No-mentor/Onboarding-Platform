@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ChevronDown, RotateCcw, Bell, HelpCircle, Calendar, Download, Copy } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
@@ -10,13 +11,15 @@ import { getAuditLogs, type AuditLogResponse } from '@/lib/api';
 import styles from './audit-log.module.css';
 
 export default function AuditLogPage() {
+  const router = useRouter();
   const { run, isPending } = useModalAction();
   const { showToast } = useToast();
   const [selectedUser, setSelectedUser] = useState('all');
   const [selectedEvent, setSelectedEvent] = useState('all');
-  const [startDate, setStartDate] = useState('2026.08.10 09:00');
-  const [endDate, setEndDate] = useState('2026.08.16 18:16');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
 
   // Modal states
   const [isEventDetailsOpen, setIsEventDetailsOpen] = useState(false);
@@ -27,21 +30,62 @@ export default function AuditLogPage() {
   const [logs, setLogs] = useState<AuditLogResponse[]>([]);
 
   // Load audit logs on mount
+  const loadLogs = async () => {
+    try {
+      setIsLoading(true);
+      const response = await getAuditLogs();
+      setLogs(response.items ?? []);
+    } catch (err) {
+      console.error('감사 로그 로드 실패:', err);
+      showToast('감사 로그를 불러올 수 없습니다', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadLogs = async () => {
-      try {
-        setIsLoading(true);
-        const response = await getAuditLogs();
-        setLogs(response.items ?? []);
-      } catch (err) {
-        console.error('감사 로그 로드 실패:', err);
-        showToast('감사 로그를 불러올 수 없습니다', 'error');
-      } finally {
-        setIsLoading(false);
-      }
-    };
     loadLogs();
   }, []);
+
+  const handleExportLogs = () => {
+    if (filteredLogs.length === 0) {
+      showToast('내보낼 감사 로그가 없습니다.', 'error');
+      return;
+    }
+    let content = '';
+    let filename = `audit_logs_${new Date().toISOString().slice(0, 10)}`;
+    let mimeType = 'text/plain';
+
+    if (exportFormat === 'json') {
+      content = JSON.stringify(filteredLogs, null, 2);
+      filename += '.json';
+      mimeType = 'application/json';
+    } else {
+      const headers = ['ID', '이벤트', '행위자 ID', '결과', '발생시간'];
+      const rows = filteredLogs.map((l) => [
+        `"${l.id}"`,
+        `"${l.eventType}"`,
+        `"${l.actorId || 'SYSTEM'}"`,
+        `"${l.result || ''}"`,
+        `"${l.createdAt || ''}"`
+      ]);
+      content = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+      filename += '.csv';
+      mimeType = 'text/csv;charset=utf-8;';
+    }
+
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`${filename} 파일을 성공적으로 내보냈습니다.`, 'success');
+    setIsExportModalOpen(false);
+  };
 
   /** 서버는 ISO 문자열로 내려준다 */
   const formatLogTime = (value?: string) => {
@@ -70,11 +114,16 @@ export default function AuditLogPage() {
     MEMBER_INVITE: '#A78BFA',
   };
 
+  const distinctActors = Array.from(new Set(logs.map((l) => l.actorId).filter(Boolean))) as string[];
+  const distinctEvents = Array.from(new Set(logs.map((l) => l.eventType).filter(Boolean))) as string[];
+
   const filteredLogs = logs.filter((log) => {
     const userMatch = selectedUser === 'all' || log.actorId === selectedUser;
     const eventMatch = selectedEvent === 'all' || log.eventType === selectedEvent;
     return userMatch && eventMatch;
   });
+
+  const selectedLog = logs.find((l) => l.id === selectedLogId);
 
   return (
     <div className={styles.layout}>
@@ -89,15 +138,14 @@ export default function AuditLogPage() {
             <p className={styles.subtitle}>시스템 내 주요 이벤트의 기록을 확인하고 관리할 수 있습니다.</p>
           </div>
           <div className={styles.headerRight}>
-            <button className={styles.workspaceBtn}>
-              마케팅팀 인수인계
+            <button className={styles.workspaceBtn} onClick={() => router.push('/workspace-selection')}>
+              워크스페이스 전환
               <ChevronDown size={16} />
             </button>
-            <button className={styles.notifBtn}>
+            <button className={styles.notifBtn} onClick={() => router.push('/notification-center')}>
               <Bell size={20} />
-              <span className={styles.badge}>7</span>
             </button>
-            <button className={styles.helpBtn}>
+            <button className={styles.helpBtn} onClick={() => router.push('/ai-chat')}>
               <HelpCircle size={18} />
             </button>
           </div>
@@ -109,66 +157,82 @@ export default function AuditLogPage() {
           <div className={styles.filterCard}>
             <div className={styles.filterRow}>
               <div className={styles.filterGroup}>
-                <label className={styles.filterLabel}>영위자</label>
+                <label className={styles.filterLabel}>행위자</label>
                 <select
                   className={styles.filterSelect}
                   value={selectedUser}
                   onChange={(e) => setSelectedUser(e.target.value)}
                 >
-                  <option value="all">전체 사용자</option>
-                  <option value="김세원">김세원</option>
-                  <option value="이민수">이민수</option>
-                  <option value="최서연">최서연</option>
+                  <option value="all">전체 행위자 ({distinctActors.length})</option>
+                  {distinctActors.map((actor) => (
+                    <option key={actor} value={actor}>{actor}</option>
+                  ))}
                 </select>
               </div>
 
               <div className={styles.filterGroup}>
-                <label className={styles.filterLabel}>이벤트</label>
+                <label className={styles.filterLabel}>이벤트 유형</label>
                 <select
                   className={styles.filterSelect}
                   value={selectedEvent}
                   onChange={(e) => setSelectedEvent(e.target.value)}
                 >
-                  <option value="all">전체 이벤트</option>
-                  <option value="DOC_VIEW">DOC_VIEW</option>
-                  <option value="DOC_ACCESS_DENIED">DOC_ACCESS_DENIED</option>
-                  <option value="CHAT_QUERY">CHAT_QUERY</option>
-                  <option value="PLAN_REGENERATE">PLAN_REGENERATE</option>
-                  <option value="MEMBER_INVITE">MEMBER_INVITE</option>
+                  <option value="all">전체 이벤트 ({distinctEvents.length})</option>
+                  {distinctEvents.map((evt) => (
+                    <option key={evt} value={evt}>{evt}</option>
+                  ))}
                 </select>
               </div>
 
               <div className={styles.filterGroup}>
-                <label className={styles.filterLabel}>기간</label>
-                <div className={styles.dateRange}>
-                  <input
-                    type="text"
-                    className={styles.dateInput}
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                  />
-                  <span className={styles.dateRangeSeparator}>~</span>
-                  <input
-                    type="text"
-                    className={styles.dateInput}
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                  />
+                <label className={styles.filterLabel}>필터 작업</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => {
+                      setSelectedUser('all');
+                      setSelectedEvent('all');
+                      loadLogs();
+                      showToast('필터를 초기화했습니다.', 'info');
+                    }}
+                    style={{
+                      padding: '8px 14px',
+                      backgroundColor: '#F3F4F6',
+                      border: '1px solid #D1D5DB',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <RotateCcw size={14} /> 새로고침
+                  </button>
+                  <button
+                    onClick={() => setIsExportModalOpen(true)}
+                    style={{
+                      padding: '8px 14px',
+                      backgroundColor: '#4F46E5',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <Download size={14} /> 로그 내보내기
+                  </button>
                 </div>
-              </div>
-
-              <div className={styles.filterActions}>
-                <button className={styles.queryBtn}>조회</button>
-                <button className={styles.resetBtn}>
-                  <RotateCcw size={16} />
-                  초기화
-                </button>
               </div>
             </div>
           </div>
 
-          {/* Logs Table */}
-          <div className={styles.card}>
+          {/* Table */}
+          <div className={styles.tableCard}>
             <div className={styles.tableWrapper}>
               <table className={styles.table}>
                 <thead>
@@ -176,66 +240,80 @@ export default function AuditLogPage() {
                     <th>시간</th>
                     <th>행위자</th>
                     <th>이벤트</th>
-                    <th>대상</th>
+                    <th>대상 리소스</th>
                     <th>결과</th>
+                    <th>작업</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredLogs.map((log) => (
-                    <tr key={log.id} onClick={() => {
-                      setSelectedLogId(log.id);
-                      setIsEventDetailsOpen(true);
-                    }} style={{ cursor: 'pointer' }}>
-                      <td className={styles.timeCell}>{formatLogTime(log.createdAt)}</td>
-                      <td className={styles.userCell}>{log.actorId ?? '-'}</td>
-                      <td>
-                        <span
-                          className={styles.eventBadge}
-                          style={{
-                            backgroundColor: eventBgColors[log.eventType] || '#EDE9FE',
-                            color: eventColors[log.eventType] || '#A78BFA',
-                          }}
-                        >
-                          {log.eventType}
-                        </span>
-                      </td>
-                      <td className={styles.targetCell}>
-                        {[log.resourceType, log.resourceId].filter(Boolean).join(' · ') || '-'}
-                      </td>
-                      <td>
-                        <span
-                          className={styles.resultBadge}
-                          style={{ color: log.result === 'DENY' ? '#ef4444' : '#10B981' }}
-                        >
-                          {log.result}
-                        </span>
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: '#9CA3AF' }}>
+                        감사 로그를 불러오는 중입니다...
                       </td>
                     </tr>
-                  ))}
+                  ) : filteredLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: '#9CA3AF' }}>
+                        조건에 맞는 감사 로그가 없습니다.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredLogs.map((log) => (
+                      <tr key={log.id}>
+                        <td className={styles.dateCell}>{formatLogTime(log.createdAt)}</td>
+                        <td>
+                          <div className={styles.userCell}>
+                            <span className={styles.userName}>{log.actorId ?? 'SYSTEM'}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <span
+                            className={styles.eventBadge}
+                            style={{
+                              backgroundColor: eventBgColors[log.eventType] || '#EDE9FE',
+                              color: eventColors[log.eventType] || '#6C46A2',
+                            }}
+                          >
+                            {log.eventType}
+                          </span>
+                        </td>
+                        <td className={styles.targetCell}>
+                          {[log.resourceType, log.resourceId].filter(Boolean).join(' · ') || '-'}
+                        </td>
+                        <td>
+                          <span
+                            className={styles.resultBadge}
+                            style={{
+                              color: log.result === 'DENY' ? '#ef4444' : '#10B981',
+                            }}
+                          >
+                            {log.result}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            className={styles.detailBtn}
+                            onClick={() => {
+                              setSelectedLogId(log.id);
+                              setIsEventDetailsOpen(true);
+                            }}
+                          >
+                            상세 보기
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
 
-            {/* Pagination */}
+            {/* Pagination / Summary */}
             <div className={styles.pagination}>
-              <select className={styles.perPageSelect}>
-                <option>10개씩 보기</option>
-                <option>20개씩 보기</option>
-                <option>50개씩 보기</option>
-              </select>
-
-              <span className={styles.pageInfo}>1-10 of 128</span>
-
-              <div className={styles.paginationBtns}>
-                <button className={styles.pagBtn}>&lt;</button>
-                <button className={`${styles.pagBtn} ${styles.pagBtnActive}`}>1</button>
-                <button className={styles.pagBtn}>2</button>
-                <button className={styles.pagBtn}>3</button>
-                <button className={styles.pagBtn}>4</button>
-                <button className={styles.pagBtn}>...</button>
-                <button className={styles.pagBtn}>13</button>
-                <button className={styles.pagBtn}>&gt;</button>
-              </div>
+              <span className={styles.pagInfo}>
+                총 {filteredLogs.length}건의 감사 이벤트 기록
+              </span>
             </div>
           </div>
         </div>
@@ -244,89 +322,67 @@ export default function AuditLogPage() {
       {/* MODALS */}
 
       {/* 1. Event Details Modal */}
-      {isEventDetailsOpen && selectedLogId && (
+      {isEventDetailsOpen && selectedLog && (
         <Modal
           open
           onClose={() => setIsEventDetailsOpen(false)}
-          title="로그 상세 보기"
+          title="감사 로그 상세 정보"
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsEventDetailsOpen(false)}>닫기</ModalSecondaryButton>
             </>
           }
         >
-          {logs.find(l => l.id === selectedLogId) && (
-            <>
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>시간</span>
-                <span className={styles.detailValue}>{formatLogTime(logs.find(l => l.id === selectedLogId)?.createdAt)}</span>
-              </div>
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>행위자</span>
-                <span className={styles.detailValue}>
-                  {logs.find(l => l.id === selectedLogId)?.actorId ?? '-'}
-                  <span className={styles.badge}>NEW_HIRE · 마케팅팀</span>
-                </span>
-              </div>
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>이벤트</span>
-                <span
-                  className={styles.eventBadge}
-                  style={{
-                    backgroundColor: eventBgColors[logs.find(l => l.id === selectedLogId)?.eventType ?? ''] || '#EDE9FE',
-                    color: eventColors[logs.find(l => l.id === selectedLogId)?.eventType ?? ''] || '#A78BFA',
-                  }}
-                >
-                  {logs.find(l => l.id === selectedLogId)?.eventType}
-                </span>
-              </div>
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>대상</span>
-                <span className={styles.detailValue}>
-                  {(() => {
-                    const log = logs.find(l => l.id === selectedLogId);
-                    return [log?.resourceType, log?.resourceId].filter(Boolean).join(' · ') || '-';
-                  })()}
-                </span>
-              </div>
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>결과</span>
-                <span
-                  className={styles.resultBadge}
-                  style={{
-                    color: logs.find(l => l.id === selectedLogId)?.result === 'DENY' ? '#ef4444' : '#10B981',
-                  }}
-                >
-                  {logs.find(l => l.id === selectedLogId)?.result}
-                </span>
-              </div>
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>워크스페이스</span>
-                <span className={styles.detailValue}>마케팅팀 인수인계</span>
-              </div>
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>IP 주소</span>
-                <span className={styles.detailValue}>203.254.11.27</span>
-              </div>
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>설명</span>
-                <span className={styles.detailValue}>액택 운송에 대한 접근 권한이 없어 액세스가 거부되었습니다.</span>
-              </div>
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>관련 메타데이터</span>
-                <div className={styles.metadata}>
-                  <code>{JSON.stringify({
-                    "object_type": "document",
-                    "object_id": "doc_8f7a2c1b",
-                    "file_name": "임원_급여자료.pdf",
-                    "file_size": 2847291,
-                    "owner": "admin@company.com",
-                    "permission_required": "viewer"
-                  }, null, 2)}</code>
-                </div>
-              </div>
-            </>
-          )}
+          <div className={styles.detailRow}>
+            <span className={styles.detailLabel}>이벤트 ID</span>
+            <span className={styles.detailValue} style={{ fontFamily: 'monospace', fontSize: '12px' }}>{selectedLog.id}</span>
+          </div>
+          <div className={styles.detailRow}>
+            <span className={styles.detailLabel}>발생 시간</span>
+            <span className={styles.detailValue}>{formatLogTime(selectedLog.createdAt)}</span>
+          </div>
+          <div className={styles.detailRow}>
+            <span className={styles.detailLabel}>행위자</span>
+            <span className={styles.detailValue}>{selectedLog.actorId ?? 'SYSTEM'}</span>
+          </div>
+          <div className={styles.detailRow}>
+            <span className={styles.detailLabel}>이벤트 유형</span>
+            <span
+              className={styles.eventBadge}
+              style={{
+                backgroundColor: eventBgColors[selectedLog.eventType] || '#EDE9FE',
+                color: eventColors[selectedLog.eventType] || '#6C46A2',
+              }}
+            >
+              {selectedLog.eventType}
+            </span>
+          </div>
+          <div className={styles.detailRow}>
+            <span className={styles.detailLabel}>대상 리소스</span>
+            <span className={styles.detailValue}>
+              {[selectedLog.resourceType, selectedLog.resourceId].filter(Boolean).join(' · ') || '-'}
+            </span>
+          </div>
+          <div className={styles.detailRow}>
+            <span className={styles.detailLabel}>처리 결과</span>
+            <span
+              className={styles.resultBadge}
+              style={{
+                color: selectedLog.result === 'DENY' ? '#ef4444' : '#10B981',
+                fontWeight: 600,
+              }}
+            >
+              {selectedLog.result}
+            </span>
+          </div>
+          <div className={styles.detailRow}>
+            <span className={styles.detailLabel}>메타데이터</span>
+            <div className={styles.metadata} style={{ width: '100%', marginTop: '8px' }}>
+              <pre style={{ margin: 0, fontSize: '12px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                {selectedLog.metadata ? JSON.stringify(selectedLog.metadata, null, 2) : '기록된 추가 메타데이터가 없습니다.'}
+              </pre>
+            </div>
+          </div>
         </Modal>
       )}
 
@@ -340,10 +396,9 @@ export default function AuditLogPage() {
             <>
               <ModalSecondaryButton onClick={() => setIsExportModalOpen(false)}>취소</ModalSecondaryButton>
               <ModalPrimaryButton
-                loading={isPending('audit-log-0')}
-                onClick={() => run('audit-log-0', '로그를 내보냈습니다.', () => setIsExportModalOpen(false))}
+                onClick={handleExportLogs}
               >
-                <Download size={16} /> 내보내기
+                <Download size={16} /> 내보내기 ({filteredLogs.length}건)
               </ModalPrimaryButton>
             </>
           }
@@ -352,16 +407,24 @@ export default function AuditLogPage() {
             <label className={styles.label}>파일 형식</label>
             <div className={styles.formatOptions}>
               <label className={styles.radioOption}>
-                <input type="radio" name="format" value="csv" defaultChecked />
-                <span>CSV</span>
+                <input
+                  type="radio"
+                  name="format"
+                  value="csv"
+                  checked={exportFormat === 'csv'}
+                  onChange={() => setExportFormat('csv')}
+                />
+                <span>CSV (스프레드시트 호환)</span>
               </label>
               <label className={styles.radioOption}>
-                <input type="radio" name="format" value="excel" />
-                <span>Excel</span>
-              </label>
-              <label className={styles.radioOption}>
-                <input type="radio" name="format" value="json" />
-                <span>JSON</span>
+                <input
+                  type="radio"
+                  name="format"
+                  value="json"
+                  checked={exportFormat === 'json'}
+                  onChange={() => setExportFormat('json')}
+                />
+                <span>JSON (원시 데이터)</span>
               </label>
             </div>
           </div>
