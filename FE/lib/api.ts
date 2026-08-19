@@ -2,6 +2,18 @@ import { getAuthToken, getWorkspaceId } from './storage';
 
 const API_BASE = 'http://localhost:8080/api/v1';
 
+/**
+ * 서버 공통 페이지네이션 응답 (global/web/PageResponse).
+ * 목록 키는 content 가 아니라 items 다.
+ */
+export interface PageResponse<T> {
+  items: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
 // ===== Dashboard =====
 export interface DashboardRecommendation {
   id: string;
@@ -181,25 +193,18 @@ export async function getChecklists(): Promise<ChecklistSummaryResponse> {
 }
 
 // ===== Progress =====
+/** GET /admin/progress 항목 (서버 AdminProgressItemResponse 와 1:1) */
 export interface AdminProgressItemResponse {
-  id: string;
+  userId: string;
   name: string;
-  team: string;
-  day: number;
-  progress: number;
-  completed: number;
-  total: number;
+  email: string;
+  progressPercent: number;
   status: string;
-  activity?: string;
+  planId: string | null;
+  currentDay: number;
 }
 
-export interface AdminProgressListResponse {
-  content: AdminProgressItemResponse[];
-  totalElements: number;
-  totalPages: number;
-  currentPage: number;
-  pageSize: number;
-}
+export type AdminProgressListResponse = PageResponse<AdminProgressItemResponse>;
 
 export async function getAdminProgress(page: number = 0, size: number = 20): Promise<AdminProgressListResponse> {
   const token = getAuthToken();
@@ -311,22 +316,22 @@ export async function sendChatMessage(message: string, sessionId?: string): Prom
 }
 
 // ===== Members =====
+export type MembershipStatus = 'ACTIVE' | 'INVITED' | 'SUSPENDED' | 'LEFT';
+
+/** GET /members 항목 (서버 MemberResponse 와 1:1) */
 export interface MemberResponse {
   id: string;
-  email: string;
+  userId: string;
   name: string;
-  role: 'OWNER' | 'ADMIN' | 'MEMBER';
-  status: string;
-  joinedAt?: string;
+  email: string;
+  role: WorkspaceRole;
+  status: MembershipStatus;
+  department: string | null;
+  careerLevel: string | null;
+  title: string | null;
 }
 
-export interface MemberListResponse {
-  content: MemberResponse[];
-  totalElements: number;
-  totalPages: number;
-  currentPage: number;
-  pageSize: number;
-}
+export type MemberListResponse = PageResponse<MemberResponse>;
 
 export async function getMembers(page: number = 0, size: number = 20): Promise<MemberListResponse> {
   const token = getAuthToken();
@@ -373,14 +378,7 @@ export interface DocumentResponse {
   updatedAt?: string;
 }
 
-/** 서버는 items/page/size/totalElements/totalPages 로 내려준다 */
-export interface DocumentPageResponse {
-  items: DocumentResponse[];
-  page: number;
-  size: number;
-  totalElements: number;
-  totalPages: number;
-}
+export type DocumentPageResponse = PageResponse<DocumentResponse>;
 
 export interface DocumentListParams {
   page?: number;
@@ -766,26 +764,19 @@ export async function updateTemplate(templateId: string, data: any): Promise<Tem
 }
 
 // ===== Audit Logs =====
+/** GET /admin/audit-logs 항목 (서버 AuditLogResponse 와 1:1) */
 export interface AuditLogResponse {
   id: string;
-  timestamp: string;
-  actorId: string;
-  actorName?: string;
   eventType: string;
-  targetType?: string;
-  targetId?: string;
-  targetName?: string;
-  result: 'ALLOW' | 'DENY';
-  details?: string;
+  actorId: string | null;
+  resourceType: string | null;
+  resourceId: string | null;
+  result: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
 }
 
-export interface AuditLogPageResponse {
-  content: AuditLogResponse[];
-  totalElements: number;
-  totalPages: number;
-  currentPage: number;
-  pageSize: number;
-}
+export type AuditLogPageResponse = PageResponse<AuditLogResponse>;
 
 export async function getAuditLogs(
   page: number = 0,

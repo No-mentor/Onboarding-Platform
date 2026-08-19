@@ -1,27 +1,15 @@
 import { getAuthToken } from './storage';
+import type { DocumentResponse } from './api';
 
 const API_BASE = 'http://localhost:8080/api/v1';
 
-export interface DocumentResponse {
-  id: string;
-  name: string;
-  type: string;
-  status: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
-  uploadedAt: string;
-  processedAt?: string;
-  uploadedBy: string;
-  size: number;
-  visibility: string;
-  url?: string;
-}
+// 문서 타입은 lib/api.ts 를 단일 출처로 쓴다 (서버 스펙과 1:1)
+export type { DocumentResponse, DocumentStatus } from './api';
 
-export interface DocumentListResponse {
-  content: DocumentResponse[];
-  totalElements: number;
-  totalPages: number;
-  currentPage: number;
-  pageSize: number;
-}
+import type { DocumentPageResponse } from './api';
+
+/** @deprecated lib/api.ts 의 DocumentPageResponse 를 쓰세요 */
+export type DocumentListResponse = DocumentPageResponse;
 
 export async function uploadDocument(
   workspaceId: string,

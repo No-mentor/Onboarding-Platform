@@ -7,7 +7,8 @@ import { faFilePdf, faFileExcel, faFilePowerpoint } from '@fortawesome/free-soli
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton, ModalDangerButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
-import { getDocuments, deleteDocument } from '@/lib/document';
+import { getDocuments, formatFileSize, formatFileType, type DocumentResponse } from '@/lib/api';
+import { deleteDocument } from '@/lib/document';
 import { useToast } from '@/components/ui/toast';
 import { getWorkspaceId } from '@/lib/storage';
 import styles from './file-management.module.css';
@@ -19,7 +20,7 @@ export default function FileManagementPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFile, setSelectedFile] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [files, setFiles] = useState<any[]>([]);
+  const [files, setFiles] = useState<DocumentResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Modal states
@@ -48,10 +49,8 @@ export default function FileManagementPage() {
     const loadFiles = async () => {
       try {
         setIsLoading(true);
-        const wsId = getWorkspaceId();
-        if (!wsId) throw new Error('워크스페이스 ID 없음');
-        const response = await getDocuments(wsId);
-        setFiles(response.content || []);
+        const response = await getDocuments({ page: 0, size: 20 });
+        setFiles(response.items ?? []);
       } catch (err) {
         console.error('파일 목록 로드 실패:', err);
         showToast('파일 목록을 불러올 수 없습니다', 'error');
@@ -91,6 +90,16 @@ export default function FileManagementPage() {
   };
 
   const currentFile = files[selectedFile];
+
+  /** 서버는 ISO 문자열을 준다 */
+  const formatDocDate = (value?: string) => {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleString('ko-KR', {
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+    });
+  };
   const filteredFiles = selectedFilter === 'all'
     ? files
     : files.filter(f => f.status === selectedFilter);
@@ -178,9 +187,9 @@ export default function FileManagementPage() {
                     </div>
                     <div className={styles.colName}>
                       <div className={styles.fileIcon}>
-                        {getFileIcon(file.type)}
+                        {getFileIcon(formatFileType(file.mimeType, file.title))}
                       </div>
-                      <span className={styles.fileName}>{file.name}</span>
+                      <span className={styles.fileName}>{file.title}</span>
                     </div>
                     <div className={styles.colStatus}>
                       <span
@@ -190,14 +199,14 @@ export default function FileManagementPage() {
                         {file.status}
                       </span>
                     </div>
-                    <div className={styles.colScope}>{file.scope}</div>
+                    <div className={styles.colScope}>{file.visibility ?? '-'}</div>
                     <div className={styles.colRoles}>
-                      {file.roles.map((role, i) => (
+                      {(file.allowedRoles ?? []).map((role, i) => (
                         <span key={i} className={styles.roleBadge}>{role}</span>
                       ))}
                     </div>
-                    <div className={styles.colCheck}>{file.checkCount || '—'}</div>
-                    <div className={styles.colUpdate}>{file.date}</div>
+                    <div className={styles.colCheck}>{file.chunkCount ?? '—'}</div>
+                    <div className={styles.colUpdate}>{formatDocDate(file.updatedAt ?? file.createdAt)}</div>
                     <div className={styles.colAction}>
                       {file.status === 'FAILED' ? (
                         <button className={styles.retryBtn} onClick={() => {
@@ -243,9 +252,9 @@ export default function FileManagementPage() {
                 <div className={styles.detailsHeader}>
                   <div className={styles.detailsTitle}>
                     <div className={styles.fileDetailsIcon}>
-                      {getFileIcon(currentFile.type)}
+                      {getFileIcon(formatFileType(currentFile.mimeType, currentFile.title))}
                     </div>
-                    <span>{currentFile.name}</span>
+                    <span>{currentFile.title}</span>
                   </div>
                   <span
                     className={styles.detailsStatus}
@@ -270,7 +279,7 @@ export default function FileManagementPage() {
                 <div className={styles.detailsMeta}>
                   <div className={styles.metaRow}>
                     <span className={styles.metaLabel}>문서 ID</span>
-                    <span className={styles.metaValue}>{currentFile.docId}</span>
+                    <span className={styles.metaValue}>{currentFile.id}</span>
                   </div>
                   <div className={styles.metaRow}>
                     <span className={styles.metaLabel}>상태</span>
@@ -283,44 +292,38 @@ export default function FileManagementPage() {
                   </div>
                   <div className={styles.metaRow}>
                     <span className={styles.metaLabel}>공개 범위</span>
-                    <span className={styles.metaValue}>{currentFile.scope}</span>
+                    <span className={styles.metaValue}>{currentFile.visibility ?? '-'}</span>
                   </div>
                   <div className={styles.metaRow}>
                     <span className={styles.metaLabel}>허용 역할</span>
                     <div className={styles.metaValueRoles}>
-                      {currentFile.roles.map((role, i) => (
+                      {(currentFile.allowedRoles ?? []).map((role, i) => (
                         <span key={i} className={styles.roleBadge}>{role}</span>
                       ))}
                     </div>
                   </div>
                   <div className={styles.metaRow}>
-                    <span className={styles.metaLabel}>체크 수</span>
-                    <span className={styles.metaValue}>{currentFile.checkCount || '—'}</span>
+                    <span className={styles.metaLabel}>학습 조각</span>
+                    <span className={styles.metaValue}>{currentFile.chunkCount ?? '—'}</span>
                   </div>
                   <div className={styles.metaRow}>
                     <span className={styles.metaLabel}>파일 크기</span>
-                    <span className={styles.metaValue}>{currentFile.size}</span>
+                    <span className={styles.metaValue}>{formatFileSize(currentFile.sizeBytes)}</span>
                   </div>
                   <div className={styles.metaRow}>
                     <span className={styles.metaLabel}>업데이트</span>
-                    <span className={styles.metaValue}>{currentFile.updatedAt}</span>
+                    <span className={styles.metaValue}>{formatDocDate(currentFile.updatedAt)}</span>
                   </div>
                   <div className={styles.metaRow}>
-                    <span className={styles.metaLabel}>업로더</span>
-                    <span className={styles.metaValue}>{currentFile.uploader}</span>
+                    <span className={styles.metaLabel}>등록일</span>
+                    <span className={styles.metaValue}>{formatDocDate(currentFile.createdAt)}</span>
                   </div>
-                  <div className={styles.metaRow}>
-                    <span className={styles.metaLabel}>설명</span>
-                    <span className={styles.metaValue}>{currentFile.description}</span>
-                  </div>
-                  <div className={styles.metaRow}>
-                    <span className={styles.metaLabel}>태그</span>
-                    <div className={styles.metaValueTags}>
-                      {currentFile.tags.map((tag, i) => (
-                        <span key={i} className={styles.tagBadge}>{tag}</span>
-                      ))}
+                  {currentFile.errorMessage && (
+                    <div className={styles.metaRow}>
+                      <span className={styles.metaLabel}>오류</span>
+                      <span className={styles.metaValue}>{currentFile.errorMessage}</span>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <div className={styles.detailsActions2}>
@@ -437,14 +440,14 @@ export default function FileManagementPage() {
             {/* Chat message from user */}
             <div className={styles.chatTime}>10:24</div>
             <div className={styles.userMessage}>
-              {currentFile.name}은 인제 창조된 됐?
+              {currentFile.title}은 인제 창조된 됐?
             </div>
 
             {/* Chat message from AI */}
             <div className={styles.chatTime}>10:24</div>
             <div className={styles.aiMessage}>
               <div className={styles.aiIcon}><Sparkles size={18} /></div>
-              <p>{currentFile.name}은 행사 기획 단계에서 중요한 참고 자료입니다. 또한 행사 주최자 작성 시, 미팅 운영 정책 적 작성 시, 미팅 참석자 현황 시, 중요 정책 및 보고서 작성 시 인도시 필수 메뉴입니다.</p>
+              <p>{currentFile.title}은 행사 기획 단계에서 중요한 참고 자료입니다. 또한 행사 주최자 작성 시, 미팅 운영 정책 적 작성 시, 미팅 참석자 현황 시, 중요 정책 및 보고서 작성 시 인도시 필수 메뉴입니다.</p>
             </div>
 
             {/* Sources */}
@@ -452,10 +455,10 @@ export default function FileManagementPage() {
               <span>출처</span>
               <div className={styles.sourceButtons}>
                 <button className={styles.sourceBtn}>
-                  <FileText size={14} /> {currentFile.name}.pdf - p.3
+                  <FileText size={14} /> {currentFile.title}.pdf - p.3
                 </button>
                 <button className={styles.sourceBtn}>
-                  <FileText size={14} /> {currentFile.name}.pdf - p.5
+                  <FileText size={14} /> {currentFile.title}.pdf - p.5
                 </button>
               </div>
             </div>
@@ -510,7 +513,7 @@ export default function FileManagementPage() {
           <div className={styles.confirmContent}>
             <div className={styles.fileCard}>
               <FileText size={24} color="#DC2626" />
-              <span>{currentFile.name}</span>
+              <span>{currentFile.title}</span>
             </div>
           </div>
         </Modal>
@@ -549,7 +552,7 @@ export default function FileManagementPage() {
           </div>
 
           <p className={styles.deleteMessage}>
-            &apos;{currentFile.name}&apos;을 삭제하시겠습니까?
+            &apos;{currentFile.title}&apos;을 삭제하시겠습니까?
           </p>
           <p className={styles.deleteSubtext}>
             이 문서는 휴지통으로 이동되며, AI 답변에 담긴 내용은 더 이상 제공되지 않습니다.
@@ -557,7 +560,7 @@ export default function FileManagementPage() {
 
           <div className={styles.deleteFileCard}>
             <FileText size={20} color="#DC2626" />
-            <span>{currentFile.name}</span>
+            <span>{currentFile.title}</span>
           </div>
 
           <p className={styles.deleteFootnote}>휴지통에서는 30일 후 자동으로 완전 삭제됩니다.</p>
@@ -584,7 +587,7 @@ export default function FileManagementPage() {
         >
           <div className={styles.metadataFile}>
             <FileText size={24} color="#DC2626" />
-            <span>{currentFile.name}</span>
+            <span>{currentFile.title}</span>
           </div>
 
           <div className={styles.formGroup}>
