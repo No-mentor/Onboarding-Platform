@@ -16,9 +16,17 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
-  // 이메일 인증이 안 된 계정으로 로그인했을 때 띄우는 확인 모달
   const [showVerifyPrompt, setShowVerifyPrompt] = useState(false);
   const [isSendingCode, setIsSendingCode] = useState(false);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('expired') === 'true') {
+        showToast('로그인 세션이 만료되어 자동 로그아웃되었습니다. 다시 로그인해 주세요.', 'info');
+      }
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

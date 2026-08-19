@@ -1,20 +1,23 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Zap, Bell, HelpCircle, Check } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Plus, Zap, Bell, HelpCircle, Check, RotateCcw, CheckCircle2, Clock } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
 import { useToast } from '@/components/ui/toast';
-import { getOnboardingPlan, generateOnboardingPlan } from '@/lib/api';
+import { getOnboardingPlan, generateOnboardingPlan, updatePlanItemStatus } from '@/lib/api';
 import styles from './30day-plan.module.css';
 
 export default function ThirtyDayPlanPage() {
+  const router = useRouter();
   const { run, isPending } = useModalAction();
   const { showToast } = useToast();
   const [selectedTab, setSelectedTab] = useState('all');
   const [expandedDays, setExpandedDays] = useState<number[]>([1]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Modal states
   const [isWeekDetailsModalOpen, setIsWeekDetailsModalOpen] = useState(false);
@@ -31,51 +34,91 @@ export default function ThirtyDayPlanPage() {
 
   // Load plan on mount
   useEffect(() => {
-    const loadPlan = async () => {
-      try {
-        setIsLoading(true);
-        let response = await getOnboardingPlan(true);
-
-        // 계획이 없으면 생성
-        if (!response) {
-          console.log('계획이 없어 새로 생성합니다');
-          response = await generateOnboardingPlan();
-        }
-
-        const items = response.items || [];
-        setDays(items);
-        showToast('계획이 로드되었습니다', 'success');
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : '계획을 로드할 수 없습니다';
-        console.error('계획 로드 실패:', err);
-
-        // 404 에러 (계획 없음) 인 경우 자동으로 생성 시도
-        if (errorMsg.includes('온보딩 계획이 없습니다') || errorMsg.includes('계획 조회 실패')) {
-          try {
-            console.log('계획 생성 시작...');
-            const generatedResponse = await generateOnboardingPlan();
-            const items = generatedResponse.items || [];
-            setDays(items);
-            showToast('계획이 생성되었습니다', 'success');
-          } catch (generateErr) {
-            console.error('계획 생성 실패:', generateErr);
-            showToast('계획 생성에 실패했습니다', 'error');
-          }
-        } else {
-          showToast(errorMsg, 'error');
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
     loadPlan();
-  }, [showToast]);
+  }, []);
+
+  const loadPlan = async () => {
+    try {
+      setIsLoading(true);
+      let response = await getOnboardingPlan(true);
+
+      // 계획이 없으면 생성
+      if (!response || !response.items || response.items.length === 0) {
+        response = await generateOnboardingPlan();
+      }
+
+      const items = response.items || [];
+      setDays(items);
+    } catch (err: any) {
+      console.error('계획 로드 실패:', err);
+      try {
+        const generatedResponse = await generateOnboardingPlan();
+        const items = generatedResponse.items || [];
+        setDays(items);
+      } catch (generateErr) {
+        console.error('계획 생성 실패:', generateErr);
+        showToast('온보딩 계획을 불러올 수 없습니다.', 'error');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleToggleDayComplete = async (item: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const nextStatus = item.status === 'COMPLETED' ? 'IN_PROGRESS' : 'COMPLETED';
+    try {
+      if (item.id) {
+        await updatePlanItemStatus(item.id, nextStatus);
+      }
+      setDays((prev) =>
+        prev.map((d) => (d.id === item.id || d.day === item.day ? { ...d, status: nextStatus } : d))
+      );
+      if (selectedDay && (selectedDay.id === item.id || selectedDay.day === item.day)) {
+        setSelectedDay((prev: any) => ({ ...prev, status: nextStatus }));
+      }
+      showToast(nextStatus === 'COMPLETED' ? `DAY ${item.day} 일정을 완료했습니다! 🎉` : `DAY ${item.day} 일정을 진행 중으로 변경했습니다.`, 'success');
+    } catch (err: any) {
+      showToast(err.message || '상태 변경 실패', 'error');
+    }
+  };
+
+  const handleGenerateNewPlan = async () => {
+    try {
+      setIsGenerating(true);
+      const res = await generateOnboardingPlan();
+      setDays(res.items || []);
+      showToast('30일 온보딩 로드맵이 생성되었습니다!', 'success');
+      setIsPlanGenerationModalOpen(false);
+      setIsPlanActionModalOpen(false);
+    } catch (err: any) {
+      showToast(err.message || '계획 생성 실패', 'error');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const toggleDayExpanded = (day: number) => {
     setExpandedDays((prev) =>
       prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
     );
   };
+
+  const filteredDays = days.filter((item) => {
+    const day = item.day ?? item.dayIndex ?? 1;
+    if (selectedTab === 'all') return true;
+    if (selectedTab === '1week') return day >= 1 && day <= 7;
+    if (selectedTab === '2week') return day >= 8 && day <= 14;
+    if (selectedTab === '3week') return day >= 15 && day <= 21;
+    if (selectedTab === '4week') return day >= 22 && day <= 30;
+    return true;
+  });
+
+  const totalCount = days.length;
+  const completedCount = days.filter((d) => d.status === 'COMPLETED').length;
+  const inProgressCount = days.filter((d) => d.status === 'IN_PROGRESS').length;
+  const pendingCount = totalCount - completedCount - inProgressCount;
+  const overallPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   return (
     <div className={styles.container}>
@@ -89,13 +132,13 @@ export default function ThirtyDayPlanPage() {
             <p className={styles.description}>AI 가 생성한 계획을 원자재 확인하고 향후 상태를 관리하세요.</p>
           </div>
           <div className={styles.headerRight}>
-            <select className={styles.workspaceBtn}>
-              <option>마케팅팀 인수인계</option>
-            </select>
-            <button className={styles.notifBtn}>
+            <button className={styles.workspaceBtn} onClick={() => router.push('/workspace-selection')}>
+              워크스페이스 전환
+            </button>
+            <button className={styles.notifBtn} onClick={() => router.push('/notification-center')}>
               <Bell size={20} />
             </button>
-            <button className={styles.helpBtn}>
+            <button className={styles.helpBtn} onClick={() => router.push('/ai-chat')}>
               <HelpCircle size={18} />
             </button>
           </div>
@@ -116,7 +159,9 @@ export default function ThirtyDayPlanPage() {
               ))}
             </div>
             <div className={styles.tabActions}>
-              <button className={styles.refreshBtn} onClick={() => setIsPlanGenerationModalOpen(true)}>계획 재생성</button>
+              <button className={styles.refreshBtn} onClick={() => setIsPlanGenerationModalOpen(true)}>
+                <RotateCcw size={14} /> 계획 재생성
+              </button>
               <button className={styles.createBtn} onClick={() => setIsPlanGenerationModalOpen(true)}>
                 <Plus size={16} /> 계획 생성
               </button>
@@ -125,69 +170,119 @@ export default function ThirtyDayPlanPage() {
 
           {/* Timeline */}
           <div className={styles.timeline}>
-            {days.map((item, idx) => {
-              const isExpanded = expandedDays.includes(item.dayIndex);
-              return (
-                <div key={item.id} className={styles.timelineItem}>
-                  <div className={styles.timelineMarker}>
-                    <div className={`${styles.dot} ${item.status === 'COMPLETED' ? styles.completed : ''}`}>
-                      {item.status === 'COMPLETED' && <Check size={14} className={styles.checkmark} />}
-                    </div>
-                    {idx < days.length - 1 && <div className={styles.line} />}
-                  </div>
+            {filteredDays.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#6B7280' }}>
+                <p>생성된 온보딩 계획이 없습니다.</p>
+                <button
+                  onClick={handleGenerateNewPlan}
+                  disabled={isGenerating}
+                  style={{
+                    marginTop: '12px',
+                    padding: '8px 16px',
+                    backgroundColor: '#4F46E5',
+                    color: '#fff',
+                    borderRadius: '8px',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {isGenerating ? '계획 생성 중...' : '30일 온보딩 계획 생성하기'}
+                </button>
+              </div>
+            ) : (
+              filteredDays.map((item, idx) => {
+                const currentDay = item.day ?? item.dayIndex ?? idx + 1;
+                const isExpanded = expandedDays.includes(currentDay);
+                const isCompleted = item.status === 'COMPLETED';
+                const isInProgress = item.status === 'IN_PROGRESS';
 
-                  <div className={styles.content}>
-                    <div
-                      className={styles.contentHeader}
-                      onClick={() => {
-                        setSelectedDay(item);
-                        setIsDaySummaryModalOpen(true);
-                      }}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <span className={styles.dayLabel}>DAY {item.dayIndex}</span>
-                      <h3 className={styles.dayTitle}>{item.title}</h3>
-                    </div>
-
-                    {isExpanded && (
-                      <div className={styles.dayItems}>
-                        {item.description && <span>{item.description}</span>}
-                        {item.personName && <span>담당자: {item.personName}</span>}
-                      </div>
-                    )}
-
-                    <div className={styles.progressArea}>
-                      <span className={styles.progressPercent}>{item.status}</span>
+                return (
+                  <div key={item.id || idx} className={styles.timelineItem}>
+                    <div className={styles.timelineMarker}>
                       <button
-                        className={styles.expandBtn}
-                        onClick={() => toggleDayExpanded(item.dayIndex)}
-                        style={{
-                          transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                          transition: 'transform 0.3s ease'
-                        }}
+                        className={`${styles.dot} ${isCompleted ? styles.completed : ''}`}
+                        onClick={(e) => handleToggleDayComplete(item, e)}
+                        title={isCompleted ? '완료 취소' : '완료로 변경'}
+                        style={{ cursor: 'pointer', border: 'none' }}
                       >
-                        ▼
+                        {isCompleted && <Check size={14} className={styles.checkmark} />}
                       </button>
+                      {idx < filteredDays.length - 1 && <div className={styles.line} />}
+                    </div>
+
+                    <div className={styles.content}>
+                      <div
+                        className={styles.contentHeader}
+                        onClick={() => {
+                          setSelectedDay(item);
+                          setIsDaySummaryModalOpen(true);
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <span className={styles.dayLabel}>DAY {currentDay}</span>
+                        <h3 className={styles.dayTitle}>{item.title}</h3>
+                      </div>
+
+                      {isExpanded && (
+                        <div className={styles.dayItems}>
+                          {item.description && <span>{item.description}</span>}
+                          {item.personName && <span>담당자: {item.personName}</span>}
+                        </div>
+                      )}
+
+                      <div className={styles.progressArea}>
+                        <button
+                          onClick={(e) => handleToggleDayComplete(item, e)}
+                          style={{
+                            padding: '3px 8px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            borderRadius: '12px',
+                            cursor: 'pointer',
+                            border: 'none',
+                            backgroundColor: isCompleted ? '#DCFCE7' : isInProgress ? '#FEF3C7' : '#F3F4F6',
+                            color: isCompleted ? '#166534' : isInProgress ? '#92400E' : '#4B5563',
+                          }}
+                          title="클릭하여 상태 변경"
+                        >
+                          {isCompleted ? '완료' : isInProgress ? '진행 중' : '시작 전'}
+                        </button>
+                        <button
+                          className={styles.expandBtn}
+                          onClick={() => toggleDayExpanded(currentDay)}
+                          style={{
+                            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.3s ease'
+                          }}
+                        >
+                          ▼
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
 
           {/* Footer Info */}
           <div className={styles.footerInfo}>
             <div className={styles.infoItem}>
-              <span>관리자는 항목 완료 (keepCompleted) 를 선택해</span>
+              <span>전체 30일 진행률: <strong>{overallPercent}%</strong> ({completedCount}/{totalCount} 완료)</span>
             </div>
             <div className={styles.infoItem}>
-              <span>계획을 재생성할 수 있습니다.</span>
+              <button
+                onClick={() => setIsCompletionStatusModalOpen(true)}
+                style={{ background: 'none', border: 'none', color: '#4F46E5', cursor: 'pointer', fontWeight: 600 }}
+              >
+                진행 현황 자세히 보기 →
+              </button>
             </div>
           </div>
 
           {/* Generate Button */}
-          <button className={styles.generateBtn} onClick={() => setIsPlanActionModalOpen(true)}>
-            <Zap size={16} /> Generate / Regenerate
+          <button className={styles.generateBtn} onClick={() => setIsPlanGenerationModalOpen(true)}>
+            <Zap size={16} /> 계획 재생성 (AI Generate)
           </button>
         </div>
       </main>
@@ -203,34 +298,28 @@ export default function ThirtyDayPlanPage() {
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsWeekDetailsModalOpen(false)}>닫기</ModalSecondaryButton>
-              <ModalPrimaryButton
-                loading={isPending('30day-plan-0')}
-                onClick={() => run('30day-plan-0', '처리를 완료했습니다.', () => setIsWeekDetailsModalOpen(false))}
-              >
-                편집
-              </ModalPrimaryButton>
             </>
           }
         >
           <div className={styles.weekCard}>
             <div className={styles.weekHeader}>
-              <span className={styles.weekLabel}>1주차 (DAY 1-7)</span>
-              <span className={styles.weekProgress}>40% 완료</span>
+              <span className={styles.weekLabel}>전체 30일 로드맵 현황</span>
+              <span className={styles.weekProgress}>{overallPercent}% 완료</span>
             </div>
             <div className={styles.weekContent}>
-              <p>업무 이해 및 환경 셋업부터 시작하는 초기 단계입니다.</p>
+              <p>사내 온보딩 문서와 업무 규정을 기반으로 AI가 자동 구성한 맞춤형 로드맵입니다.</p>
               <div className={styles.weekStats}>
                 <div className={styles.statItem}>
-                  <label>문서</label>
-                  <span>7개</span>
-                </div>
-                <div className={styles.statItem}>
-                  <label>체크리스트</label>
-                  <span>9개</span>
+                  <label>전체 일정</label>
+                  <span>{totalCount}개</span>
                 </div>
                 <div className={styles.statItem}>
                   <label>완료</label>
-                  <span>2개</span>
+                  <span style={{ color: '#10B981' }}>{completedCount}개</span>
+                </div>
+                <div className={styles.statItem}>
+                  <label>진행 중</label>
+                  <span style={{ color: '#F59E0B' }}>{inProgressCount}개</span>
                 </div>
               </div>
             </div>
@@ -243,15 +332,16 @@ export default function ThirtyDayPlanPage() {
         <Modal
           open
           onClose={() => setIsDaySummaryModalOpen(false)}
-          title="DAY {selectedDay.day} 요약"
+          title={`DAY ${selectedDay.day ?? ''} 요약`}
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsDaySummaryModalOpen(false)}>닫기</ModalSecondaryButton>
               <ModalPrimaryButton
-                loading={isPending('30day-plan-1')}
-                onClick={() => run('30day-plan-1', '처리를 완료했습니다.', () => setIsDaySummaryModalOpen(false))}
+                onClick={() => {
+                  handleToggleDayComplete(selectedDay);
+                }}
               >
-                세부 항목 보기
+                {selectedDay.status === 'COMPLETED' ? '진행 중으로 변경' : '완료로 표시하기'}
               </ModalPrimaryButton>
             </>
           }
@@ -260,9 +350,9 @@ export default function ThirtyDayPlanPage() {
             <h3 className={styles.dayTitle}>{selectedDay.title}</h3>
             <div className={styles.dayMeta}>
               <span className={selectedDay.status === 'COMPLETED' ? styles.completed : styles.pending}>
-                {selectedDay.status === 'COMPLETED' ? '완료' : '진행 중'}
+                {selectedDay.status === 'COMPLETED' ? '완료' : selectedDay.status === 'IN_PROGRESS' ? '진행 중' : '대기 중'}
               </span>
-              <span className={styles.progressLabel}>{selectedDay.type}</span>
+              <span className={styles.progressLabel}>{selectedDay.type || 'ONBOARDING'}</span>
             </div>
             <div className={styles.dayBreakdown}>
               {selectedDay.description && <div className={styles.breakdownItem}>{selectedDay.description}</div>}
@@ -277,13 +367,13 @@ export default function ThirtyDayPlanPage() {
         <Modal
           open
           onClose={() => setIsPlanGenerationModalOpen(false)}
-          title="계획 생성"
+          title="30일 온보딩 계획 생성 / 재생성"
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsPlanGenerationModalOpen(false)}>취소</ModalSecondaryButton>
               <ModalPrimaryButton
-                loading={isPending('30day-plan-2')}
-                onClick={() => run('30day-plan-2', '처리를 완료했습니다.', () => setIsPlanGenerationModalOpen(false))}
+                loading={isGenerating}
+                onClick={handleGenerateNewPlan}
               >
                 생성 시작
               </ModalPrimaryButton>
@@ -291,17 +381,12 @@ export default function ThirtyDayPlanPage() {
           }
         >
           <div className={styles.generationCard}>
-            <div className={styles.generationOption}>
-              <input type="radio" name="gen" value="new" defaultChecked />
-              <label>새로운 계획 생성</label>
-            </div>
-            <div className={styles.generationOption}>
-              <input type="radio" name="gen" value="regen" />
-              <label>현재 계획 기반 재생성</label>
-            </div>
+            <p style={{ fontSize: '14px', color: '#374151', lineHeight: 1.6, margin: 0 }}>
+              사내 지식 베이스(문서)와 역할 정의를 기반으로 AI가 30일 맞춤형 인수인계 로드맵을 자동으로 생성합니다.
+            </p>
           </div>
-          <div className={styles.generationNote}>
-            <p>계획 생성 시 AI가 현재 진행도와 팀 특성을 고려하여 맞춤 계획을 작성합니다.</p>
+          <div className={styles.generationNote} style={{ marginTop: '12px' }}>
+            <p>💡 생성 시 기존에 완료된 항목을 보존하며 최신 사내 가이드라인이 반영됩니다.</p>
           </div>
         </Modal>
       )}
@@ -311,7 +396,7 @@ export default function ThirtyDayPlanPage() {
         <Modal
           open
           onClose={() => setIsCompletionStatusModalOpen(false)}
-          title="완료 현황"
+          title="30일 온보딩 완료 현황"
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsCompletionStatusModalOpen(false)}>닫기</ModalSecondaryButton>
@@ -321,98 +406,20 @@ export default function ThirtyDayPlanPage() {
           <div className={styles.statusCard}>
             <div className={styles.statusItem}>
               <label>완료된 일정</label>
-              <span className={styles.statusValue}>1개 (DAY 1)</span>
+              <span className={styles.statusValue} style={{ color: '#10B981' }}>{completedCount}개</span>
             </div>
             <div className={styles.statusItem}>
               <label>진행 중</label>
-              <span className={styles.statusValue}>3개 (DAY 2, 3, ...)</span>
+              <span className={styles.statusValue} style={{ color: '#F59E0B' }}>{inProgressCount}개</span>
             </div>
             <div className={styles.statusItem}>
               <label>대기 중</label>
-              <span className={styles.statusValue}>26개</span>
+              <span className={styles.statusValue}>{pendingCount}개</span>
             </div>
             <div className={styles.statusItem}>
               <label>전체 진행률</label>
-              <span className={styles.statusValue} style={{ color: '#6C46A2' }}>11%</span>
+              <span className={styles.statusValue} style={{ color: '#4F46E5', fontWeight: 700 }}>{overallPercent}%</span>
             </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* 5. Plan Edit Modal */}
-      {isPlanEditModalOpen && (
-        <Modal
-          open
-          onClose={() => setIsPlanEditModalOpen(false)}
-          title="계획 편집"
-          footer={
-            <>
-              <ModalSecondaryButton onClick={() => setIsPlanEditModalOpen(false)}>취소</ModalSecondaryButton>
-              <ModalPrimaryButton
-                loading={isPending('30day-plan-3')}
-                onClick={() => run('30day-plan-3', '변경 내용을 저장했습니다.', () => setIsPlanEditModalOpen(false))}
-              >
-                저장
-              </ModalPrimaryButton>
-            </>
-          }
-        >
-          <div className={styles.editForm}>
-            <div className={styles.formGroup}>
-              <label>계획 이름</label>
-              <input type="text" defaultValue="마케팅팀 인수인계 계획" className={styles.input} />
-            </div>
-            <div className={styles.formGroup}>
-              <label>설명</label>
-              <textarea defaultValue="30일 신입 인수인계 계획" className={styles.textarea} rows={3} />
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* 6. Task Breakdown Modal */}
-      {isTaskBreakdownModalOpen && selectedDay && (
-        <Modal
-          open
-          onClose={() => setIsTaskBreakdownModalOpen(false)}
-          title="DAY {selectedDay.day} 항목"
-          footer={
-            <>
-              <ModalSecondaryButton onClick={() => setIsTaskBreakdownModalOpen(false)}>닫기</ModalSecondaryButton>
-            </>
-          }
-        >
-          <div className={styles.taskList}>
-            {selectedDay.title && (
-              <div className={styles.taskGroup}>
-                <h4>{selectedDay.title}</h4>
-                <div className={styles.taskItems}>
-                  {selectedDay.description && <div className={styles.taskItem}>{selectedDay.description}</div>}
-                  {selectedDay.personName && <div className={styles.taskItem}>담당자: {selectedDay.personName}</div>}
-                </div>
-              </div>
-            )}
-          </div>
-        </Modal>
-      )}
-
-      {/* 7. Plan Action Modal */}
-      {isPlanActionModalOpen && (
-        <Modal
-          open
-          onClose={() => setIsPlanActionModalOpen(false)}
-          title="계획 작업"
-          footer={
-            <>
-              <ModalSecondaryButton onClick={() => setIsPlanActionModalOpen(false)}>닫기</ModalSecondaryButton>
-            </>
-          }
-        >
-          <div className={styles.actionList}>
-            <button className={styles.actionItem}>새 계획 생성</button>
-            <button className={styles.actionItem}>현재 계획 재생성</button>
-            <button className={styles.actionItem}>계획 편집</button>
-            <button className={styles.actionItem}>완료 상태 업데이트</button>
           </div>
         </Modal>
       )}
