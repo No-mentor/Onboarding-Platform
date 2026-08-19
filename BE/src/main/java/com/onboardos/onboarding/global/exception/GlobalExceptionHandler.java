@@ -12,11 +12,11 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 
 @Slf4j
 @RestControllerAdvice
@@ -56,16 +56,12 @@ public class GlobalExceptionHandler {
         return build(ErrorCode.VALIDATION_ERROR, "요청 파라미터 형식이 올바르지 않습니다.", request);
     }
 
-    /**
-     * X-Workspace-Id 같은 필수 헤더가 빠진 경우.
-     * 처리하지 않으면 500 으로 나가 클라이언트가 원인을 알 수 없다.
-     */
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<ErrorResponse> handleMissingHeader(
             MissingRequestHeaderException ex,
             HttpServletRequest request
     ) {
-        return build(ErrorCode.VALIDATION_ERROR, "필수 헤더가 없습니다: " + ex.getHeaderName(), request);
+        return build(ErrorCode.VALIDATION_ERROR, ErrorCode.VALIDATION_ERROR.getDefaultMessage(), request);
     }
 
     @ExceptionHandler({AuthenticationException.class, BadCredentialsException.class})
