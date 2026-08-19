@@ -38,7 +38,14 @@ export function LoginForm() {
         response.email,
         response.workspaces[0]?.id
       );
-      router.push('/dashboard');
+
+      const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const redirectUrl = urlParams?.get('redirect');
+      if (redirectUrl && redirectUrl.startsWith('/')) {
+        router.push(redirectUrl);
+      } else {
+        router.push('/dashboard');
+      }
     } catch (error) {
       // 디버깅용 로그
       console.log('[Login Error]', error);
