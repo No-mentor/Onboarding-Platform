@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ChevronRight, ChevronDown, Bell, HelpCircle, Building2, Settings, Check } from 'lucide-react';
 import { AiOutlineFilePdf, AiOutlineFileExcel, AiOutlineFile } from 'react-icons/ai';
 import { CommonSidebar } from '@/components/common-sidebar';
@@ -26,8 +27,10 @@ const MOCK_RECENT_FILES = [
 ];
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [showDailyTasksModal, setShowDailyTasksModal] = useState(false);
   const [userName, setUserName] = useState<string>('김세원');
+  const [quickQuestion, setQuickQuestion] = useState<string>('');
   const [showAllFilesModal, setShowAllFilesModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
@@ -253,8 +256,24 @@ export default function DashboardPage() {
                 type="text"
                 placeholder='"이 예산은 언제 사용해?"'
                 className={styles.aiInput}
+                value={quickQuestion}
+                onChange={(e) => setQuickQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && quickQuestion.trim()) {
+                    router.push(`/ai-chat?q=${encodeURIComponent(quickQuestion.trim())}`);
+                  }
+                }}
               />
-              <button className={styles.aiSubmitBtn} onClick={() => setIsAIInquiryModalOpen(true)}>
+              <button
+                className={styles.aiSubmitBtn}
+                onClick={() => {
+                  if (quickQuestion.trim()) {
+                    router.push(`/ai-chat?q=${encodeURIComponent(quickQuestion.trim())}`);
+                  } else {
+                    router.push('/ai-chat');
+                  }
+                }}
+              >
                 AI에게 질문하기
               </button>
             </section>
@@ -319,9 +338,14 @@ export default function DashboardPage() {
         onClose={() => setIsOnboardingProgressModalOpen(false)}
         title="인수인계 진행도"
         footer={
-          <ModalSecondaryButton onClick={() => setIsOnboardingProgressModalOpen(false)}>
-            닫기
-          </ModalSecondaryButton>
+          <>
+            <ModalSecondaryButton onClick={() => setIsOnboardingProgressModalOpen(false)}>
+              닫기
+            </ModalSecondaryButton>
+            <ModalPrimaryButton onClick={() => { setIsOnboardingProgressModalOpen(false); router.push('/30day-plan'); }}>
+              30일 계획에서 보기
+            </ModalPrimaryButton>
+          </>
         }
       >
         <div className={styles.modalProgress}>
@@ -341,9 +365,10 @@ export default function DashboardPage() {
         title="파일 상세"
         footer={
           <>
-            <ModalSecondaryButton onClick={() => setIsFileSummaryModalOpen(false)}>파일 열기</ModalSecondaryButton>
-            <ModalSecondaryButton onClick={() => setIsFileSummaryModalOpen(false)}>미리보기</ModalSecondaryButton>
-            <ModalPrimaryButton onClick={() => { setIsFileSummaryModalOpen(false); setIsAIInquiryModalOpen(true); }}>AI에게 질문하기</ModalPrimaryButton>
+            <ModalSecondaryButton onClick={() => setIsFileSummaryModalOpen(false)}>닫기</ModalSecondaryButton>
+            <ModalPrimaryButton onClick={() => { setIsFileSummaryModalOpen(false); router.push(`/ai-chat?q=${encodeURIComponent(selectedFile?.name + ' 문서 내용 요약해줘')}`); }}>
+              AI에게 질문하기
+            </ModalPrimaryButton>
           </>
         }
       >
@@ -373,9 +398,8 @@ export default function DashboardPage() {
               <span>{selectedFile.relatedTask}</span>
             </div>
             <div className={styles.fileDetailActions}>
-              <button onClick={() => { setIsFileSummaryModalOpen(false); setIsAIInquiryModalOpen(true); }}>AI 요약</button>
-              <button onClick={() => { setIsFileSummaryModalOpen(false); setIsAIInquiryModalOpen(true); }}>주요 변경사항 확인</button>
-              <button onClick={() => { setIsFileSummaryModalOpen(false); setShowAllFilesModal(true); }}>관련 문서 찾기</button>
+              <button onClick={() => { setIsFileSummaryModalOpen(false); router.push(`/ai-chat?q=${encodeURIComponent(selectedFile.name + ' 문서 요약해줘')}`); }}>AI 요약</button>
+              <button onClick={() => { setIsFileSummaryModalOpen(false); router.push('/file-management'); }}>파일 관리로 이동</button>
             </div>
           </div>
         )}
@@ -387,9 +411,14 @@ export default function DashboardPage() {
         onClose={() => setIsTaskDetailsModalOpen(false)}
         title="업무 상세"
         footer={
-          <ModalSecondaryButton onClick={() => setIsTaskDetailsModalOpen(false)}>
-            닫기
-          </ModalSecondaryButton>
+          <>
+            <ModalSecondaryButton onClick={() => setIsTaskDetailsModalOpen(false)}>
+              닫기
+            </ModalSecondaryButton>
+            <ModalPrimaryButton onClick={() => { setIsTaskDetailsModalOpen(false); router.push('/daily-tasks'); }}>
+              오늘 할 일에서 보기
+            </ModalPrimaryButton>
+          </>
         }
       >
         {selectedTask && (
@@ -418,11 +447,15 @@ export default function DashboardPage() {
             <ModalSecondaryButton onClick={() => setIsAIInquiryModalOpen(false)}>
               취소
             </ModalSecondaryButton>
-            <ModalPrimaryButton>질문하기</ModalPrimaryButton>
+            <ModalPrimaryButton onClick={() => { setIsAIInquiryModalOpen(false); router.push('/ai-chat'); }}>
+              질문하러 가기
+            </ModalPrimaryButton>
           </>
         }
       >
-        <input type="text" placeholder="질문을 입력하세요" className={styles.modalInput} />
+        <p style={{ fontSize: '13.5px', color: '#475569', margin: 0 }}>
+          업무 지식 베이스를 바탕으로 AI 어시스턴트와 대화를 시작합니다.
+        </p>
       </Modal>
 
       {/* 예산 조회 */}

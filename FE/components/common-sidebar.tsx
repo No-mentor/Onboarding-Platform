@@ -55,7 +55,7 @@ export function CommonSidebar() {
 
   return (
     <aside className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ''}`}>
-      <div className={styles.sidebarHeader}>
+      <Link href="/dashboard" className={styles.sidebarHeader} style={{ textDecoration: 'none' }}>
         <div className={styles.mainLogo}>
           <Image
             src="/logo-main.png"
@@ -74,7 +74,7 @@ export function CommonSidebar() {
           className={styles.mentalkLogo}
           priority
         />
-      </div>
+      </Link>
 
       <nav className={styles.navMenu}>
         <div className={styles.navSection}>
@@ -115,13 +115,13 @@ export function CommonSidebar() {
       </nav>
 
       <div className={styles.sidebarFooter}>
-        <div className={styles.userCard}>
+        <Link href="/settings" className={styles.userCard} style={{ textDecoration: 'none', cursor: 'pointer' }} title="계정 설정 바로가기">
           <div className={styles.userAvatar}>{userInitial}</div>
           <div className={styles.userInfo}>
             <div className={styles.userName}>{userName}</div>
             <div className={styles.userRole}>신입 구성원 · {userTeam}</div>
           </div>
-        </div>
+        </Link>
         <button className={styles.collapseBtn} onClick={() => setIsCollapsed((value) => !value)}>
           {isCollapsed ? '메뉴 펼치기' : '메뉴 접기'}
         </button>

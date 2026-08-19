@@ -1,45 +1,122 @@
-'use client';
+﻿'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ChevronDown, Mail, Bell, HelpCircle } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
-import { useModalAction } from '@/components/ui/use-modal-action';
 import { useToast } from '@/components/ui/toast';
 import { getDisplayLabel } from '@/lib/display-labels';
+import { getMembers, inviteMember, updateMemberRole, MemberResponse } from '@/lib/api';
 import styles from './members.module.css';
 
-const MOCK_MEMBERS = [
-  { id: 1, name: '김세원', initials: '김', bgColor: '#0765FC', team: '마케팅팀', email: 'sewon.mock@example.com', role: 'NEW_HIRE', status: 'ACTIVE', joinDate: '2024.05.20 10:30' },
-  { id: 2, name: '이민수', initials: '이', bgColor: '#8A7047', team: '마케팅팀', email: 'minsu.mock@example.com', role: 'MANAGER', status: 'ACTIVE', joinDate: '2024.05.10 09:15' },
-  { id: 3, name: '박지은', initials: '박', bgColor: '#3F765D', team: '브랜드팀', email: 'jieun.mock@example.com', role: 'MEMBER', status: 'ACTIVE', joinDate: '2024.05.08 14:20' },
-  { id: 4, name: '최서연', initials: '최', bgColor: '#2563EB', team: '인사팀', email: 'seoyeon.mock@example.com', role: 'ADMIN', status: 'ACTIVE', joinDate: '2024.05.01 11:05' },
-  { id: 5, name: '정하늘', initials: '정', bgColor: '#EC4899', team: '마케팅팀', email: 'haneul.mock@example.com', role: 'NEW_HIRE', status: 'PENDING', joinDate: '2024.05.24 16:40' },
+const DEFAULT_MEMBERS = [
+  { id: 'mock-1', name: '김세원', initials: '김', bgColor: '#0765FC', team: '마케팅팀', email: 'sewon.mock@example.com', role: 'NEW_HIRE', status: 'ACTIVE', joinDate: '2024.05.20 10:30' },
+  { id: 'mock-2', name: '이민수', initials: '이', bgColor: '#8A7047', team: '마케팅팀', email: 'minsu.mock@example.com', role: 'MANAGER', status: 'ACTIVE', joinDate: '2024.05.10 09:15' },
+  { id: 'mock-3', name: '박지은', initials: '박', bgColor: '#3F765D', team: '브랜드팀', email: 'jieun.mock@example.com', role: 'MEMBER', status: 'ACTIVE', joinDate: '2024.05.08 14:20' },
+  { id: 'mock-4', name: '최서연', initials: '최', bgColor: '#2563EB', team: '인사팀', email: 'seoyeon.mock@example.com', role: 'ADMIN', status: 'ACTIVE', joinDate: '2024.05.01 11:05' },
+  { id: 'mock-5', name: '정하늘', initials: '정', bgColor: '#EC4899', team: '마케팅팀', email: 'haneul.mock@example.com', role: 'NEW_HIRE', status: 'PENDING', joinDate: '2024.05.24 16:40' },
 ];
 
 export default function MembersPage() {
-  const { run, isPending } = useModalAction();
+  const router = useRouter();
   const { showToast } = useToast();
   const [activeRole, setActiveRole] = useState('all');
   const [selectedMember, setSelectedMember] = useState<any>(null);
+  const [members, setMembers] = useState<any[]>(DEFAULT_MEMBERS);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInviting, setIsInviting] = useState(false);
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false);
 
   // Modal states
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isMemberDetailsModalOpen, setIsMemberDetailsModalOpen] = useState(false);
   const [isRoleAssignmentModalOpen, setIsRoleAssignmentModalOpen] = useState(false);
   const [isMemberRolesModalOpen, setIsMemberRolesModalOpen] = useState(false);
-  const [isMemberActionsModalOpen, setIsMemberActionsModalOpen] = useState(false);
 
-  // Form states for invite
+  // Form states
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('NEW_HIRE');
-
-  // Form states for role assignment
   const [newMemberRole, setNewMemberRole] = useState('MEMBER');
   const [newMemberStatus, setNewMemberStatus] = useState('ACTIVE');
-  const [members, setMembers] = useState<any[]>(MOCK_MEMBERS);
 
-  const roleColors: { [key: string]: string } = {
+  const fetchMembersList = async () => {
+    try {
+      setIsLoading(true);
+      const res = await getMembers();
+      if (res && res.members && res.members.length > 0) {
+        const mapped = res.members.map((m: MemberResponse, idx: number) => {
+          const name = m.name || m.email.split('@')[0];
+          const colors = ['#0765FC', '#8A7047', '#3F765D', '#2563EB', '#EC4899', '#7C3AED'];
+          return {
+            id: m.id || `member-${idx + 1}`,
+            name,
+            initials: name.charAt(0),
+            bgColor: colors[idx % colors.length],
+            team: m.department || '온보딩팀',
+            email: m.email,
+            role: m.role || 'MEMBER',
+            status: m.status || 'ACTIVE',
+            joinDate: m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : '2024.05.20',
+          };
+        });
+        setMembers(mapped);
+      }
+    } catch (err) {
+      console.log('실제 멤버 목록 조회 실패 (모의 데이터 유지):', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMembersList();
+  }, []);
+
+  const handleSendInvite = async () => {
+    if (!inviteEmail.trim()) {
+      showToast('초대할 이메일을 입력해 주세요.', 'error');
+      return;
+    }
+
+    try {
+      setIsInviting(true);
+      await inviteMember(inviteEmail.trim(), inviteRole);
+      showToast(`${inviteEmail}님에게 ${getDisplayLabel(inviteRole)} 초대 메일을 발송했습니다.`, 'success');
+      setInviteEmail('');
+      setIsInviteModalOpen(false);
+      await fetchMembersList();
+    } catch (err: any) {
+      showToast(err?.message || '초대 발송에 실패했습니다.', 'error');
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
+  const handleUpdateRole = async () => {
+    if (!selectedMember) return;
+
+    try {
+      setIsUpdatingRole(true);
+      if (!selectedMember.id.startsWith('mock-')) {
+        await updateMemberRole(selectedMember.id, newMemberRole);
+      }
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === selectedMember.id ? { ...m, role: newMemberRole, status: newMemberStatus } : m
+        )
+      );
+      showToast(`${selectedMember.name}님의 역할을 ${getDisplayLabel(newMemberRole)}(으)로 변경했습니다.`, 'success');
+      setIsRoleAssignmentModalOpen(false);
+      setIsMemberDetailsModalOpen(false);
+    } catch (err: any) {
+      showToast(err?.message || '역할 변경에 실패했습니다.', 'error');
+    } finally {
+      setIsUpdatingRole(false);
+    }
+  };
+
+  const roleColors: Record<string, string> = {
     NEW_HIRE: '#0765FC',
     OWNER: '#0765FC',
     ADMIN: '#0765FC',
@@ -47,12 +124,17 @@ export default function MembersPage() {
     MEMBER: '#287456',
   };
 
-  const statusColors: { [key: string]: string } = {
+  const statusColors: Record<string, string> = {
     ACTIVE: '#287456',
     PENDING: '#80683D',
   };
 
   const filteredMembers = activeRole === 'all' ? members : members.filter((m) => m.role === activeRole);
+
+  const newHireCount = members.filter((m) => m.role === 'NEW_HIRE').length;
+  const memberCount = members.filter((m) => m.role === 'MEMBER').length;
+  const managerCount = members.filter((m) => m.role === 'MANAGER').length;
+  const adminCount = members.filter((m) => m.role === 'ADMIN' || m.role === 'OWNER').length;
 
   return (
     <div className={styles.layout}>
@@ -67,18 +149,21 @@ export default function MembersPage() {
             <p className={styles.subtitle}>워크스페이스 멤버를 초대하고 역할·상태를 관리하세요.</p>
           </div>
           <div className={styles.headerRight}>
-            <button className={styles.addMemberBtn}>
+            <button className={styles.addMemberBtn} onClick={() => setIsInviteModalOpen(true)}>
               + 멤버 초대
             </button>
-            <button className={styles.workspaceBtn}>
-              마케팅팀 인수인계
+            <button
+              className={styles.workspaceBtn}
+              onClick={() => router.push('/workspace-selection')}
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <span>마케팅팀 인수인계</span>
               <ChevronDown size={16} />
             </button>
-            <button className={styles.notifBtn}>
+            <button className={styles.notifBtn} onClick={() => router.push('/notification-center')} title="알림 센터">
               <Bell size={20} />
-              <span className={styles.badge}>7</span>
             </button>
-            <button className={styles.helpBtn}>
+            <button className={styles.helpBtn} onClick={() => router.push('/ai-chat')} title="AI 어시스턴트">
               <HelpCircle size={18} />
             </button>
           </div>
@@ -92,7 +177,7 @@ export default function MembersPage() {
               <Mail size={32} color="#0765FC" />
               <div>
                 <div className={styles.cardTitle}>초대 보내기</div>
-                <p className={styles.cardDesc}>새 멤버를 초대하고 직접한<br />역할을 부여하세요.</p>
+                <p className={styles.cardDesc}>새 멤버를 초대하고 직접 역할을 부여하세요.</p>
               </div>
             </div>
             <div className={styles.cardRight}>
@@ -102,6 +187,7 @@ export default function MembersPage() {
                 className={styles.emailInput}
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSendInvite(); }}
               />
               <select className={styles.roleSelect} value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
                 <option value="NEW_HIRE">신입 구성원</option>
@@ -109,7 +195,9 @@ export default function MembersPage() {
                 <option value="MANAGER">관리 담당자</option>
                 <option value="ADMIN">관리자</option>
               </select>
-              <button className={styles.sendBtn} onClick={() => setIsInviteModalOpen(true)}>초대 발송</button>
+              <button className={styles.sendBtn} onClick={handleSendInvite} disabled={isInviting}>
+                {isInviting ? '발송 중...' : '초대 발송'}
+              </button>
             </div>
           </div>
 
@@ -122,37 +210,31 @@ export default function MembersPage() {
                   className={`${styles.roleTab} ${activeRole === 'all' ? styles.roleTabActive : ''}`}
                   onClick={() => setActiveRole('all')}
                 >
-                  전체
-                </button>
-                <button
-                  className={`${styles.roleTab} ${activeRole === 'OWNER' ? styles.roleTabActive : ''}`}
-                  onClick={() => setActiveRole('OWNER')}
-                >
-                  소유자
-                </button>
-                <button
-                  className={`${styles.roleTab} ${activeRole === 'ADMIN' ? styles.roleTabActive : ''}`}
-                  onClick={() => setActiveRole('ADMIN')}
-                >
-                  관리자
-                </button>
-                <button
-                  className={`${styles.roleTab} ${activeRole === 'MANAGER' ? styles.roleTabActive : ''}`}
-                  onClick={() => setActiveRole('MANAGER')}
-                >
-                  관리 담당자
-                </button>
-                <button
-                  className={`${styles.roleTab} ${activeRole === 'MEMBER' ? styles.roleTabActive : ''}`}
-                  onClick={() => setActiveRole('MEMBER')}
-                >
-                  구성원
+                  전체 ({members.length})
                 </button>
                 <button
                   className={`${styles.roleTab} ${activeRole === 'NEW_HIRE' ? styles.roleTabActive : ''}`}
                   onClick={() => setActiveRole('NEW_HIRE')}
                 >
-                  신입 구성원
+                  신입 ({newHireCount})
+                </button>
+                <button
+                  className={`${styles.roleTab} ${activeRole === 'MEMBER' ? styles.roleTabActive : ''}`}
+                  onClick={() => setActiveRole('MEMBER')}
+                >
+                  구성원 ({memberCount})
+                </button>
+                <button
+                  className={`${styles.roleTab} ${activeRole === 'MANAGER' ? styles.roleTabActive : ''}`}
+                  onClick={() => setActiveRole('MANAGER')}
+                >
+                  관리 담당자 ({managerCount})
+                </button>
+                <button
+                  className={`${styles.roleTab} ${activeRole === 'ADMIN' ? styles.roleTabActive : ''}`}
+                  onClick={() => setActiveRole('ADMIN')}
+                >
+                  관리자 ({adminCount})
                 </button>
               </div>
             </div>
@@ -175,6 +257,8 @@ export default function MembersPage() {
                       key={member.id}
                       onClick={() => {
                         setSelectedMember(member);
+                        setNewMemberRole(member.role);
+                        setNewMemberStatus(member.status);
                         setIsMemberDetailsModalOpen(true);
                       }}
                       style={{ cursor: 'pointer' }}
@@ -212,18 +296,27 @@ export default function MembersPage() {
                       </td>
                       <td className={styles.dateCell}>{member.joinDate}</td>
                       <td>
-                        <select
-                          className={styles.actionSelect}
-                          onClick={() => {
+                        <button
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            borderRadius: '6px',
+                            border: '1px solid #e2e8f0',
+                            backgroundColor: '#fff',
+                            color: '#0765FC',
+                            cursor: 'pointer',
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setSelectedMember(member);
+                            setNewMemberRole(member.role);
+                            setNewMemberStatus(member.status);
                             setIsRoleAssignmentModalOpen(true);
                           }}
                         >
-                          <option>역할 / 상태 변경</option>
-                          <option value="MEMBER">구성원</option>
-                          <option value="MANAGER">관리 담당자</option>
-                          <option value="ADMIN">관리자</option>
-                        </select>
+                          역할 변경
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -234,12 +327,11 @@ export default function MembersPage() {
 
           {/* Footer Button */}
           <div className={styles.footer}>
-            <button className={styles.invitationBtn}>
-              Invitation + Roles
+            <button className={styles.invitationBtn} onClick={() => setIsMemberRolesModalOpen(true)}>
+              역할 권한 가이드 확인
             </button>
           </div>
         </div>
-
       </main>
 
       {/* MODALS */}
@@ -249,15 +341,15 @@ export default function MembersPage() {
         <Modal
           open
           onClose={() => setIsInviteModalOpen(false)}
-          title="멤버 초대"
+          title="멤버 초대하기"
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsInviteModalOpen(false)}>취소</ModalSecondaryButton>
               <ModalPrimaryButton
-                loading={isPending('members-0')}
-                onClick={() => run('members-0', '초대를 발송했습니다.', () => setIsInviteModalOpen(false))}
+                loading={isInviting}
+                onClick={handleSendInvite}
               >
-                초대 발송
+                초대 메일 발송
               </ModalPrimaryButton>
             </>
           }
@@ -270,11 +362,12 @@ export default function MembersPage() {
               onChange={(e) => setInviteEmail(e.target.value)}
               placeholder="example@company.com"
               className={styles.input}
+              autoFocus
             />
           </div>
 
           <div className={styles.formGroup}>
-            <label className={styles.label}>역할</label>
+            <label className={styles.label}>부여할 역할</label>
             <select
               value={inviteRole}
               onChange={(e) => setInviteRole(e.target.value)}
@@ -287,7 +380,7 @@ export default function MembersPage() {
             </select>
           </div>
 
-          <p className={styles.helpText}>선택한 역할로 새 멤버를 초대합니다. 초대 메일이 발송됩니다.</p>
+          <p className={styles.helpText}>선택한 역할로 새 멤버를 초대합니다. 입력한 이메일로 온보딩 링크가 발송됩니다.</p>
         </Modal>
       )}
 
@@ -296,15 +389,17 @@ export default function MembersPage() {
         <Modal
           open
           onClose={() => setIsMemberDetailsModalOpen(false)}
-          title="멤버 정보"
+          title="구성원 상세 정보"
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsMemberDetailsModalOpen(false)}>닫기</ModalSecondaryButton>
               <ModalPrimaryButton
-                loading={isPending('members-1')}
-                onClick={() => run('members-1', '역할을 변경했습니다.', () => setIsMemberDetailsModalOpen(false))}
+                onClick={() => {
+                  setIsMemberDetailsModalOpen(false);
+                  setIsRoleAssignmentModalOpen(true);
+                }}
               >
-                역할 변경
+                역할 변경하기
               </ModalPrimaryButton>
             </>
           }
@@ -355,8 +450,8 @@ export default function MembersPage() {
             <>
               <ModalSecondaryButton onClick={() => setIsRoleAssignmentModalOpen(false)}>취소</ModalSecondaryButton>
               <ModalPrimaryButton
-                loading={isPending('members-2')}
-                onClick={() => run('members-2', '변경 내용을 저장했습니다.', () => setIsRoleAssignmentModalOpen(false))}
+                loading={isUpdatingRole}
+                onClick={handleUpdateRole}
               >
                 변경 저장
               </ModalPrimaryButton>
@@ -388,7 +483,7 @@ export default function MembersPage() {
           </div>
 
           <div className={styles.formGroup}>
-            <label className={styles.label}>상태</label>
+            <label className={styles.label}>계정 상태</label>
             <select
               value={newMemberStatus}
               onChange={(e) => setNewMemberStatus(e.target.value)}
@@ -399,16 +494,16 @@ export default function MembersPage() {
             </select>
           </div>
 
-          <p className={styles.helpText}>변경 사항은 즉시 적용됩니다.</p>
+          <p className={styles.helpText}>역할 변경 시 해당 멤버의 기능 접근 권한이 즉시 갱신됩니다.</p>
         </Modal>
       )}
 
-      {/* 4. Member Roles Modal */}
+      {/* 4. Member Roles Guide Modal */}
       {isMemberRolesModalOpen && (
         <Modal
           open
           onClose={() => setIsMemberRolesModalOpen(false)}
-          title="멤버 역할 설명"
+          title="멤버 역할 및 권한 안내"
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsMemberRolesModalOpen(false)}>닫기</ModalSecondaryButton>
@@ -417,60 +512,21 @@ export default function MembersPage() {
         >
           <div className={styles.roleInfo}>
             <div className={styles.roleItem}>
-              <h4 className={styles.roleName}>신입 구성원</h4>
-              <p className={styles.roleDesc}>새로 입사한 직원이며 기본 접근 권한을 가집니다.</p>
+              <h4 className={styles.roleName}>신입 구성원 (NEW_HIRE)</h4>
+              <p className={styles.roleDesc}>온보딩 플랜 및 체크리스트를 수행하며 본인의 진행 상황을 기록합니다.</p>
             </div>
             <div className={styles.roleItem}>
-              <h4 className={styles.roleName}>구성원</h4>
-              <p className={styles.roleDesc}>일반 구성원으로 대부분의 기능에 접근할 수 있습니다.</p>
+              <h4 className={styles.roleName}>구성원 (MEMBER)</h4>
+              <p className={styles.roleDesc}>문서 탐색 및 AI 어시스턴트 등 워크스페이스의 일반 기능을 활용합니다.</p>
             </div>
             <div className={styles.roleItem}>
-              <h4 className={styles.roleName}>관리 담당자</h4>
-              <p className={styles.roleDesc}>팀 관리자로 팀원 관리 및 보고서 작성 권한이 있습니다.</p>
+              <h4 className={styles.roleName}>관리 담당자 (MANAGER)</h4>
+              <p className={styles.roleDesc}>신입 구성원의 온보딩 진척도를 모니터링하고 피드백을 전달합니다.</p>
             </div>
             <div className={styles.roleItem}>
-              <h4 className={styles.roleName}>관리자</h4>
-              <p className={styles.roleDesc}>최고 관리자로 모든 기능에 대한 완전한 접근 권한이 있습니다.</p>
+              <h4 className={styles.roleName}>관리자 (ADMIN / OWNER)</h4>
+              <p className={styles.roleDesc}>멤버 초대, 권한 변경, 템플릿 관리 등 워크스페이스의 전반을 총괄합니다.</p>
             </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* 5. Member Actions Modal */}
-      {isMemberActionsModalOpen && selectedMember && (
-        <Modal
-          open
-          onClose={() => setIsMemberActionsModalOpen(false)}
-          title="멤버 작업"
-          footer={
-            <>
-              <ModalSecondaryButton onClick={() => setIsMemberActionsModalOpen(false)}>닫기</ModalSecondaryButton>
-            </>
-          }
-        >
-          <div className={styles.memberCard}>
-            <div
-              className={styles.memberAvatar}
-              style={{ backgroundColor: selectedMember.bgColor }}
-            >
-              {selectedMember.initials}
-            </div>
-            <h3 className={styles.memberCardName}>{selectedMember.name}</h3>
-          </div>
-
-          <div className={styles.actionsList}>
-            <button className={styles.actionItem}>
-              역할 변경
-            </button>
-            <button className={styles.actionItem}>
-              초대 재발송
-            </button>
-            <button className={styles.actionItem}>
-              이메일 변경
-            </button>
-            <button className={styles.actionItem} style={{ color: '#dc2626' }}>
-              삭제
-            </button>
           </div>
         </Modal>
       )}

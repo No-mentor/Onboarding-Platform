@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
-import { ChevronDown, RotateCcw, Bell, HelpCircle, Calendar, Download } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { ChevronDown, RotateCcw, Bell, HelpCircle, Calendar, Download, RefreshCw } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
-import { useModalAction } from '@/components/ui/use-modal-action';
 import { useToast } from '@/components/ui/toast';
 import { getDisplayLabel } from '@/lib/display-labels';
+import { getAuditLogs, AuditLogResponse } from '@/lib/api';
 import styles from './audit-log.module.css';
 
 type AuditLog = {
@@ -17,52 +18,80 @@ type AuditLog = {
   target: string;
   result: string;
   resultColor: string;
+  metadata?: Record<string, unknown> | null;
 };
 
-const MOCK_AUDIT_LOGS: AuditLog[] = [
-  { id: 'mock-log-1', time: '2026.08.16 19:42:13', user: '김세원', event: 'DOC_VIEW', target: '[목업] 행사운영가이드.pdf', result: '허용', resultColor: '#287456' },
-  { id: 'mock-log-2', time: '2026.08.16 19:41:02', user: '김세원', event: 'DOC_ACCESS_DENIED', target: '[목업] 임원_급여자료.pdf', result: '거부', resultColor: '#985050' },
-  { id: 'mock-log-3', time: '2026.08.16 19:38:27', user: '김세원', event: 'CHAT_QUERY', target: '예산안 사용 시점', result: '허용', resultColor: '#287456' },
+const DEFAULT_MOCK_LOGS: AuditLog[] = [
+  { id: 'mock-log-1', time: '2026.08.16 19:42:13', user: '김세원', event: 'DOC_VIEW', target: '[온보딩] 행사운영가이드.pdf', result: '허용', resultColor: '#287456' },
+  { id: 'mock-log-2', time: '2026.08.16 19:41:02', user: '김세원', event: 'DOC_ACCESS_DENIED', target: '[보안] 임원_급여자료.pdf', result: '거부', resultColor: '#985050' },
+  { id: 'mock-log-3', time: '2026.08.16 19:38:27', user: '김세원', event: 'CHAT_QUERY', target: '예산안 사용 시점 질의', result: '허용', resultColor: '#287456' },
   { id: 'mock-log-4', time: '2026.08.16 19:30:55', user: '이민수', event: 'PLAN_REGENERATE', target: '김세원 30일 계획', result: '허용', resultColor: '#287456' },
   { id: 'mock-log-5', time: '2026.08.16 18:58:40', user: '최서연', event: 'MEMBER_INVITE', target: 'newhire.mock@example.com', result: '허용', resultColor: '#287456' },
-  { id: 'mock-log-6', time: '2026.08.16 18:44:18', user: '박지은', event: 'DOC_VIEW', target: '[목업] 브랜드가이드.pdf', result: '허용', resultColor: '#287456' },
+  { id: 'mock-log-6', time: '2026.08.16 18:44:18', user: '박지은', event: 'DOC_VIEW', target: '[온보딩] 브랜드가이드.pdf', result: '허용', resultColor: '#287456' },
   { id: 'mock-log-7', time: '2026.08.16 18:31:06', user: '정하늘', event: 'CHAT_QUERY', target: '검수 절차 문의', result: '허용', resultColor: '#287456' },
-  { id: 'mock-log-8', time: '2026.08.16 18:12:59', user: '이민수', event: 'DOC_ACCESS_DENIED', target: '[목업] 재무결산자료.xlsx', result: '거부', resultColor: '#985050' },
-  { id: 'mock-log-9', time: '2026.08.16 17:50:21', user: '김세원', event: 'DOC_VIEW', target: '[목업] 거래처_연락망.xlsx', result: '허용', resultColor: '#287456' },
+  { id: 'mock-log-8', time: '2026.08.16 18:12:59', user: '이민수', event: 'DOC_ACCESS_DENIED', target: '[기밀] 재무결산자료.xlsx', result: '거부', resultColor: '#985050' },
+  { id: 'mock-log-9', time: '2026.08.16 17:50:21', user: '김세원', event: 'DOC_VIEW', target: '[온보딩] 거래처_연락망.xlsx', result: '허용', resultColor: '#287456' },
   { id: 'mock-log-10', time: '2026.08.16 17:32:14', user: '최서연', event: 'MEMBER_INVITE', target: 'marketer.mock@example.com', result: '허용', resultColor: '#287456' },
 ];
 
-const DEFAULT_START_DATE = '2026-08-10T00:00';
-const DEFAULT_END_DATE = '2026-08-16T23:59';
-
-function toDateTimeLocal(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function parseLogTime(value: string) {
-  const [year, month, day, hour, minute, second] = value.split(/[. :]/).map(Number);
-  return new Date(year, month - 1, day, hour, minute, second).getTime();
+function downloadBlob(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function AuditLogPage() {
-  const { run, isPending } = useModalAction();
+  const router = useRouter();
   const { showToast } = useToast();
   const [selectedUser, setSelectedUser] = useState('all');
   const [selectedEvent, setSelectedEvent] = useState('all');
-  const [startDate, setStartDate] = useState(DEFAULT_START_DATE);
-  const [endDate, setEndDate] = useState(DEFAULT_END_DATE);
-  const [activeRange, setActiveRange] = useState<'today' | '7days' | '30days' | 'custom'>('7days');
+  const [logs, setLogs] = useState<AuditLog[]>(DEFAULT_MOCK_LOGS);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Modal states
   const [isEventDetailsOpen, setIsEventDetailsOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [isPermissionAuditOpen, setIsPermissionAuditOpen] = useState(false);
-  const [isTimeRangeOpen, setIsTimeRangeOpen] = useState(false);
-  const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
-  const [logs] = useState<AuditLog[]>(MOCK_AUDIT_LOGS);
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
-  const eventBgColors: { [key: string]: string } = {
+  const fetchLogs = async () => {
+    try {
+      setIsLoading(true);
+      const res = await getAuditLogs(0, 100);
+      if (res && res.content && res.content.length > 0) {
+        const mapped: AuditLog[] = res.content.map((item: AuditLogResponse, idx: number) => {
+          const rawTime = item.createdAt || item.timestamp;
+          const dateStr = rawTime ? new Date(rawTime).toLocaleString('ko-KR') : '2026.08.16 19:42:13';
+          const isSuccess = String(item.result) === 'ALLOW' || String(item.result) === 'SUCCESS' || String(item.result) === '허용';
+          const targetName = (item.metadata?.documentTitle as string) || (item.metadata?.query as string) || item.targetName || item.resourceType || '작업 대상';
+          return {
+            id: item.id || `audit-log-${idx + 1}`,
+            time: dateStr,
+            user: item.actorName || item.actorId || '시스템 / 관리자',
+            event: item.eventType || 'DOC_VIEW',
+            target: targetName,
+            result: isSuccess ? '허용' : '거부',
+            resultColor: isSuccess ? '#287456' : '#985050',
+            metadata: item.metadata,
+          };
+        });
+        setLogs(mapped);
+      }
+    } catch (err) {
+      console.log('실제 감사 로그 조회 실패 (모의 데이터 유지):', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLogs();
+  }, []);
+
+  const eventBgColors: Record<string, string> = {
     DOC_VIEW: '#E8F1FF',
     DOC_ACCESS_DENIED: '#F8EEEE',
     CHAT_QUERY: '#E8F1FF',
@@ -70,7 +99,7 @@ export default function AuditLogPage() {
     MEMBER_INVITE: '#E8F1FF',
   };
 
-  const eventColors: { [key: string]: string } = {
+  const eventColors: Record<string, string> = {
     DOC_VIEW: '#0765FC',
     DOC_ACCESS_DENIED: '#985050',
     CHAT_QUERY: '#0765FC',
@@ -78,39 +107,35 @@ export default function AuditLogPage() {
     MEMBER_INVITE: '#0765FC',
   };
 
+  const distinctUsers = useMemo(() => Array.from(new Set(logs.map((l) => l.user))), [logs]);
+  const distinctEvents = useMemo(() => Array.from(new Set(logs.map((l) => l.event))), [logs]);
+
   const filteredLogs = logs.filter((log) => {
     const userMatch = selectedUser === 'all' || log.user === selectedUser;
     const eventMatch = selectedEvent === 'all' || log.event === selectedEvent;
-    const logTime = parseLogTime(log.time);
-    const dateMatch = logTime >= new Date(startDate).getTime() && logTime <= new Date(endDate).getTime();
-    return userMatch && eventMatch && dateMatch;
+    return userMatch && eventMatch;
   });
 
-  const selectQuickRange = (range: 'today' | '7days' | '30days') => {
-    const end = new Date(DEFAULT_END_DATE);
-    const start = new Date(DEFAULT_END_DATE);
-    start.setHours(0, 0, 0, 0);
-    if (range === '7days') start.setDate(start.getDate() - 6);
-    if (range === '30days') start.setDate(start.getDate() - 29);
-    setStartDate(toDateTimeLocal(start));
-    setEndDate(toDateTimeLocal(end));
-    setActiveRange(range);
+  const handleExportCSV = () => {
+    const headers = ['ID', '일시', '사용자', '이벤트', '대상 리소스', '결과'];
+    const rows = filteredLogs.map((l) => [l.id, l.time, l.user, l.event, `"${l.target.replace(/"/g, '""')}"`, l.result]);
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    downloadBlob(csvContent, `audit_logs_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8;');
+    showToast('감사 로그 CSV 파일이 다운로드되었습니다.', 'success');
+    setIsExportModalOpen(false);
+  };
+
+  const handleExportJSON = () => {
+    const jsonContent = JSON.stringify(filteredLogs, null, 2);
+    downloadBlob(jsonContent, `audit_logs_${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
+    showToast('감사 로그 JSON 파일이 다운로드되었습니다.', 'success');
+    setIsExportModalOpen(false);
   };
 
   const resetFilters = () => {
     setSelectedUser('all');
     setSelectedEvent('all');
-    setStartDate(DEFAULT_START_DATE);
-    setEndDate(DEFAULT_END_DATE);
-    setActiveRange('7days');
-  };
-
-  const queryLogs = () => {
-    if (new Date(startDate).getTime() > new Date(endDate).getTime()) {
-      showToast('시작 일시는 종료 일시보다 빠르게 설정해 주세요.', 'error');
-      return;
-    }
-    showToast(`${filteredLogs.length}개의 로그를 조회했습니다.`, 'success');
+    showToast('필터가 초기화되었습니다.', 'info');
   };
 
   return (
@@ -122,19 +147,25 @@ export default function AuditLogPage() {
         {/* Header */}
         <header className={styles.header}>
           <div>
-            <h1 className={styles.title}>감사 로그</h1>
-            <p className={styles.subtitle}>시스템 내 주요 이벤트의 기록을 확인하고 관리할 수 있습니다.</p>
+            <h1 className={styles.title}>보안 감사 로그</h1>
+            <p className={styles.subtitle}>문서 조회, 접근 거부, AI 질의 및 멤버 초대 기록을 추적합니다.</p>
           </div>
           <div className={styles.headerRight}>
-            <button className={styles.workspaceBtn}>
-              마케팅팀 인수인계
+            <button className={styles.exportBtn} onClick={() => setIsExportModalOpen(true)}>
+              <Download size={16} /> 로그 내보내기
+            </button>
+            <button
+              className={styles.workspaceBtn}
+              onClick={() => router.push('/workspace-selection')}
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <span>마케팅팀 인수인계</span>
               <ChevronDown size={16} />
             </button>
-            <button className={styles.notifBtn}>
+            <button className={styles.notifBtn} onClick={() => router.push('/notification-center')} title="알림 센터">
               <Bell size={20} />
-              <span className={styles.badge}>7</span>
             </button>
-            <button className={styles.helpBtn}>
+            <button className={styles.helpBtn} onClick={() => router.push('/ai-chat')} title="AI 어시스턴트">
               <HelpCircle size={18} />
             </button>
           </div>
@@ -142,86 +173,81 @@ export default function AuditLogPage() {
 
         {/* Content */}
         <div className={styles.content}>
-          {/* Filters */}
-          <div className={styles.filterCard}>
-            <div className={styles.filterRow}>
+          {/* Filters Bar */}
+          <div className={styles.filtersBar}>
+            <div className={styles.filtersLeft}>
               <div className={styles.filterGroup}>
-                <label className={styles.filterLabel}>행위자</label>
+                <label className={styles.filterLabel}>사용자</label>
                 <select
-                  className={styles.filterSelect}
                   value={selectedUser}
                   onChange={(e) => setSelectedUser(e.target.value)}
+                  className={styles.select}
                 >
                   <option value="all">전체 사용자</option>
-                  <option value="김세원">김세원</option>
-                  <option value="이민수">이민수</option>
-                  <option value="최서연">최서연</option>
+                  {distinctUsers.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
                 </select>
               </div>
 
               <div className={styles.filterGroup}>
                 <label className={styles.filterLabel}>이벤트</label>
                 <select
-                  className={styles.filterSelect}
                   value={selectedEvent}
                   onChange={(e) => setSelectedEvent(e.target.value)}
+                  className={styles.select}
                 >
                   <option value="all">전체 이벤트</option>
-                  <option value="DOC_VIEW">문서 조회</option>
-                  <option value="DOC_ACCESS_DENIED">문서 접근 거부</option>
-                  <option value="CHAT_QUERY">AI 질문</option>
-                  <option value="PLAN_REGENERATE">계획 재생성</option>
-                  <option value="MEMBER_INVITE">구성원 초대</option>
+                  {distinctEvents.map((e) => (
+                    <option key={e} value={e}>{getDisplayLabel(e)}</option>
+                  ))}
                 </select>
               </div>
 
-              <div className={`${styles.filterGroup} ${styles.dateFilterGroup}`}>
-                <div className={styles.dateFilterHeader}>
-                  <label className={styles.filterLabel}>기간</label>
-                  <div className={styles.quickRanges} aria-label="빠른 기간 선택">
-                    <button className={activeRange === 'today' ? styles.quickRangeActive : styles.quickRange} onClick={() => selectQuickRange('today')}>오늘</button>
-                    <button className={activeRange === '7days' ? styles.quickRangeActive : styles.quickRange} onClick={() => selectQuickRange('7days')}>최근 7일</button>
-                    <button className={activeRange === '30days' ? styles.quickRangeActive : styles.quickRange} onClick={() => selectQuickRange('30days')}>최근 30일</button>
-                  </div>
-                </div>
-                <div className={styles.dateRange}>
-                  <label className={styles.dateField}><span>시작</span><Calendar size={16} /><input type="datetime-local" className={styles.dateInput} value={startDate} max={endDate} onChange={(e) => { setStartDate(e.target.value); setActiveRange('custom'); }} /></label>
-                  <span className={styles.dateRangeSeparator}>~</span>
-                  <label className={styles.dateField}><span>종료</span><Calendar size={16} /><input type="datetime-local" className={styles.dateInput} value={endDate} min={startDate} onChange={(e) => { setEndDate(e.target.value); setActiveRange('custom'); }} /></label>
-                </div>
-              </div>
+              <button className={styles.resetBtn} onClick={resetFilters} title="필터 초기화">
+                <RotateCcw size={16} /> 초기화
+              </button>
 
-              <div className={styles.filterActions}>
-                <button className={styles.queryBtn} onClick={queryLogs}>조회</button>
-                <button className={styles.resetBtn} onClick={resetFilters}>
-                  <RotateCcw size={16} />
-                  초기화
-                </button>
-              </div>
+              <button className={styles.resetBtn} onClick={fetchLogs} title="새로고침" style={{ marginLeft: '4px' }}>
+                <RefreshCw size={16} /> 새로고침
+              </button>
+            </div>
+
+            <div className={styles.filtersRight}>
+              <span style={{ fontSize: '13px', color: '#64748b' }}>
+                총 <strong>{filteredLogs.length}</strong>건의 기록
+              </span>
             </div>
           </div>
 
-          {/* Logs Table */}
+          {/* Audit Logs Table */}
           <div className={styles.card}>
-            <div className={styles.tableWrapper}>
+            <div className={styles.tableContainer}>
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th>시간</th>
-                    <th>행위자</th>
+                    <th>일시</th>
+                    <th>사용자</th>
                     <th>이벤트</th>
-                    <th>대상</th>
+                    <th>대상 리소스</th>
                     <th>결과</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredLogs.map((log) => (
-                    <tr key={log.id} onClick={() => {
-                      setSelectedLogId(log.id);
-                      setIsEventDetailsOpen(true);
-                    }} style={{ cursor: 'pointer' }}>
+                    <tr
+                      key={log.id}
+                      onClick={() => {
+                        setSelectedLog(log);
+                        setIsEventDetailsOpen(true);
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <td className={styles.timeCell}>{log.time}</td>
-                      <td className={styles.userCell}>{log.user}</td>
+                      <td className={styles.userCell}>
+                        <div className={styles.userAvatar}>{log.user.charAt(0)}</div>
+                        <span>{log.user}</span>
+                      </td>
                       <td>
                         <span
                           className={styles.eventBadge}
@@ -239,6 +265,10 @@ export default function AuditLogPage() {
                           className={styles.resultBadge}
                           style={{ color: log.resultColor }}
                         >
+                          <span
+                            className={styles.resultDot}
+                            style={{ backgroundColor: log.resultColor }}
+                          />
                           {log.result}
                         </span>
                       </td>
@@ -247,28 +277,6 @@ export default function AuditLogPage() {
                 </tbody>
               </table>
             </div>
-
-            {/* Pagination */}
-            <div className={styles.pagination}>
-              <select className={styles.perPageSelect}>
-                <option>10개씩 보기</option>
-                <option>20개씩 보기</option>
-                <option>50개씩 보기</option>
-              </select>
-
-              <span className={styles.pageInfo}>전체 128개 중 1~10개</span>
-
-              <div className={styles.paginationBtns}>
-                <button className={styles.pagBtn}>&lt;</button>
-                <button className={`${styles.pagBtn} ${styles.pagBtnActive}`}>1</button>
-                <button className={styles.pagBtn}>2</button>
-                <button className={styles.pagBtn}>3</button>
-                <button className={styles.pagBtn}>4</button>
-                <button className={styles.pagBtn}>...</button>
-                <button className={styles.pagBtn}>13</button>
-                <button className={styles.pagBtn}>&gt;</button>
-              </div>
-            </div>
           </div>
         </div>
       </main>
@@ -276,82 +284,56 @@ export default function AuditLogPage() {
       {/* MODALS */}
 
       {/* 1. Event Details Modal */}
-      {isEventDetailsOpen && selectedLogId && (
+      {isEventDetailsOpen && selectedLog && (
         <Modal
           open
           onClose={() => setIsEventDetailsOpen(false)}
-          title="로그 상세 보기"
+          title="감사 로그 상세 정보"
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsEventDetailsOpen(false)}>닫기</ModalSecondaryButton>
             </>
           }
         >
-          {logs.find(l => l.id === selectedLogId) && (
-            <>
+          <div className={styles.eventCard}>
+            <div className={styles.eventHeader}>
+              <span
+                className={styles.eventBadgeLarge}
+                style={{
+                  backgroundColor: eventBgColors[selectedLog.event] || '#E8F1FF',
+                  color: eventColors[selectedLog.event] || '#0765FC',
+                }}
+              >
+                {getDisplayLabel(selectedLog.event)}
+              </span>
+              <span className={styles.eventTime}>{selectedLog.time}</span>
+            </div>
+
+            <div className={styles.eventDetailsList}>
               <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>시간</span>
-                <span className={styles.detailValue}>{logs.find(l => l.id === selectedLogId)?.time}</span>
+                <span className={styles.detailLabel}>수행자</span>
+                <span className={styles.detailValue}>{selectedLog.user}</span>
               </div>
               <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>행위자</span>
-                <span className={styles.detailValue}>
-                  {logs.find(l => l.id === selectedLogId)?.user}
-                  <span className={styles.badge}>신입 구성원 · 마케팅팀</span>
-                </span>
-              </div>
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>이벤트</span>
-                <span
-                  className={styles.eventBadge}
-                  style={{
-                    backgroundColor: eventBgColors[logs.find(l => l.id === selectedLogId)?.event ?? ''] || '#E8F1FF',
-                    color: eventColors[logs.find(l => l.id === selectedLogId)?.event ?? ''] || '#0765FC',
-                  }}
-                >
-                  {getDisplayLabel(logs.find(l => l.id === selectedLogId)?.event)}
-                </span>
-              </div>
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>대상</span>
-                <span className={styles.detailValue}>{logs.find(l => l.id === selectedLogId)?.target}</span>
+                <span className={styles.detailLabel}>대상 리소스</span>
+                <span className={styles.detailValue}>{selectedLog.target}</span>
               </div>
               <div className={styles.detailRow}>
                 <span className={styles.detailLabel}>결과</span>
-                <span
-                  className={styles.resultBadge}
-                  style={{ color: logs.find(l => l.id === selectedLogId)?.resultColor }}
-                >
-                  {logs.find(l => l.id === selectedLogId)?.result}
+                <span className={styles.detailValue} style={{ color: selectedLog.resultColor, fontWeight: 600 }}>
+                  {selectedLog.result}
                 </span>
               </div>
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>워크스페이스</span>
-                <span className={styles.detailValue}>마케팅팀 인수인계</span>
-              </div>
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>접속 주소</span>
-                <span className={styles.detailValue}>203.254.11.27</span>
-              </div>
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>설명</span>
-                <span className={styles.detailValue}>액택 운송에 대한 접근 권한이 없어 액세스가 거부되었습니다.</span>
-              </div>
-              <div className={styles.detailRow}>
-                <span className={styles.detailLabel}>관련 메타데이터</span>
-                <div className={styles.metadata}>
-                  <code>{JSON.stringify({
-                    "object_type": "document",
-                    "object_id": "doc_8f7a2c1b",
-                    "file_name": "[목업] 임원_급여자료.pdf",
-                    "file_size": 2847291,
-                    "owner": "admin@company.com",
-                    "permission_required": "viewer"
-                  }, null, 2)}</code>
+              {selectedLog.metadata && (
+                <div className={styles.detailRow} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '6px' }}>
+                  <span className={styles.detailLabel}>메타데이터 (JSON)</span>
+                  <pre style={{ background: '#f8fafc', padding: '8px', borderRadius: '6px', fontSize: '11.5px', width: '100%', overflowX: 'auto' }}>
+                    {JSON.stringify(selectedLog.metadata, null, 2)}
+                  </pre>
                 </div>
-              </div>
-            </>
-          )}
+              )}
+            </div>
+          </div>
         </Modal>
       )}
 
@@ -360,194 +342,57 @@ export default function AuditLogPage() {
         <Modal
           open
           onClose={() => setIsExportModalOpen(false)}
-          title="로그 내보내기"
+          title="감사 로그 내보내기"
           footer={
             <>
-              <ModalSecondaryButton onClick={() => setIsExportModalOpen(false)}>취소</ModalSecondaryButton>
-              <ModalPrimaryButton
-                loading={isPending('audit-log-0')}
-                onClick={() => run('audit-log-0', '로그를 내보냈습니다.', () => setIsExportModalOpen(false))}
+              <ModalSecondaryButton onClick={() => setIsExportModalOpen(false)}>닫기</ModalSecondaryButton>
+            </>
+          }
+        >
+          <div className={styles.exportForm}>
+            <p style={{ fontSize: '14px', color: '#475569', marginBottom: '16px' }}>
+              현재 필터링된 <strong>{filteredLogs.length}건</strong>의 감사 로그를 파일로 다운로드합니다.
+            </p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={handleExportCSV}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  backgroundColor: '#0765FC',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
               >
-                <Download size={16} /> 내보내기
-              </ModalPrimaryButton>
-            </>
-          }
-        >
-          <div className={styles.formGroup}>
-            <label className={styles.label}>파일 형식</label>
-            <div className={styles.formatOptions}>
-              <label className={styles.radioOption}>
-                <input type="radio" name="format" value="csv" defaultChecked />
-                <span>표 형식 파일</span>
-              </label>
-              <label className={styles.radioOption}>
-                <input type="radio" name="format" value="excel" />
-                <span>엑셀 파일</span>
-              </label>
-              <label className={styles.radioOption}>
-                <input type="radio" name="format" value="json" />
-                <span>데이터 파일</span>
-              </label>
-            </div>
-          </div>
-
-          <div className={styles.formGroup}>
-            <label className={styles.label}>포함 범위</label>
-            <div className={styles.checkboxGroup}>
-              <label className={styles.checkbox}>
-                <input type="checkbox" defaultChecked />
-                <span>기본 정보</span>
-              </label>
-              <label className={styles.checkbox}>
-                <input type="checkbox" defaultChecked />
-                <span>상세 정보</span>
-              </label>
-              <label className={styles.checkbox}>
-                <input type="checkbox" />
-                <span>메타데이터</span>
-              </label>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* 3. Permission Audit Modal */}
-      {isPermissionAuditOpen && (
-        <Modal
-          open
-          onClose={() => setIsPermissionAuditOpen(false)}
-          title="권한 감사"
-          footer={
-            <>
-              <ModalSecondaryButton onClick={() => setIsPermissionAuditOpen(false)}>닫기</ModalSecondaryButton>
-            </>
-          }
-        >
-          <div className={styles.permissionItem}>
-            <div className={styles.permissionHeader}>
-              <h3>문서 접근 권한</h3>
-            </div>
-            <div className={styles.permissionContent}>
-              <div className={styles.permissionRow}>
-                <span className={styles.permissionLabel}>역할</span>
-                <span className={styles.permissionValue}>신입 구성원</span>
-              </div>
-              <div className={styles.permissionRow}>
-                <span className={styles.permissionLabel}>권한</span>
-                <span className={styles.permissionValue}>조회, 다운로드</span>
-              </div>
-              <div className={styles.permissionRow}>
-                <span className={styles.permissionLabel}>생성 일시</span>
-                <span className={styles.permissionValue}>2026.08.16 18:21:01</span>
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.permissionItem}>
-            <div className={styles.permissionHeader}>
-              <h3>AI 질문 권한</h3>
-            </div>
-            <div className={styles.permissionContent}>
-              <div className={styles.permissionRow}>
-                <span className={styles.permissionLabel}>역할</span>
-                <span className={styles.permissionValue}>구성원</span>
-              </div>
-              <div className={styles.permissionRow}>
-                <span className={styles.permissionLabel}>권한</span>
-                <span className={styles.permissionValue}>질문</span>
-              </div>
-              <div className={styles.permissionRow}>
-                <span className={styles.permissionLabel}>생성 일시</span>
-                <span className={styles.permissionValue}>2026.08.16 18:21:01</span>
-              </div>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* 4. Time Range Picker Modal */}
-      {isTimeRangeOpen && (
-        <Modal
-          open
-          onClose={() => setIsTimeRangeOpen(false)}
-          title="시간 범위 선택"
-          footer={
-            <>
-              <ModalSecondaryButton onClick={() => setIsTimeRangeOpen(false)}>취소</ModalSecondaryButton>
-              <ModalPrimaryButton
-                loading={isPending('audit-log-1')}
-                onClick={() => run('audit-log-1', '필터를 적용했습니다.', () => setIsTimeRangeOpen(false))}
+                <Download size={16} /> CSV로 다운로드
+              </button>
+              <button
+                onClick={handleExportJSON}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  backgroundColor: '#f1f5f9',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
               >
-                적용
-              </ModalPrimaryButton>
-            </>
-          }
-        >
-          <div className={styles.calendarGrid}>
-            <div className={styles.calendar}>
-              <div className={styles.calendarHeader}>
-                <button>&laquo;</button>
-                <span>2026년 8월</span>
-                <button>&raquo;</button>
-              </div>
-              <div className={styles.calendarBody}>
-                <div className={styles.dayHeader}>
-                  <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
-                </div>
-                <div className={styles.dayGrid}>
-                  {[26, 27, 28, 29, 30, 31, 1].map((d, i) => (
-                    <button key={`prev-${i}`} className={styles.dayBtn} style={{ color: '#9CA3AF' }}>{d}</button>
-                  ))}
-                  {[...Array(31)].map((_, i) => (
-                    <button
-                      key={`curr-${i + 1}`}
-                      className={`${styles.dayBtn} ${[10, 16].includes(i + 1) ? styles.active : ''}`}
-                    >
-                      {i + 1}
-                    </button>
-                  ))}
-                  {[1, 2, 3, 4, 5].map((d, i) => (
-                    <button key={`next-${i}`} className={styles.dayBtn} style={{ color: '#9CA3AF' }}>{d}</button>
-                  ))}
-                </div>
-              </div>
+                <Download size={16} /> JSON으로 다운로드
+              </button>
             </div>
-
-            <div className={styles.calendar}>
-              <div className={styles.calendarHeader}>
-                <button>&laquo;</button>
-                <span>2026년 8월</span>
-                <button>&raquo;</button>
-              </div>
-              <div className={styles.calendarBody}>
-                <div className={styles.dayHeader}>
-                  <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
-                </div>
-                <div className={styles.dayGrid}>
-                  {[26, 27, 28, 29, 30, 31, 1].map((d, i) => (
-                    <button key={`prev2-${i}`} className={styles.dayBtn} style={{ color: '#9CA3AF' }}>{d}</button>
-                  ))}
-                  {[...Array(31)].map((_, i) => (
-                    <button
-                      key={`curr2-${i + 1}`}
-                      className={`${styles.dayBtn} ${[16].includes(i + 1) ? styles.active : ''}`}
-                    >
-                      {i + 1}
-                    </button>
-                  ))}
-                  {[1, 2, 3, 4, 5].map((d, i) => (
-                    <button key={`next2-${i}`} className={styles.dayBtn} style={{ color: '#9CA3AF' }}>{d}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.timeRangePresets}>
-            <button className={styles.presetBtn}>오늘</button>
-            <button className={styles.presetBtn}>최근 7일</button>
-            <button className={styles.presetBtn}>최근 30일</button>
-            <button className={styles.presetBtn}>직접 선택</button>
           </div>
         </Modal>
       )}

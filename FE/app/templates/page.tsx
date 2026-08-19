@@ -1,10 +1,12 @@
-'use client';
-import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, Search, MoreVertical, LayoutTemplate, UsersRound, FileText, CircleCheck, Crown } from 'lucide-react';
+﻿'use client';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { Plus, Edit2, Trash2, Search, MoreVertical, LayoutTemplate, UsersRound, FileText, CircleCheck, Crown, ChevronDown, Bell, HelpCircle } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton, ModalDangerButton } from '@/components/ui/modal';
-import { useModalAction } from '@/components/ui/use-modal-action';
+import { useToast } from '@/components/ui/toast';
 import { getDisplayLabel } from '@/lib/display-labels';
+import { getTemplates, createTemplate, deleteTemplate, TemplateResponse } from '@/lib/api';
 import styles from './templates.module.css';
 
 type TemplateCategory = {
@@ -26,10 +28,10 @@ type OnboardingTemplate = {
   categories: TemplateCategory[];
 };
 
-const MOCK_TEMPLATES: OnboardingTemplate[] = [
+const DEFAULT_MOCK_TEMPLATES: OnboardingTemplate[] = [
   {
     id: 'marketing-new-hire',
-    name: '마케팅 신입 기본',
+    name: '마케팅 신입 기본 템플릿',
     role: 'NEW_HIRE',
     status: 'IN_USE',
     items: 18,
@@ -49,7 +51,7 @@ const MOCK_TEMPLATES: OnboardingTemplate[] = [
   },
   {
     id: 'development-new-hire',
-    name: '개발팀 신입',
+    name: '개발팀 신입 온보딩',
     role: 'NEW_HIRE',
     status: 'IN_USE',
     items: 22,
@@ -69,7 +71,7 @@ const MOCK_TEMPLATES: OnboardingTemplate[] = [
   },
   {
     id: 'leader-transition',
-    name: '팀장 전환',
+    name: '팀장 인수인계 전환',
     role: 'MANAGER',
     status: 'DRAFT',
     items: 14,
@@ -79,29 +81,116 @@ const MOCK_TEMPLATES: OnboardingTemplate[] = [
     duration: 21,
     usageCount: 0,
     categories: [
-      { name: '조직 이해', itemCount: 3 },
-      { name: '팀원 면담', itemCount: 3 },
-      { name: '업무 현황', itemCount: 3 },
-      { name: '목표 수립', itemCount: 2 },
-      { name: '보고 체계', itemCount: 2 },
-      { name: '참고 자료', itemCount: 1 },
+      { name: '조직 및 인력 현황', itemCount: 3 },
+      { name: '핵심 KPI 파악', itemCount: 4 },
+      { name: '예산 및 프로젝트 관리', itemCount: 4 },
+      { name: '이해관계자 1:1', itemCount: 3 },
     ],
   },
 ];
 
 export default function TemplatesPage() {
-  const { run, isPending } = useModalAction();
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(MOCK_TEMPLATES[0].id);
-  const [isCreationModalOpen, setIsCreationModalOpen] = useState(false);
-  const [isListModalOpen, setIsListModalOpen] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-  const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
-  const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
-  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
-  const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
-  const [templates] = useState<OnboardingTemplate[]>(MOCK_TEMPLATES);
+  const router = useRouter();
+  const { showToast } = useToast();
+  const [activeTab, setActiveTab] = useState('ALL');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [templates, setTemplates] = useState<OnboardingTemplate[]>(DEFAULT_MOCK_TEMPLATES);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
-  const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
+  // Modal states
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<OnboardingTemplate | null>(null);
+
+  // Create form states
+  const [newTitle, setNewTitle] = useState('');
+  const [newDesc, setNewDesc] = useState('');
+  const [newRole, setNewRole] = useState('NEW_HIRE');
+  const [newDuration, setNewDuration] = useState(30);
+
+  const fetchTemplatesList = async () => {
+    try {
+      setIsLoading(true);
+      const res = await getTemplates();
+      if (res && res.templates && res.templates.length > 0) {
+        const mapped: OnboardingTemplate[] = res.templates.map((t: TemplateResponse, idx: number) => ({
+          id: t.id || `tpl-${idx + 1}`,
+          name: t.title,
+          role: t.role || 'NEW_HIRE',
+          status: 'IN_USE',
+          items: t.sections ? t.sections.reduce((acc: number, s: any) => acc + (s.items?.length || 0), 0) : 15,
+          team: '마케팅팀 인수인계',
+          date: t.updatedAt ? `수정일 ${new Date(t.updatedAt).toLocaleDateString()}` : '수정일 2024. 05. 13',
+          description: t.description || '맞춤 온보딩 템플릿',
+          duration: t.durationDays || 30,
+          usageCount: 1,
+          categories: t.sections && t.sections.length > 0 ? t.sections.map((s: any) => ({ name: s.title, itemCount: s.items?.length || 3 })) : [{ name: '기본 섹션', itemCount: 5 }],
+        }));
+        setTemplates(mapped);
+      }
+    } catch (err) {
+      console.log('실제 템플릿 조회 실패 (모의 데이터 유지):', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTemplatesList();
+  }, []);
+
+  const handleCreate = async () => {
+    if (!newTitle.trim()) {
+      showToast('템플릿 제목을 입력해 주세요.', 'error');
+      return;
+    }
+
+    try {
+      setIsCreating(true);
+      await createTemplate({
+        title: newTitle.trim(),
+        description: newDesc.trim(),
+        role: newRole,
+        durationDays: newDuration,
+      });
+      showToast('새 템플릿이 성공적으로 등록되었습니다.', 'success');
+      setNewTitle('');
+      setNewDesc('');
+      setIsCreateModalOpen(false);
+      await fetchTemplatesList();
+    } catch (err: any) {
+      showToast(err?.message || '템플릿 등록 실패', 'error');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedTemplate) return;
+
+    try {
+      if (!selectedTemplate.id.startsWith('marketing-') && !selectedTemplate.id.startsWith('development-') && !selectedTemplate.id.startsWith('leader-')) {
+        await deleteTemplate(selectedTemplate.id);
+      }
+      setTemplates((prev) => prev.filter((t) => t.id !== selectedTemplate.id));
+      showToast('템플릿이 삭제되었습니다.', 'success');
+      setIsDeleteModalOpen(false);
+      setIsDetailModalOpen(false);
+    } catch (err: any) {
+      showToast(err?.message || '템플릿 삭제 실패', 'error');
+    }
+  };
+
+  const filteredTemplates = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+    return templates.filter((tpl) => {
+      const matchesTab = activeTab === 'ALL' || tpl.role === activeTab;
+      const matchesSearch = !keyword || tpl.name.toLowerCase().includes(keyword) || tpl.description.toLowerCase().includes(keyword);
+      return matchesTab && matchesSearch;
+    });
+  }, [activeTab, searchTerm, templates]);
 
   return (
     <div className={styles.container}>
@@ -109,226 +198,230 @@ export default function TemplatesPage() {
 
       <main className={styles.main}>
         <header className={styles.header}>
-          <div><h1>온보딩 템플릿</h1><p>역할별 30 일 인수인계 구성을 템플릿으로 관리하세요.</p></div>
-          <button className={styles.createBtn} onClick={() => setIsCreationModalOpen(true)}><Plus size={16} /> 템플릿 생성</button>
+          <div>
+            <h1>온보딩 템플릿 관리</h1>
+            <p>직무별 표준 인수인계 템플릿을 생성하고 관리합니다.</p>
+          </div>
+          <div className={styles.headerActions}>
+            <button className={styles.createButton} onClick={() => setIsCreateModalOpen(true)}>
+              <Plus size={16} /> 새 템플릿 생성
+            </button>
+          </div>
         </header>
 
-        <div className={styles.content}>
-          <div className={styles.statsWrapper}>
-            <div className={styles.statCard}><LayoutTemplate size={22} /><div><span>전체 템플릿</span><strong>3<small>개</small></strong><p>활성 템플릿 수</p></div></div>
-            <div className={styles.statCard}><UsersRound size={22} /><div><span>역할</span><strong>3<small>개</small></strong><p>다양한 역할 템플릿</p></div></div>
-            <div className={styles.statCard}><FileText size={22} /><div><span>총 항목</span><strong>54<small>개</small></strong><p>모든 템플릿 항목 수</p></div></div>
-            <div className={styles.statCard}><CircleCheck size={22} /><div><span>사용 중</span><strong>2<small>개</small></strong><p>사용 중인 템플릿</p></div></div>
+        {/* Filter Bar */}
+        <section className={styles.filterSection}>
+          <div className={styles.tabs}>
+            {['ALL', 'NEW_HIRE', 'MEMBER', 'MANAGER', 'ADMIN'].map((tab) => (
+              <button
+                key={tab}
+                className={`${styles.tab} ${activeTab === tab ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab === 'ALL' ? '전체' : getDisplayLabel(tab)}
+              </button>
+            ))}
           </div>
 
-          <div className={styles.mainLayout}>
-            <div className={styles.listCard}>
-            <h2>템플릿 목록</h2>
-            <div className={styles.templates}>
-              {templates.map(t => (
-                <div key={t.id} className={`${styles.template} ${selectedTemplateId === t.id ? styles.selectedTemplate : ''}`} onClick={() => setSelectedTemplateId(t.id)}>
-                  <div className={`${styles.templateIcon} ${t.role === 'MANAGER' ? styles.managerIcon : ''}`}>
-                    {t.role === 'MANAGER' ? <Crown size={20} /> : <UsersRound size={20} />}
-                  </div>
-                  <div className={styles.info}>
-                    <div className={styles.name}>{t.name} <span className={styles.role}>{getDisplayLabel(t.role)}</span> <span className={t.status === 'DRAFT' ? styles.draftStatus : styles.status}>{getDisplayLabel(t.status)}</span></div>
-                    <div className={styles.meta}>{t.items}개 항목 · {t.team}</div>
-                    <div className={styles.date}>{t.date}</div>
-                  </div>
-                  <button className={styles.menu} onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedTemplateId(t.id);
-                    setIsActionsMenuOpen(true);
-                  }}><MoreVertical size={16} /></button>
+          <div className={styles.searchBox}>
+            <Search size={16} color="#94A3B8" />
+            <input
+              type="text"
+              placeholder="템플릿 이름 또는 설명 검색..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </section>
+
+        {/* Template Cards Grid */}
+        <section className={styles.grid}>
+          {filteredTemplates.map((tpl) => (
+            <div
+              key={tpl.id}
+              className={styles.card}
+              onClick={() => {
+                setSelectedTemplate(tpl);
+                setIsDetailModalOpen(true);
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className={styles.cardHeader}>
+                <div>
+                  <span className={styles.roleTag}>{getDisplayLabel(tpl.role)}</span>
+                  <h3 className={styles.cardTitle}>{tpl.name}</h3>
                 </div>
-              ))}
-            </div>
-            <button className={styles.addMore} onClick={() => setIsCreationModalOpen(true)}><Plus size={16} /> 템플릿 생성</button>
-            </div>
-
-            <aside className={styles.details}>
-              <div className={styles.detailsHeader}>
-                <h2>템플릿 상세</h2>
-                <button className={styles.preview} onClick={() => setIsDetailsModalOpen(true)}>미리보기</button>
+                <button
+                  className={styles.deleteIconBtn}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedTemplate(tpl);
+                    setIsDeleteModalOpen(true);
+                  }}
+                  title="삭제"
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
-              {selectedTemplate && (
-                <>
-                  <h3>{selectedTemplate.name}</h3>
-                  <div className={styles.badge}>{getDisplayLabel(selectedTemplate.role)}</div>
-                  <div className={selectedTemplate.status === 'DRAFT' ? styles.draftText : styles.green}>{getDisplayLabel(selectedTemplate.status)}</div>
-                  <p className={styles.desc}>{selectedTemplate.description}<br/>{selectedTemplate.team} · {selectedTemplate.date}</p>
-                  <div className={styles.stats2}>
-                    <div><div>{selectedTemplate.items}</div><div>총 항목</div></div>
-                    <div><div>{selectedTemplate.categories.length}</div><div>카테고리</div></div>
-                    <div><div>{selectedTemplate.duration}일</div><div>권장 기간</div></div>
-                    <div><div>{selectedTemplate.usageCount}</div><div>사용 중</div></div>
-                  </div>
-                  <h4>카테고리 미리보기</h4>
-                  <div className={styles.categories}>
-                    {selectedTemplate.categories.map((category, index) => (
-                      <div key={category.name}><span>{index + 1}</span> {category.name} <span className={styles.count}>{category.itemCount}개 항목</span></div>
-                    ))}
-                  </div>
-                  <div className={styles.actions}>
-                    <button onClick={() => setIsCategoriesModalOpen(true)}><Edit2 size={16} /> 편집</button>
-                    <button className={styles.delete} onClick={() => setIsStatusModalOpen(true)}><Trash2 size={16} /> 삭제</button>
-                  </div>
-                </>
-              )}
-            </aside>
-          </div>
-        </div>
+
+              <p className={styles.cardDesc}>{tpl.description}</p>
+
+              <div className={styles.cardMeta}>
+                <span>📅 {tpl.duration}일 로드맵</span>
+                <span>📋 {tpl.items}개 항목</span>
+                <span>👥 {tpl.usageCount}회 적용</span>
+              </div>
+
+              <div className={styles.categoryList}>
+                {tpl.categories.slice(0, 3).map((c, i) => (
+                  <span key={i} className={styles.categoryChip}>
+                    {c.name} ({c.itemCount})
+                  </span>
+                ))}
+                {tpl.categories.length > 3 && (
+                  <span className={styles.categoryChip}>+{tpl.categories.length - 3}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </section>
       </main>
 
       {/* MODALS */}
 
-      {/* 1. Template Creation Modal */}
-      {isCreationModalOpen && (
+      {/* 1. Create Template Modal */}
+      {isCreateModalOpen && (
         <Modal
           open
-          onClose={() => setIsCreationModalOpen(false)}
-          title="템플릿 생성"
+          onClose={() => setIsCreateModalOpen(false)}
+          title="새 온보딩 템플릿 생성"
           footer={
             <>
-              <ModalSecondaryButton onClick={() => setIsCreationModalOpen(false)}>취소</ModalSecondaryButton>
-              <ModalPrimaryButton
-                loading={isPending('templates-0')}
-                onClick={() => run('templates-0', '생성이 완료되었습니다.', () => setIsCreationModalOpen(false))}
-              >
-                생성
+              <ModalSecondaryButton onClick={() => setIsCreateModalOpen(false)}>취소</ModalSecondaryButton>
+              <ModalPrimaryButton loading={isCreating} onClick={handleCreate}>
+                템플릿 생성
               </ModalPrimaryButton>
             </>
           }
         >
-          <div className={styles.formGroup}>
-            <label className={styles.label}>템플릿명</label>
-            <input type="text" placeholder="새로운 템플릿 이름" className={styles.input} />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>대상 역할</label>
-            <select className={styles.select}>
-              <option value="NEW_HIRE">신입 구성원</option>
-              <option value="MEMBER">구성원</option>
-              <option value="MANAGER">관리 담당자</option>
-            </select>
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>설명</label>
-            <textarea placeholder="템플릿 설명" className={styles.textarea} rows={3} />
-          </div>
-        </Modal>
-      )}
-
-      {/* 2. Template List Modal */}
-      {isListModalOpen && (
-        <Modal
-          open
-          onClose={() => setIsListModalOpen(false)}
-          title="템플릿 목록"
-        >
-          <div className={styles.searchBox}>
-            <Search size={16} />
-            <input type="text" placeholder="템플릿 검색" />
-          </div>
-          {templates.map(t => (
-            <div key={t.id} className={styles.templateItem}>
-              <div>{t.name} - {getDisplayLabel(t.role)}</div>
-              <span>{getDisplayLabel(t.status)}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '6px' }}>템플릿 명</label>
+              <input
+                type="text"
+                placeholder="예: 마케팅팀 신입 30일 기본 온보딩"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13.5px' }}
+                autoFocus
+              />
             </div>
-          ))}
+
+            <div>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '6px' }}>대상 역할</label>
+              <select
+                value={newRole}
+                onChange={(e) => setNewRole(e.target.value)}
+                style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13.5px' }}
+              >
+                <option value="NEW_HIRE">신입 구성원 (NEW_HIRE)</option>
+                <option value="MEMBER">일반 구성원 (MEMBER)</option>
+                <option value="MANAGER">관리 담당자 (MANAGER)</option>
+                <option value="ADMIN">관리자 (ADMIN)</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '6px' }}>기간 (일수)</label>
+              <input
+                type="number"
+                value={newDuration}
+                onChange={(e) => setNewDuration(Number(e.target.value))}
+                min={7}
+                max={90}
+                style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13.5px' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155', display: 'block', marginBottom: '6px' }}>설명</label>
+              <textarea
+                placeholder="템플릿의 목적과 주요 대상 업무를 기술하세요."
+                value={newDesc}
+                onChange={(e) => setNewDesc(e.target.value)}
+                rows={3}
+                style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13.5px', resize: 'vertical' }}
+              />
+            </div>
+          </div>
         </Modal>
       )}
 
-      {/* 3. Template Details Modal */}
-      {isDetailsModalOpen && selectedTemplate && (
+      {/* 2. Detail Modal */}
+      {isDetailModalOpen && selectedTemplate && (
         <Modal
           open
-          onClose={() => setIsDetailsModalOpen(false)}
-          title={selectedTemplate.name}
-          footer={<ModalSecondaryButton onClick={() => setIsDetailsModalOpen(false)}>닫기</ModalSecondaryButton>}
-        >
-          <div className={styles.detail}><strong>역할:</strong> {getDisplayLabel(selectedTemplate.role)}</div>
-          <div className={styles.detail}><strong>상태:</strong> {getDisplayLabel(selectedTemplate.status)}</div>
-          <div className={styles.detail}><strong>항목 수:</strong> {selectedTemplate.items}</div>
-          <div className={styles.detail}><strong>팀:</strong> {selectedTemplate.team}</div>
-        </Modal>
-      )}
-
-      {/* 4. Template Categories Modal */}
-      {isCategoriesModalOpen && selectedTemplate && (
-        <Modal
-          open
-          onClose={() => setIsCategoriesModalOpen(false)}
-          title="카테고리 관리"
+          onClose={() => setIsDetailModalOpen(false)}
+          title="온보딩 템플릿 상세"
           footer={
             <>
-              <ModalSecondaryButton onClick={() => setIsCategoriesModalOpen(false)}>취소</ModalSecondaryButton>
+              <ModalSecondaryButton onClick={() => setIsDetailModalOpen(false)}>닫기</ModalSecondaryButton>
               <ModalPrimaryButton
-                loading={isPending('templates-1')}
-                onClick={() => run('templates-1', '변경 내용을 저장했습니다.', () => setIsCategoriesModalOpen(false))}
+                onClick={() => {
+                  setIsDetailModalOpen(false);
+                  router.push('/30day-plan');
+                }}
               >
-                저장
+                30일 계획에서 확인
               </ModalPrimaryButton>
             </>
           }
         >
-          {['회사 이해', '마케팅 프로세스', '주요 툴 및 시스템', '주요 프로젝트', '커뮤니케이션', '첫날 자료'].map((cat, i) => (
-            <div key={i} className={styles.categoryItem}>
-              <span>{i + 1}. {cat}</span>
-              <button className={styles.editBtn}><Edit2 size={14} /></button>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <span className={styles.roleTag}>{getDisplayLabel(selectedTemplate.role)}</span>
+              <h3 style={{ margin: 0, fontSize: '16px' }}>{selectedTemplate.name}</h3>
             </div>
-          ))}
-        </Modal>
-      )}
+            <p style={{ fontSize: '13.5px', color: '#64748b', margin: '0 0 16px' }}>{selectedTemplate.description}</p>
 
-      {/* 5. Template Members Modal */}
-      {isMembersModalOpen && (
-        <Modal
-          open
-          onClose={() => setIsMembersModalOpen(false)}
-          title="템플릿 멤버"
-          footer={<ModalSecondaryButton onClick={() => setIsMembersModalOpen(false)}>닫기</ModalSecondaryButton>}
-        >
-          <div className={styles.memberList}>
-            <div className={styles.member}>김세원 (신입 구성원)</div>
-            <div className={styles.member}>이민수 (신입 구성원)</div>
-            <div className={styles.member}>최서연 (구성원)</div>
+            <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', marginBottom: '16px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>포함된 온보딩 섹션:</div>
+              <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#475569', lineHeight: '1.7' }}>
+                {selectedTemplate.categories.map((c, i) => (
+                  <li key={i}>{c.name} - {c.itemCount}개 과제</li>
+                ))}
+              </ul>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => { setIsDetailModalOpen(false); router.push('/members'); }}
+                style={{ flex: 1, padding: '10px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+              >
+                👥 구성원에게 적용하기
+              </button>
+            </div>
           </div>
         </Modal>
       )}
 
-      {/* 6. Template Status Modal */}
-      {isStatusModalOpen && selectedTemplate && (
+      {/* 3. Delete Modal */}
+      {isDeleteModalOpen && selectedTemplate && (
         <Modal
           open
-          onClose={() => setIsStatusModalOpen(false)}
+          onClose={() => setIsDeleteModalOpen(false)}
           title="템플릿 삭제"
           footer={
             <>
-              <ModalSecondaryButton onClick={() => setIsStatusModalOpen(false)}>취소</ModalSecondaryButton>
-              <ModalDangerButton
-                loading={isPending('templates-2')}
-                onClick={() => run('templates-2', '삭제했습니다.', () => setIsStatusModalOpen(false))}
-              >
-                삭제
-              </ModalDangerButton>
+              <ModalSecondaryButton onClick={() => setIsDeleteModalOpen(false)}>취소</ModalSecondaryButton>
+              <ModalDangerButton onClick={handleDelete}>삭제하기</ModalDangerButton>
             </>
           }
         >
-          <p>‘{selectedTemplate.name}’을(를) 삭제하시겠습니까?</p>
+          <p style={{ fontSize: '14px', color: '#334155', lineHeight: '1.6' }}>
+            정말로 <strong>{selectedTemplate.name}</strong> 템플릿을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+          </p>
         </Modal>
-      )}
-
-      {/* 7. Template Actions Menu */}
-      {isActionsMenuOpen && selectedTemplate && (
-        <div className={styles.menuOverlay} onClick={() => setIsActionsMenuOpen(false)}>
-          <div className={styles.actionMenu} onClick={(e) => e.stopPropagation()}>
-            <button className={styles.actionItem} onClick={() => { setIsDetailsModalOpen(true); setIsActionsMenuOpen(false); }}>상세 보기</button>
-            <button className={styles.actionItem} onClick={() => { setIsCategoriesModalOpen(true); setIsActionsMenuOpen(false); }}>카테고리 편집</button>
-            <button className={styles.actionItem} onClick={() => { setIsMembersModalOpen(true); setIsActionsMenuOpen(false); }}>멤버 관리</button>
-            <button className={styles.actionItem} onClick={() => { setIsStatusModalOpen(true); setIsActionsMenuOpen(false); }}>삭제</button>
-          </div>
-        </div>
       )}
     </div>
   );

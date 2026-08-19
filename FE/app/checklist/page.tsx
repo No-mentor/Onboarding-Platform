@@ -1,11 +1,12 @@
-'use client';
+﻿'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ChevronDown, RotateCcw, Bell, HelpCircle } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
-import { useModalAction } from '@/components/ui/use-modal-action';
 import { useToast } from '@/components/ui/toast';
+import { getChecklists, updateChecklistItemStatus, ChecklistSummaryResponse, ChecklistItemResponse } from '@/lib/api';
 import styles from './checklist.module.css';
 
 type ChecklistStatus = 'pending' | 'progress' | 'complete';
@@ -41,7 +42,7 @@ const STATUS_LABELS: Record<ChecklistStatus, string> = {
 };
 
 export default function ChecklistPage() {
-  const { run, isPending } = useModalAction();
+  const router = useRouter();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState('all');
 
@@ -52,26 +53,61 @@ export default function ChecklistPage() {
   const [isChecklistActionsModalOpen, setIsChecklistActionsModalOpen] = useState(false);
   const [isChecklistTabsModalOpen, setIsChecklistTabsModalOpen] = useState(false);
   const [isTaskCategoriesModalOpen, setIsTaskCategoriesModalOpen] = useState(false);
-  const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
-  const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
-  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
 
   // Selected item state
   const [selectedItem, setSelectedItem] = useState<ChecklistItem | null>(null);
-  const [selectedWorkspace, setSelectedWorkspace] = useState('마케팅팀 인수인계');
-  const [notificationCount, setNotificationCount] = useState(7);
-
-  // Filter states
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>(INITIAL_CHECKLIST_ITEMS);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterDay, setFilterDay] = useState('all');
-  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>(INITIAL_CHECKLIST_ITEMS);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const toggleCheck = (id: string) => {
-    setChecklistItems((prev) => prev.map((item) =>
-      item.id === id
-        ? { ...item, status: item.status === 'complete' ? 'pending' : 'complete' }
-        : item
-    ));
+  const fetchChecklists = async () => {
+    try {
+      setIsLoading(true);
+      const res: ChecklistSummaryResponse = await getChecklists();
+      if (res && res.items && res.items.length > 0) {
+        const mapped: ChecklistItem[] = res.items.map((item: ChecklistItemResponse, idx: number) => ({
+          id: item.id || `task-${idx + 1}`,
+          title: item.title,
+          day: (idx % 12) + 1,
+          status: item.status === 'COMPLETED' ? 'complete' : item.status === 'IN_PROGRESS' ? 'progress' : 'pending',
+        }));
+        setChecklistItems(mapped);
+      }
+    } catch (err) {
+      console.log('실제 체크리스트 조회 실패 (모의 데이터로 유지):', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchChecklists();
+  }, []);
+
+  const toggleCheck = async (id: string) => {
+    const target = checklistItems.find((i) => i.id === id);
+    if (!target) return;
+    const newStatus: ChecklistStatus = target.status === 'complete' ? 'pending' : 'complete';
+
+    setChecklistItems((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, status: newStatus } : item
+      )
+    );
+
+    if (!id.startsWith('task-')) {
+      try {
+        const apiStatus = newStatus === 'complete' ? 'COMPLETED' : 'NOT_STARTED';
+        await updateChecklistItemStatus(id, apiStatus);
+        showToast(newStatus === 'complete' ? '체크리스트 항목을 완료했습니다.' : '완료 상태를 되돌렸습니다.', 'success');
+      } catch (err) {
+        showToast('상태 변경 실패', 'error');
+        fetchChecklists();
+      }
+    } else {
+      showToast(newStatus === 'complete' ? '체크리스트 항목을 완료했습니다.' : '완료 상태를 되돌렸습니다.', 'info');
+    }
   };
 
   const filteredItems = checklistItems.filter((item) => {
@@ -82,14 +118,23 @@ export default function ChecklistPage() {
   });
 
   const completedCount = checklistItems.filter((item) => item.status === 'complete').length;
-  const completionRate = Math.round((completedCount / checklistItems.length) * 100);
+  const completionRate = checklistItems.length > 0 ? Math.round((completedCount / checklistItems.length) * 100) : 0;
 
-  const updateSelectedItem = (changes: Partial<ChecklistItem>, message: string) => {
+  const updateSelectedItem = async (changes: Partial<ChecklistItem>, message: string) => {
     if (!selectedItem) return;
     const updated = { ...selectedItem, ...changes };
     setChecklistItems((prev) => prev.map((item) => item.id === updated.id ? updated : item));
     setSelectedItem(updated);
     showToast(message, 'success');
+
+    if (changes.status && !selectedItem.id.startsWith('task-')) {
+      try {
+        const apiStatus = changes.status === 'complete' ? 'COMPLETED' : changes.status === 'progress' ? 'IN_PROGRESS' : 'NOT_STARTED';
+        await updateChecklistItemStatus(selectedItem.id, apiStatus);
+      } catch (e) {
+        console.log('상태 변경 오류:', e);
+      }
+    }
   };
 
   return (
@@ -105,15 +150,18 @@ export default function ChecklistPage() {
             <p className={styles.subtitle}>상태별로 필터링하고 완료 여부를 바로 확인하세요.</p>
           </div>
           <div className={styles.headerRight}>
-            <button className={styles.workspaceBtn} onClick={() => setIsWorkspaceModalOpen(true)}>
-              {selectedWorkspace}
+            <button
+              className={styles.workspaceBtn}
+              onClick={() => router.push('/workspace-selection')}
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <span>마케팅팀 인수인계</span>
               <ChevronDown size={16} />
             </button>
-            <button className={styles.notifBtn} onClick={() => setIsNotificationsModalOpen(true)} aria-label="알림 열기">
+            <button className={styles.notifBtn} onClick={() => router.push('/notification-center')} aria-label="알림 열기" title="알림 센터">
               <Bell size={20} />
-              {notificationCount > 0 && <span className={styles.badge}>{notificationCount}</span>}
             </button>
-            <button className={styles.helpBtn} onClick={() => setIsHelpModalOpen(true)} aria-label="도움말 열기">
+            <button className={styles.helpBtn} onClick={() => router.push('/ai-chat')} aria-label="도움말 열기" title="AI 어시스턴트">
               <HelpCircle size={18} />
             </button>
           </div>
@@ -128,28 +176,27 @@ export default function ChecklistPage() {
                 className={`${styles.tab} ${activeTab === 'all' ? styles.tabActive : ''}`}
                 onClick={() => setActiveTab('all')}
               >
-                전체
+                전체 ({checklistItems.length})
               </button>
               <button
                 className={`${styles.tab} ${activeTab === 'pending' ? styles.tabActive : ''}`}
                 onClick={() => setActiveTab('pending')}
               >
-                대기
+                대기 ({checklistItems.filter((i) => i.status === 'pending').length})
               </button>
               <button
                 className={`${styles.tab} ${activeTab === 'progress' ? styles.tabActive : ''}`}
                 onClick={() => setActiveTab('progress')}
               >
-                진행 중
+                진행 중 ({checklistItems.filter((i) => i.status === 'progress').length})
               </button>
               <button
                 className={`${styles.tab} ${activeTab === 'complete' ? styles.tabActive : ''}`}
                 onClick={() => setActiveTab('complete')}
               >
-                완료
+                완료 ({completedCount})
               </button>
             </div>
-
           </div>
 
           {/* Checklist Items */}
@@ -195,7 +242,6 @@ export default function ChecklistPage() {
                     onClick={() => {
                       if (item.status === 'complete') {
                         toggleCheck(item.id);
-                        showToast('완료 상태를 되돌렸습니다.', 'info');
                         return;
                       }
                       setSelectedItem(item);
@@ -315,8 +361,14 @@ export default function ChecklistPage() {
             <>
               <ModalSecondaryButton onClick={() => setIsFilterOptionsModalOpen(false)}>취소</ModalSecondaryButton>
               <ModalPrimaryButton
-                loading={isPending('checklist-1')}
-                onClick={() => run('checklist-1', '필터를 적용했습니다.', () => setIsFilterOptionsModalOpen(false))}
+                onClick={() => {
+                  if (filterStatus === 'pending') setActiveTab('pending');
+                  else if (filterStatus === 'complete') setActiveTab('complete');
+                  else if (filterStatus === 'progress') setActiveTab('progress');
+                  else setActiveTab('all');
+                  setIsFilterOptionsModalOpen(false);
+                  showToast('필터가 적용되었습니다.', 'success');
+                }}
               >
                 필터 적용
               </ModalPrimaryButton>
@@ -379,144 +431,39 @@ export default function ChecklistPage() {
               const nextStatus: ChecklistStatus = selectedItem.status === 'pending' ? 'progress' : selectedItem.status === 'progress' ? 'complete' : 'pending';
               updateSelectedItem({ status: nextStatus }, `상태를 '${STATUS_LABELS[nextStatus]}'(으)로 변경했습니다.`);
             }}>다음 상태로 변경</button>
-            <button className={styles.actionItem} onClick={() => updateSelectedItem({ day: selectedItem.day + 1 }, `${selectedItem.day + 1}일차로 일정을 변경했습니다.`)}>일정 하루 미루기</button>
-            <button className={styles.actionItem} onClick={() => updateSelectedItem({ note: selectedItem.note ? undefined : '담당자와 확인이 필요한 항목입니다.' }, selectedItem.note ? '메모를 삭제했습니다.' : '메모를 추가했습니다.')}>{selectedItem.note ? '메모 삭제' : '메모 추가'}</button>
-            <button className={styles.actionItem} onClick={() => updateSelectedItem({ reminder: !selectedItem.reminder }, selectedItem.reminder ? '미리 알림을 해제했습니다.' : '내일 오전 9시로 알림을 설정했습니다.')}>{selectedItem.reminder ? '미리 알림 해제' : '미리 알림 설정'}</button>
-            <button className={styles.actionItem} style={{ color: '#0765fc' }} onClick={() => {
+            <button
+              className={styles.actionItem}
+              onClick={() => {
+                setIsChecklistActionsModalOpen(false);
+                router.push(`/ai-chat?q=${encodeURIComponent(selectedItem.title + ' 관련 온보딩 질문')}`);
+              }}
+            >
+              🤖 AI에게 관련 업무 질문하기
+            </button>
+            <button
+              className={styles.actionItem}
+              onClick={() => {
+                setIsChecklistActionsModalOpen(false);
+                router.push('/30day-plan');
+              }}
+            >
+              📅 30일 로드맵에서 확인
+            </button>
+            <button
+              className={styles.actionItem}
+              onClick={() => {
+                setIsChecklistActionsModalOpen(false);
+                router.push('/daily-tasks');
+              }}
+            >
+              📝 오늘 할 일에서 보기
+            </button>
+            <button className={styles.actionItem} style={{ color: '#0765fc', fontWeight: '600' }} onClick={() => {
               updateSelectedItem({ status: 'complete' }, '업무를 완료 처리했습니다.');
               setIsChecklistActionsModalOpen(false);
-            }}>완료 처리</button>
-          </div>
-          {(selectedItem.note || selectedItem.reminder) && (
-            <div className={styles.helpText}>
-              {selectedItem.note && <p>메모: {selectedItem.note}</p>}
-              {selectedItem.reminder && <p>알림: 내일 오전 9시</p>}
-            </div>
-          )}
-        </Modal>
-      )}
-
-      {/* 5. Checklist Tabs Modal */}
-      {isChecklistTabsModalOpen && (
-        <Modal
-          open
-          onClose={() => setIsChecklistTabsModalOpen(false)}
-          title="체크리스트 탭"
-          footer={
-            <>
-              <ModalPrimaryButton
-                loading={isPending('checklist-2')}
-                onClick={() => run('checklist-2', '처리를 완료했습니다.', () => setIsChecklistTabsModalOpen(false))}
-              >
-                완료
-              </ModalPrimaryButton>
-            </>
-          }
-        >
-          <div className={styles.tabsList}>
-            {([['all', '전체'], ['pending', '대기'], ['progress', '진행 중'], ['complete', '완료']] as const).map(([id, label]) => (
-              <button key={id} className={styles.tabItem} onClick={() => { setActiveTab(id); setIsChecklistTabsModalOpen(false); }}>{label}</button>
-            ))}
-          </div>
-
-          <div className={styles.helpText}>
-            <p>상태별로 항목을 필터링하여 관리하세요.</p>
-          </div>
-        </Modal>
-      )}
-
-      {/* 6. Task Categories Modal */}
-      {isTaskCategoriesModalOpen && (
-        <Modal
-          open
-          onClose={() => setIsTaskCategoriesModalOpen(false)}
-          title="업무 카테고리"
-          footer={
-            <>
-              <ModalSecondaryButton onClick={() => setIsTaskCategoriesModalOpen(false)}>닫기</ModalSecondaryButton>
-            </>
-          }
-        >
-          <div className={styles.categoryList}>
-            <div className={styles.categoryItem}>
-              <h4>계정 및 권한</h4>
-              <p>계정 설정과 접근 권한 관련 업무</p>
-            </div>
-            <div className={styles.categoryItem}>
-              <h4>문서 및 자료</h4>
-              <p>업무 관련 문서 및 참고 자료</p>
-            </div>
-            <div className={styles.categoryItem}>
-              <h4>업무 규칙</h4>
-              <p>부서별 업무 규칙 및 가이드</p>
-            </div>
-            <div className={styles.categoryItem}>
-              <h4>피드백 및 평가</h4>
-              <p>진행도 평가 및 피드백</p>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {isWorkspaceModalOpen && (
-        <Modal
-          open
-          onClose={() => setIsWorkspaceModalOpen(false)}
-          title="워크스페이스 선택"
-          footer={<ModalSecondaryButton onClick={() => setIsWorkspaceModalOpen(false)}>닫기</ModalSecondaryButton>}
-        >
-          <div className={styles.actionList}>
-            {['마케팅팀 인수인계', '개발팀 온보딩', '신규 입사자 공통'].map((workspace) => (
-              <button
-                key={workspace}
-                className={styles.actionItem}
-                onClick={() => {
-                  setSelectedWorkspace(workspace);
-                  setIsWorkspaceModalOpen(false);
-                  showToast(`${workspace}(으)로 변경했습니다.`, 'success');
-                }}
-              >
-                {workspace}{selectedWorkspace === workspace ? ' · 선택됨' : ''}
-              </button>
-            ))}
-          </div>
-        </Modal>
-      )}
-
-      {isNotificationsModalOpen && (
-        <Modal
-          open
-          onClose={() => setIsNotificationsModalOpen(false)}
-          title="알림"
-          footer={
-            <>
-              <ModalSecondaryButton onClick={() => setIsNotificationsModalOpen(false)}>닫기</ModalSecondaryButton>
-              <ModalPrimaryButton onClick={() => { setNotificationCount(0); showToast('모든 알림을 확인했습니다.', 'success'); }}>모두 읽음</ModalPrimaryButton>
-            </>
-          }
-        >
-          <div className={styles.actionList}>
-            <button className={styles.actionItem} onClick={() => { setActiveTab('progress'); setIsNotificationsModalOpen(false); }}>진행 중인 업무 1개를 확인해 주세요.</button>
-            <button className={styles.actionItem} onClick={() => { setActiveTab('pending'); setIsNotificationsModalOpen(false); }}>마감 예정 업무를 확인해 주세요.</button>
-            <button className={styles.actionItem} onClick={() => { setIsProgressDetailModalOpen(true); setIsNotificationsModalOpen(false); }}>현재 완료율이 {completionRate}%입니다.</button>
-          </div>
-        </Modal>
-      )}
-
-      {isHelpModalOpen && (
-        <Modal
-          open
-          onClose={() => setIsHelpModalOpen(false)}
-          title="체크리스트 도움말"
-          footer={<ModalSecondaryButton onClick={() => setIsHelpModalOpen(false)}>닫기</ModalSecondaryButton>}
-        >
-          <div className={styles.helpText}>
-            <p>체크박스를 선택하면 업무가 바로 완료 처리됩니다. 상태 변경에서는 진행 중 전환, 일정 변경, 메모와 알림 설정을 할 수 있습니다.</p>
-          </div>
-          <div className={styles.actionList}>
-            <button className={styles.actionItem} onClick={() => { setIsHelpModalOpen(false); setIsChecklistTabsModalOpen(true); }}>상태별 목록 보기</button>
-            <button className={styles.actionItem} onClick={() => { setIsHelpModalOpen(false); setIsTaskCategoriesModalOpen(true); }}>업무 카테고리 안내</button>
-            <button className={styles.actionItem} onClick={() => { setIsHelpModalOpen(false); setIsFilterOptionsModalOpen(true); }}>필터 설정 열기</button>
+            }}>
+              ✅ 즉시 완료 처리
+            </button>
           </div>
         </Modal>
       )}

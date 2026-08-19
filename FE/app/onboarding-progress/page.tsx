@@ -1,11 +1,11 @@
-'use client';
-import React, { useMemo, useState } from 'react';
-import Link from 'next/link';
+﻿'use client';
+import React, { useMemo, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertCircle, AlertTriangle, BarChart3, Bell, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, Filter, HelpCircle, Search, Sparkles, TrendingUp, Users } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
-import { useModalAction } from '@/components/ui/use-modal-action';
 import { useToast } from '@/components/ui/toast';
+import { getAdminProgress, AdminProgressItemResponse } from '@/lib/api';
 import styles from './onboarding-progress.module.css';
 
 type Newbie = {
@@ -20,7 +20,7 @@ type Newbie = {
   activity: string;
 };
 
-const MOCK_NEWBIES: Newbie[] = [
+const DEFAULT_MOCK_NEWBIES: Newbie[] = [
   { id: 'mock-newbie-1', name: '김세원', team: '마케팅팀', day: '7일차', progress: 62, completed: 8, total: 13, status: '없음', activity: '1시간 전' },
   { id: 'mock-newbie-2', name: '정하늘', team: '마케팅팀', day: '5일차', progress: 38, completed: 4, total: 11, status: '체크리스트 지연', activity: '3시간 전' },
   { id: 'mock-newbie-3', name: '오지민', team: '마케팅팀', day: '11일차', progress: 71, completed: 12, total: 17, status: '문서 접근 제한', activity: '30분 전' },
@@ -31,28 +31,51 @@ const MOCK_NEWBIES: Newbie[] = [
   { id: 'mock-newbie-8', name: '박소은', team: '마케팅팀', day: '2일차', progress: 16, completed: 1, total: 7, status: '문서 접근 제한', activity: '6시간 전' },
 ];
 
-const WORKSPACES = ['마케팅팀 인수인계', '운영팀 인수인계', '디자인팀 인수인계'];
 const PAGE_SIZE = 5;
 const AVATAR_COLORS = ['#7C3AED', '#0F8A5F', '#E85D75', '#2788D8', '#5865D8'];
 
 export default function OnboardingProgressPage() {
-  const { run, isPending } = useModalAction();
+  const router = useRouter();
   const { showToast } = useToast();
-  const [newbies] = useState<Newbie[]>(MOCK_NEWBIES);
+  const [newbies, setNewbies] = useState<Newbie[]>(DEFAULT_MOCK_NEWBIES);
   const [searchTerm, setSearchTerm] = useState('');
   const [issueOnly, setIssueOnly] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedWorkspace, setSelectedWorkspace] = useState(WORKSPACES[0]);
-  const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Modal states
   const [isProgressDetailModalOpen, setIsProgressDetailModalOpen] = useState(false);
   const [isOnboardingOverviewModalOpen, setIsOnboardingOverviewModalOpen] = useState(false);
-  const [isUserProgressModalOpen, setIsUserProgressModalOpen] = useState(false);
   const [isTeamStatisticsModalOpen, setIsTeamStatisticsModalOpen] = useState(false);
-  const [isProgressActionModalOpen, setIsProgressActionModalOpen] = useState(false);
-
   const [selectedNewbie, setSelectedNewbie] = useState<Newbie | null>(null);
+
+  useEffect(() => {
+    const fetchProgress = async () => {
+      try {
+        setIsLoading(true);
+        const res = await getAdminProgress(0, 50);
+        if (res && res.content && res.content.length > 0) {
+          const mapped: Newbie[] = res.content.map((item: AdminProgressItemResponse, idx: number) => ({
+            id: item.id || `newbie-${idx + 1}`,
+            name: item.name,
+            team: item.team || '마케팅팀',
+            day: `${item.day || 1}일차`,
+            progress: item.progress || 0,
+            completed: item.completed || 0,
+            total: item.total || 10,
+            status: item.status || '없음',
+            activity: item.activity || '최근 활동',
+          }));
+          setNewbies(mapped);
+        }
+      } catch (err) {
+        console.log('관리자 진행 현황 조회 실패 (모의 데이터 유지):', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchProgress();
+  }, []);
 
   const filteredNewbies = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase();
@@ -65,9 +88,13 @@ export default function OnboardingProgressPage() {
   const totalPages = Math.max(1, Math.ceil(filteredNewbies.length / PAGE_SIZE));
   const pagedNewbies = filteredNewbies.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const openInsight = (kind: 'rate' | 'bottleneck' | 'checklist') => {
-    if (kind === 'rate') setIsTeamStatisticsModalOpen(true);
-    else setIsOnboardingOverviewModalOpen(true);
+  // Dynamic statistics
+  const avgProgress = newbies.length > 0 ? Math.round(newbies.reduce((acc, n) => acc + n.progress, 0) / newbies.length) : 0;
+  const issueCount = newbies.filter((n) => n.status !== '없음').length;
+  const activeCount = newbies.length;
+
+  const handleSendReminder = (newbie: Newbie) => {
+    showToast(`${newbie.name}님에게 온보딩 독려 알림을 발송했습니다.`, 'success');
   };
 
   return (
@@ -76,85 +103,148 @@ export default function OnboardingProgressPage() {
 
       <main className={styles.main}>
         <header className={styles.header}>
-          <div><h1>신입 진행 현황</h1><p>관리자가 신입별 진행률과 병목을 확인하는 화면입니다.</p></div>
+          <div>
+            <h1>신입 진행 현황</h1>
+            <p>관리자가 신입 구성원별 온보딩 진척률과 지연 요소를 모니터링합니다.</p>
+          </div>
           <div className={styles.headerActions}>
-            <div className={styles.workspaceWrap}>
-              <button className={styles.workspaceBtn} onClick={() => setIsWorkspaceMenuOpen((open) => !open)} aria-expanded={isWorkspaceMenuOpen}>
-                <Building2 size={17} /><span>{selectedWorkspace}</span><ChevronDown size={16} className={isWorkspaceMenuOpen ? styles.chevronOpen : ''} />
-              </button>
-              {isWorkspaceMenuOpen && (
-                <div className={styles.workspaceMenu} role="menu">
-                  <div className={styles.workspaceMenuLabel}>워크스페이스 전환</div>
-                  {WORKSPACES.map((workspace) => (
-                    <button key={workspace} className={workspace === selectedWorkspace ? styles.workspaceOptionActive : styles.workspaceOption} onClick={() => {
-                      setSelectedWorkspace(workspace);
-                      setIsWorkspaceMenuOpen(false);
-                      showToast(`${workspace}(으)로 전환했습니다.`, 'success');
-                    }}>
-                      <span>{workspace}</span>{workspace === selectedWorkspace && <Check size={16} />}
-                    </button>
-                  ))}
-                  <Link href="/workspace-settings" className={styles.workspaceManage}>워크스페이스 관리</Link>
-                </div>
-              )}
-            </div>
-            <button className={styles.iconBtn} aria-label="알림" onClick={() => showToast('새 알림이 없습니다.', 'success')}><Bell size={20} /><span className={styles.notificationDot} /></button>
-            <button className={styles.iconBtn} aria-label="도움말" onClick={() => showToast('신입별 완료율과 병목 상태를 한눈에 확인할 수 있습니다.', 'success')}><HelpCircle size={20} /></button>
+            <button
+              className={styles.workspaceButton}
+              onClick={() => router.push('/workspace-selection')}
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <span>마케팅팀 인수인계</span>
+              <ChevronDown size={16} />
+            </button>
+            <button className={styles.iconButton} onClick={() => router.push('/notification-center')} title="알림 센터">
+              <Bell size={18} />
+            </button>
+            <button className={styles.iconButton} onClick={() => router.push('/ai-chat')} title="AI 어시스턴트">
+              <HelpCircle size={18} />
+            </button>
           </div>
         </header>
 
-        <div className={styles.content}>
-          <div className={styles.statsWrapper}>
-            <button className={styles.stat} onClick={() => setIsUserProgressModalOpen(true)}><span className={styles.statIcon}><Users size={23} /></span><span className={styles.statContent}><span className={styles.summaryLabel}>진행 중 신입</span><span className={styles.summaryValue}>8 <small>명</small></span></span></button>
-            <button className={styles.stat} onClick={() => setIsTeamStatisticsModalOpen(true)}><span className={styles.statIcon}><BarChart3 size={23} /></span><span className={styles.statContent}><span className={styles.summaryLabel}>평균 완료율</span><span className={styles.summaryValue}>46%</span><span className={styles.statMiniBar}><i style={{ width: '46%' }} /></span></span></button>
-            <button className={`${styles.stat} ${styles.warningStat}`} onClick={() => setIsOnboardingOverviewModalOpen(true)}><span className={styles.statIcon}><AlertTriangle size={23} /></span><span className={styles.statContent}><span className={styles.summaryLabel}>병목 감지</span><span className={styles.summaryValue}>5 <small>건</small></span></span></button>
-            <button className={styles.stat} onClick={() => showToast('오늘 미완료 항목 12건을 확인했습니다.', 'success')}><span className={styles.statIcon}><CalendarDays size={23} /></span><span className={styles.statContent}><span className={styles.summaryLabel}>오늘 미완료</span><span className={styles.summaryValue}>12 <small>건</small></span></span></button>
-          </div>
-
-          <div className={styles.mainLayout}>
-            <div className={styles.tableCard}>
-            <div className={styles.tableHeader}>
-              <h2>신입별 진행 상황</h2>
-              <div className={styles.tableTools}>
-                <label className={styles.searchBox}><Search size={17} /><input value={searchTerm} onChange={(event) => { setSearchTerm(event.target.value); setCurrentPage(1); }} placeholder="이름으로 검색" /></label>
-                <button className={`${styles.filterBtn} ${issueOnly ? styles.filterBtnActive : ''}`} aria-label="병목 항목만 보기" title="병목 항목만 보기" onClick={() => { setIssueOnly((value) => !value); setCurrentPage(1); }}><Filter size={17} /></button>
-              </div>
+        <section className={styles.summaryGrid}>
+          <div className={styles.summaryCard} onClick={() => setIsTeamStatisticsModalOpen(true)} style={{ cursor: 'pointer' }}>
+            <div className={styles.summaryHeader}>
+              <span className={styles.summaryTitle}>평균 온보딩 진척률</span>
+              <TrendingUp size={18} color="#0765FC" />
             </div>
-            <div className={styles.tableScroll}><table className={styles.table}>
-              <thead><tr><th>신입</th><th>입사일</th><th>전체 진행률</th><th>완료 / 전체</th><th>병목 상태</th><th>최근 활동</th><th>작업</th></tr></thead>
-              <tbody>
-                {pagedNewbies.map((n, index) => (
-                  <tr key={n.id}>
-                    <td><div className={styles.name}><div className={styles.avatar} style={{ background: AVATAR_COLORS[((currentPage - 1) * PAGE_SIZE + index) % AVATAR_COLORS.length] }}>{n.name[0]}</div><div><div>{n.name}</div><div>{n.team}</div></div></div></td>
-                    <td><span className={styles.dayBadge}>{n.day}</span></td>
-                    <td><div className={styles.progressCell}><strong>{n.progress}%</strong><div className={styles.bar}><div style={{width: `${n.progress}%`}} /></div></div></td>
-                    <td>{n.completed} / {n.total}</td>
-                    <td><span className={n.status === '없음' ? styles.ok : styles.issue}>{n.status}</span></td>
-                    <td><span className={styles.activity}><i />{n.activity}</span></td>
-                    <td><button onClick={() => {
-                      setSelectedNewbie(n);
-                      setIsProgressDetailModalOpen(true);
-                    }}>상세 보기</button></td>
-                  </tr>
-                ))}
-                {pagedNewbies.length === 0 && <tr><td colSpan={7} className={styles.emptyState}>조건에 맞는 신입 구성원이 없습니다.</td></tr>}
-              </tbody>
-            </table></div>
-            <div className={styles.pagination}><button disabled={currentPage === 1} onClick={() => setCurrentPage((page) => page - 1)} aria-label="이전 페이지"><ChevronLeft size={17} /></button><span>{filteredNewbies.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0}-{Math.min(currentPage * PAGE_SIZE, filteredNewbies.length)} / {filteredNewbies.length}</span><button disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => page + 1)} aria-label="다음 페이지"><ChevronRight size={17} /></button></div>
+            <div className={styles.summaryValue}>{avgProgress}%</div>
+            <div className={styles.summaryDesc}>전체 {activeCount}명 신입 구성원 평균</div>
           </div>
 
-          <aside className={styles.rightColumn}>
-            <section className={styles.insights}>
-              <h3>인사이트</h3>
-              <button className={styles.insight} onClick={() => openInsight('rate')}><span className={styles.insightIcon}><TrendingUp size={19} /></span><span><strong>평균 완료율 46%</strong><small>지난 주 대비 6%포인트 상승</small></span><span className={styles.sparkline} aria-hidden="true"><i /><i /><i /><i /></span></button>
-              <button className={`${styles.insight} ${styles.insightWarning}`} onClick={() => openInsight('bottleneck')}><span className={styles.insightIcon}><AlertCircle size={19} /></span><span><strong>병목 항목 상위</strong><small>문서 접근 제한 5건</small></span><em>자세히 보기</em></button>
-              <button className={`${styles.insight} ${styles.insightSuccess}`} onClick={() => openInsight('checklist')}><span className={styles.insightIcon}><ClipboardCheck size={19} /></span><span><strong>체크리스트 지연</strong><small>2명이 지연 중</small></span><em>자세히 보기</em></button>
-            </section>
-            <section className={styles.aiCard}><div><h3>더 빠른 인수인계를 위해</h3><p>AI가 병목 원인을 분석하고 개선 제안을 드려요.</p></div><button className={styles.aiBtn} onClick={() => setIsOnboardingOverviewModalOpen(true)}><Sparkles size={17} /> AI 인사이트 보기</button><Sparkles className={styles.aiDecoration} size={36} /></section>
-          </aside>
+          <div className={styles.summaryCard} onClick={() => { setIssueOnly(true); showToast('주의/지연 대상자만 필터링했습니다.', 'info'); }} style={{ cursor: 'pointer' }}>
+            <div className={styles.summaryHeader}>
+              <span className={styles.summaryTitle}>주의 및 지연 항목</span>
+              <AlertTriangle size={18} color="#E85D75" />
+            </div>
+            <div className={styles.summaryValue} style={{ color: '#E85D75' }}>{issueCount}건</div>
+            <div className={styles.summaryDesc}>클릭하여 지연 인원만 확인</div>
           </div>
-        </div>
 
+          <div className={styles.summaryCard} onClick={() => setIsOnboardingOverviewModalOpen(true)} style={{ cursor: 'pointer' }}>
+            <div className={styles.summaryHeader}>
+              <span className={styles.summaryTitle}>활성 온보딩 인원</span>
+              <Users size={18} color="#0F8A5F" />
+            </div>
+            <div className={styles.summaryValue} style={{ color: '#0F8A5F' }}>{activeCount}명</div>
+            <div className={styles.summaryDesc}>진행 중인 인수인계 구성원</div>
+          </div>
+        </section>
+
+        {/* Table & Controls */}
+        <section className={styles.tableCard}>
+          <div className={styles.tableControls}>
+            <div className={styles.searchBox}>
+              <Search size={16} color="#94A3B8" />
+              <input
+                type="text"
+                placeholder="이름 또는 팀으로 검색..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <button
+              className={`${styles.filterButton} ${issueOnly ? styles.filterActive : ''}`}
+              onClick={() => setIssueOnly(!issueOnly)}
+            >
+              <Filter size={16} /> {issueOnly ? '전체 보기' : '지연 인원만 보기'}
+            </button>
+          </div>
+
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>이름</th>
+                <th>팀</th>
+                <th>경과</th>
+                <th>진척률</th>
+                <th>완료 과제</th>
+                <th>상태</th>
+                <th>최근 활동</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pagedNewbies.map((newbie, idx) => (
+                <tr key={newbie.id} onClick={() => { setSelectedNewbie(newbie); setIsProgressDetailModalOpen(true); }} style={{ cursor: 'pointer' }}>
+                  <td>
+                    <div className={styles.nameCell}>
+                      <div className={styles.avatar} style={{ backgroundColor: AVATAR_COLORS[idx % AVATAR_COLORS.length] }}>
+                        {newbie.name.charAt(0)}
+                      </div>
+                      <span>{newbie.name}</span>
+                    </div>
+                  </td>
+                  <td>{newbie.team}</td>
+                  <td>{newbie.day}</td>
+                  <td>
+                    <div className={styles.progressCell}>
+                      <div className={styles.miniBar}>
+                        <div className={styles.miniFill} style={{ width: `${newbie.progress}%` }}></div>
+                      </div>
+                      <span>{newbie.progress}%</span>
+                    </div>
+                  </td>
+                  <td>{newbie.completed}/{newbie.total}</td>
+                  <td>
+                    <span className={`${styles.statusBadge} ${newbie.status !== '없음' ? styles.statusWarning : styles.statusGood}`}>
+                      {newbie.status}
+                    </span>
+                  </td>
+                  <td className={styles.activityCell}>{newbie.activity}</td>
+                  <td>
+                    <button
+                      className={styles.actionBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSendReminder(newbie);
+                      }}
+                    >
+                      독려 알림
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Pagination */}
+          <div className={styles.pagination}>
+            <span>총 {filteredNewbies.length}명 중 {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, filteredNewbies.length)}명</span>
+            <div className={styles.pageButtons}>
+              <button disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>
+                <ChevronLeft size={16} />
+              </button>
+              <span>{currentPage} / {totalPages}</span>
+              <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => p + 1)}>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </section>
       </main>
 
       {/* MODALS */}
@@ -164,192 +254,112 @@ export default function OnboardingProgressPage() {
         <Modal
           open
           onClose={() => setIsProgressDetailModalOpen(false)}
-          title="신입 상세 정보"
+          title={`${selectedNewbie.name}님의 온보딩 진척 상세`}
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsProgressDetailModalOpen(false)}>닫기</ModalSecondaryButton>
               <ModalPrimaryButton
-                loading={isPending('onboarding-progress-0')}
-                onClick={() => run('onboarding-progress-0', '처리를 완료했습니다.', () => setIsProgressDetailModalOpen(false))}
+                onClick={() => {
+                  handleSendReminder(selectedNewbie);
+                  setIsProgressDetailModalOpen(false);
+                }}
               >
-                상세 보고서 보기
+                독려 메시지 발송
               </ModalPrimaryButton>
             </>
           }
         >
-          <div className={styles.detailsCard}>
-            <div className={styles.detailRow}>
-              <label>이름</label>
-              <span>{selectedNewbie.name}</span>
-            </div>
-            <div className={styles.detailRow}>
-              <label>팀</label>
-              <span>{selectedNewbie.team}</span>
-            </div>
-            <div className={styles.detailRow}>
-              <label>진행 일정</label>
-              <span>{selectedNewbie.day}</span>
-            </div>
-            <div className={styles.detailRow}>
-              <label>최근 활동</label>
-              <span>{selectedNewbie.activity}</span>
-            </div>
-          </div>
-
-          <div className={styles.progressSection}>
-            <h3>진행 현황</h3>
-            <div className={styles.progressRow}>
-              <span>전체 진행률</span>
-              <span className={styles.progressPercent}>{selectedNewbie.progress}%</span>
-            </div>
-            <div className={styles.progressBar}>
-              <div style={{ width: `${selectedNewbie.progress}%` }}></div>
+          <div className={styles.detailContent}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div className={styles.avatarLarge} style={{ backgroundColor: '#0765FC' }}>
+                {selectedNewbie.name.charAt(0)}
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px' }}>{selectedNewbie.name} ({selectedNewbie.team})</h3>
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>온보딩 {selectedNewbie.day} · 최근 활동: {selectedNewbie.activity}</p>
+              </div>
             </div>
 
-            <div className={styles.statsGrid}>
-              <div className={styles.statItem}>
-                <label>완료</label>
-                <div className={styles.statValue}>{selectedNewbie.completed}/{selectedNewbie.total}</div>
+            <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
+                <span style={{ fontWeight: 600 }}>진행도</span>
+                <span style={{ color: '#0765FC', fontWeight: 700 }}>{selectedNewbie.progress}% ({selectedNewbie.completed}/{selectedNewbie.total}개 완료)</span>
               </div>
-              <div className={styles.statItem}>
-                <label>병목 상태</label>
-                <div className={styles.statValue} style={{ color: selectedNewbie.status === '없음' ? '#287456' : '#985050' }}>
-                  {selectedNewbie.status}
-                </div>
+              <div className={styles.miniBar} style={{ height: '8px' }}>
+                <div className={styles.miniFill} style={{ width: `${selectedNewbie.progress}%` }}></div>
               </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => { setIsProgressDetailModalOpen(false); router.push('/30day-plan'); }}
+                style={{ flex: 1, padding: '10px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+              >
+                📅 30일 플랜 보기
+              </button>
+              <button
+                onClick={() => { setIsProgressDetailModalOpen(false); router.push('/checklist'); }}
+                style={{ flex: 1, padding: '10px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+              >
+                📋 체크리스트 보기
+              </button>
             </div>
           </div>
         </Modal>
       )}
 
-      {/* 2. Onboarding Overview Modal */}
+      {/* 2. Overview Modal */}
       {isOnboardingOverviewModalOpen && (
         <Modal
           open
           onClose={() => setIsOnboardingOverviewModalOpen(false)}
-          title="인수인계 개요"
+          title="온보딩 총괄 요약"
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsOnboardingOverviewModalOpen(false)}>닫기</ModalSecondaryButton>
-              <ModalPrimaryButton
-                loading={isPending('onboarding-progress-1')}
-                onClick={() => run('onboarding-progress-1', '처리를 완료했습니다.', () => setIsOnboardingOverviewModalOpen(false))}
-              >
-                상세 분석 보기
-              </ModalPrimaryButton>
             </>
           }
         >
-          <div className={styles.overviewCard}>
-            <div className={styles.overviewItem}>
-              <div className={styles.overviewLabel}>평균 완료율</div>
-              <div className={styles.overviewValue}>46%</div>
-              <div className={styles.overviewSubtext}>지난 주 대비 6%포인트 상승</div>
-            </div>
-            <div className={styles.overviewItem}>
-              <div className={styles.overviewLabel}>병목 항목</div>
-              <div className={styles.overviewValue}>5건</div>
-              <div className={styles.overviewSubtext}>문서 접근 지연</div>
-            </div>
-          </div>
-
-          <div className={styles.insightList}>
-            <div className={styles.insightItem}>
-              <h4>마케팅팀</h4>
-              <p>신입 5명 중 3명이 예정 진행률을 달성했습니다.</p>
-            </div>
-            <div className={styles.insightItem}>
-              <h4>병목 분석</h4>
-              <p>문서 접근 지연이 가장 큰 병목입니다. 담당자에게 알림을 발송하세요.</p>
+          <div style={{ padding: '8px 0' }}>
+            <p style={{ fontSize: '14px', color: '#334155', lineHeight: '1.6' }}>
+              현재 활성 신입 구성원 <strong>{activeCount}명</strong>이 온보딩 로드맵을 수행 중이며, 평균 진척률은 <strong>{avgProgress}%</strong>입니다.
+            </p>
+            <div style={{ marginTop: '14px', background: '#f8fafc', padding: '12px', borderRadius: '8px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '6px' }}>주요 모니터링 포인트:</div>
+              <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#475569', lineHeight: '1.7' }}>
+                <li>문서 접근 권한 제한 발생 시 구성원 관리에서 역할 검토 필요</li>
+                <li>체크리스트 3일 이상 지연 인원에 대한 멘토 1:1 체크인 권장</li>
+              </ul>
             </div>
           </div>
         </Modal>
       )}
 
-      {/* 3. User Progress Modal */}
-      {isUserProgressModalOpen && (
-        <Modal
-          open
-          onClose={() => setIsUserProgressModalOpen(false)}
-          title="사용자별 진행도"
-          footer={
-            <>
-              <ModalSecondaryButton onClick={() => setIsUserProgressModalOpen(false)}>닫기</ModalSecondaryButton>
-            </>
-          }
-        >
-          {newbies.slice(0, 3).map((newbie) => (
-            <div key={newbie.id} className={styles.progressListItem}>
-              <div className={styles.progressListHeader}>
-                <span className={styles.nameSpan}>{newbie.name}</span>
-                <span className={styles.progressPercent}>{newbie.progress}%</span>
-              </div>
-              <div className={styles.progressBar}>
-                <div style={{ width: `${newbie.progress}%` }}></div>
-              </div>
-              <div className={styles.progressListFooter}>
-                <span>{newbie.completed}/{newbie.total}</span>
-                <span>{newbie.activity}</span>
-              </div>
-            </div>
-          ))}
-        </Modal>
-      )}
-
-      {/* 4. Team Statistics Modal */}
+      {/* 3. Team Statistics Modal */}
       {isTeamStatisticsModalOpen && (
         <Modal
           open
           onClose={() => setIsTeamStatisticsModalOpen(false)}
-          title="팀 통계"
+          title="팀별 온보딩 통계"
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsTeamStatisticsModalOpen(false)}>닫기</ModalSecondaryButton>
             </>
           }
         >
-          <div className={styles.statsGrid}>
-            <div className={styles.statCard}>
-              <div className={styles.statLabel}>총 인원</div>
-              <div className={styles.statNumber}>8</div>
-              <div className={styles.statDesc}>명</div>
+          <div style={{ padding: '8px 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+              <span style={{ fontSize: '14px', fontWeight: 600 }}>마케팅팀</span>
+              <span style={{ fontSize: '14px', color: '#0765FC', fontWeight: 700 }}>58% 평균 완료율</span>
             </div>
-            <div className={styles.statCard}>
-              <div className={styles.statLabel}>완료율</div>
-              <div className={styles.statNumber}>46%</div>
-              <div className={styles.statDesc}>평균</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+              <span style={{ fontSize: '14px', fontWeight: 600 }}>브랜드팀</span>
+              <span style={{ fontSize: '14px', color: '#0765FC', fontWeight: 700 }}>31% 평균 완료율</span>
             </div>
-            <div className={styles.statCard}>
-              <div className={styles.statLabel}>병목</div>
-              <div className={styles.statNumber}>5</div>
-              <div className={styles.statDesc}>건</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0' }}>
+              <span style={{ fontSize: '14px', fontWeight: 600 }}>콘텐츠팀</span>
+              <span style={{ fontSize: '14px', color: '#0765FC', fontWeight: 700 }}>78% 평균 완료율</span>
             </div>
-            <div className={styles.statCard}>
-              <div className={styles.statLabel}>지연</div>
-              <div className={styles.statNumber}>12</div>
-              <div className={styles.statDesc}>건</div>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* 5. Progress Action Modal */}
-      {isProgressActionModalOpen && selectedNewbie && (
-        <Modal
-          open
-          onClose={() => setIsProgressActionModalOpen(false)}
-          title="진행도 조치"
-          footer={
-            <>
-              <ModalSecondaryButton onClick={() => setIsProgressActionModalOpen(false)}>닫기</ModalSecondaryButton>
-            </>
-          }
-        >
-          <div className={styles.actionList}>
-            <button className={styles.actionItem}>진행도 리셋</button>
-            <button className={styles.actionItem}>체크리스트 재할당</button>
-            <button className={styles.actionItem}>진행 일정 변경</button>
-            <button className={styles.actionItem}>알림 발송</button>
           </div>
         </Modal>
       )}

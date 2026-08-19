@@ -80,13 +80,17 @@ export async function getDashboard(): Promise<DashboardResponse> {
 export interface RecommendationResponse {
   id: string;
   title: string;
-  label: string;
-  time: string;
+  label?: string;
+  time?: string;
   status?: string;
+  type?: string;
+  completed?: boolean;
+  reason?: string;
 }
 
 export interface TodayRecommendationsResponse {
-  items: RecommendationResponse[];
+  items?: RecommendationResponse[];
+  recommendations?: RecommendationResponse[];
 }
 
 export async function getRecommendationsToday(): Promise<TodayRecommendationsResponse> {
@@ -128,8 +132,10 @@ export interface PlanItemResponse {
   id: string;
   day: number;
   title: string;
-  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | string;
+  type?: string;
   description?: string;
+  personName?: string;
 }
 
 export interface PlanResponse {
@@ -175,6 +181,25 @@ export async function generateOnboardingPlan(): Promise<PlanResponse> {
   return response.json();
 }
 
+export async function updatePlanItemStatus(itemId: string, status: string): Promise<PlanItemResponse> {
+  const token = getAuthToken();
+  const wsId = getWorkspaceId();
+  if (!token || !wsId) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/onboarding-plans/items/${itemId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Workspace-Id': wsId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ status }),
+  });
+
+  if (!response.ok) throw new Error('계획 항목 상태 변경 실패');
+  return response.json();
+}
+
 // ===== Checklists =====
 export interface ChecklistItemResponse {
   id: string;
@@ -202,6 +227,25 @@ export async function getChecklists(): Promise<ChecklistSummaryResponse> {
   });
 
   if (!response.ok) throw new Error('체크리스트 조회 실패');
+  return response.json();
+}
+
+export async function updateChecklistItemStatus(itemId: string, status: string): Promise<ChecklistItemResponse> {
+  const token = getAuthToken();
+  const wsId = getWorkspaceId();
+  if (!token || !wsId) throw new Error('인증 정보 없음');
+
+  const response = await fetch(`${API_BASE}/checklists/items/${itemId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Workspace-Id': wsId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ status }),
+  });
+
+  if (!response.ok) throw new Error('체크리스트 상태 변경 실패');
   return response.json();
 }
 
@@ -334,17 +378,20 @@ export interface MemberResponse {
   id: string;
   email: string;
   name: string;
-  role: 'OWNER' | 'ADMIN' | 'MEMBER';
+  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'MANAGER' | 'NEW_HIRE' | string;
   status: string;
+  department?: string;
+  team?: string;
   joinedAt?: string;
 }
 
 export interface MemberListResponse {
-  content: MemberResponse[];
-  totalElements: number;
-  totalPages: number;
-  currentPage: number;
-  pageSize: number;
+  content?: MemberResponse[];
+  members?: MemberResponse[];
+  totalElements?: number;
+  totalPages?: number;
+  currentPage?: number;
+  pageSize?: number;
 }
 
 export async function getMembers(page: number = 0, size: number = 20): Promise<MemberListResponse> {
@@ -494,18 +541,28 @@ export async function updateWorkspace(workspaceId: string, name: string): Promis
 }
 
 // ===== Templates =====
+export interface TemplateSection {
+  title: string;
+  items?: Array<{ title: string }>;
+}
+
 export interface TemplateResponse {
   id: string;
-  name: string;
+  name?: string;
+  title?: string;
   role: string;
   status?: string;
+  description?: string;
+  durationDays?: number;
   itemCount?: number;
+  sections?: TemplateSection[];
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface TemplateListResponse {
-  items: TemplateResponse[];
+  items?: TemplateResponse[];
+  templates?: TemplateResponse[];
 }
 
 export async function getTemplates(): Promise<TemplateListResponse> {
@@ -524,7 +581,7 @@ export async function getTemplates(): Promise<TemplateListResponse> {
   return response.json();
 }
 
-export async function createTemplateAPI(data: { name: string }): Promise<TemplateResponse> {
+export async function createTemplateAPI(data: any): Promise<TemplateResponse> {
   const token = getAuthToken();
   const wsId = getWorkspaceId();
   if (!token || !wsId) throw new Error('인증 정보 없음');
@@ -542,6 +599,8 @@ export async function createTemplateAPI(data: { name: string }): Promise<Templat
   if (!response.ok) throw new Error('템플릿 생성 실패');
   return response.json();
 }
+
+export const createTemplate = createTemplateAPI;
 
 export async function deleteTemplate(templateId: string): Promise<void> {
   const token = getAuthToken();
@@ -724,15 +783,19 @@ export async function updateTemplate(templateId: string, data: any): Promise<Tem
 // ===== Audit Logs =====
 export interface AuditLogResponse {
   id: string;
-  timestamp: string;
-  actorId: string;
+  timestamp?: string;
+  createdAt?: string;
+  actorId?: string | null;
   actorName?: string;
   eventType: string;
   targetType?: string;
   targetId?: string;
   targetName?: string;
-  result: 'ALLOW' | 'DENY';
+  resourceType?: string | null;
+  resourceId?: string | null;
+  result: 'ALLOW' | 'DENY' | 'SUCCESS' | 'FAILURE' | string;
   details?: string;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface AuditLogPageResponse {
