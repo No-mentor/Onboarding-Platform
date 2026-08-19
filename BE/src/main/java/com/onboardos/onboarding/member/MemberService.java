@@ -46,6 +46,7 @@ public class MemberService {
     private final UserRepository userRepository;
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceAccessService workspaceAccessService;
+    private final MemberManagementPolicy memberManagementPolicy;
     private final OnboardingPlanService onboardingPlanService;
     private final MailService mailService;
     private final SecureRandom secureRandom = new SecureRandom();
@@ -56,6 +57,7 @@ public class MemberService {
             UserRepository userRepository,
             WorkspaceRepository workspaceRepository,
             WorkspaceAccessService workspaceAccessService,
+            MemberManagementPolicy memberManagementPolicy,
             @Lazy OnboardingPlanService onboardingPlanService,
             MailService mailService
     ) {
@@ -64,16 +66,19 @@ public class MemberService {
         this.userRepository = userRepository;
         this.workspaceRepository = workspaceRepository;
         this.workspaceAccessService = workspaceAccessService;
+        this.memberManagementPolicy = memberManagementPolicy;
         this.onboardingPlanService = onboardingPlanService;
         this.mailService = mailService;
     }
 
     @Transactional
     public InvitationResponse invite(UserPrincipal principal, UUID workspaceId, CreateInvitationRequest request) {
-        workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
+        Membership actor = workspaceAccessService.requireRoles(
+                workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
+        UserRole role = request.role() == null ? UserRole.NEW_HIRE : request.role();
+        memberManagementPolicy.validateInvitation(actor, role);
 
         String email = request.email().trim().toLowerCase();
-        UserRole role = request.role() == null ? UserRole.NEW_HIRE : request.role();
 
         userRepository.findByEmailAndDeletedAtIsNull(email).ifPresent(user -> {
             if (membershipRepository.existsByWorkspaceIdAndUserIdAndDeletedAtIsNull(workspaceId, user.getId())) {
@@ -220,11 +225,17 @@ public class MemberService {
             UUID memberId,
             UpdateMemberRequest request
     ) {
-        workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
+        Membership actor = workspaceAccessService.requireRoles(
+                workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
+
+        workspaceRepository.findByIdForMemberUpdate(workspaceId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.WORKSPACE_MISMATCH));
 
         Membership membership = membershipRepository.findById(memberId)
                 .filter(m -> m.getWorkspaceId().equals(workspaceId) && m.getDeletedAt() == null)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "멤버를 찾을 수 없습니다."));
+
+        memberManagementPolicy.validateUpdate(actor, membership, request.role(), request.status());
 
         boolean removesActiveOwner = membership.getRole() == UserRole.OWNER
                 && membership.getStatus() == MembershipStatus.ACTIVE
