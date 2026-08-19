@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ChevronRight, Bell, HelpCircle } from 'lucide-react';
 import { AiOutlineFilePdf, AiOutlineFileExcel, AiOutlineFile } from 'react-icons/ai';
 import { CommonSidebar } from '@/components/common-sidebar';
@@ -24,6 +25,7 @@ import {
 import styles from './dashboard.module.css';
 
 function DashboardContent() {
+  const router = useRouter();
   const me = useMe();
   const { showToast } = useToast();
   const userName = me?.name ?? '사용자';
@@ -356,9 +358,17 @@ function DashboardContent() {
         onClose={() => setIsOnboardingProgressModalOpen(false)}
         title="인수인계 진행도"
         footer={
-          <ModalSecondaryButton onClick={() => setIsOnboardingProgressModalOpen(false)}>
-            닫기
-          </ModalSecondaryButton>
+          <>
+            <ModalSecondaryButton onClick={() => setIsOnboardingProgressModalOpen(false)}>
+              닫기
+            </ModalSecondaryButton>
+            <ModalPrimaryButton onClick={() => {
+              setIsOnboardingProgressModalOpen(false);
+              router.push('/30day-plan');
+            }}>
+              30일 로드맵 상세 보기
+            </ModalPrimaryButton>
+          </>
         }
       >
         <div className={styles.modalProgress}>
@@ -377,9 +387,17 @@ function DashboardContent() {
         onClose={() => setIsFileSummaryModalOpen(false)}
         title="파일 요약"
         footer={
-          <ModalSecondaryButton onClick={() => setIsFileSummaryModalOpen(false)}>
-            닫기
-          </ModalSecondaryButton>
+          <>
+            <ModalSecondaryButton onClick={() => setIsFileSummaryModalOpen(false)}>
+              닫기
+            </ModalSecondaryButton>
+            <ModalPrimaryButton onClick={() => {
+              setIsFileSummaryModalOpen(false);
+              router.push('/file-management');
+            }}>
+              파일 탐색기로 이동
+            </ModalPrimaryButton>
+          </>
         }
       >
         {selectedFile && (
@@ -419,9 +437,17 @@ function DashboardContent() {
         onClose={() => setIsTaskDetailsModalOpen(false)}
         title="업무 상세"
         footer={
-          <ModalSecondaryButton onClick={() => setIsTaskDetailsModalOpen(false)}>
-            닫기
-          </ModalSecondaryButton>
+          <>
+            <ModalSecondaryButton onClick={() => setIsTaskDetailsModalOpen(false)}>
+              닫기
+            </ModalSecondaryButton>
+            <ModalPrimaryButton onClick={() => {
+              setIsTaskDetailsModalOpen(false);
+              router.push('/daily-tasks');
+            }}>
+              오늘 할 일에서 보기
+            </ModalPrimaryButton>
+          </>
         }
       >
         {selectedTask && (
@@ -499,9 +525,17 @@ function DashboardContent() {
         onClose={() => setIsOnboardingSummaryModalOpen(false)}
         title="인수인계 요약"
         footer={
-          <ModalSecondaryButton onClick={() => setIsOnboardingSummaryModalOpen(false)}>
-            닫기
-          </ModalSecondaryButton>
+          <>
+            <ModalSecondaryButton onClick={() => setIsOnboardingSummaryModalOpen(false)}>
+              닫기
+            </ModalSecondaryButton>
+            <ModalPrimaryButton onClick={() => {
+              setIsOnboardingSummaryModalOpen(false);
+              router.push('/daily-tasks');
+            }}>
+              오늘 할 일 확인
+            </ModalPrimaryButton>
+          </>
         }
       >
         <div className={styles.modalSection}>

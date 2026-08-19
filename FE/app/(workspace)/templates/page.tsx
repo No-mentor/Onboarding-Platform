@@ -1,14 +1,16 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Plus, Edit2, Trash2, Search, MoreVertical } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton, ModalDangerButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
 import { useToast } from '@/components/ui/toast';
-import { getTemplates, deleteTemplate } from '@/lib/api';
+import { getTemplates, createTemplateAPI, deleteTemplate } from '@/lib/api';
 import styles from './templates.module.css';
 
 export default function TemplatesPage() {
+  const router = useRouter();
   const { run, isPending } = useModalAction();
   const { showToast } = useToast();
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -20,29 +22,73 @@ export default function TemplatesPage() {
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
 
+  // Form states for creation
+  const [newTemplateName, setNewTemplateName] = useState('');
+  const [newTemplateRole, setNewTemplateRole] = useState('NEW_HIRE');
+  const [newTemplateDesc, setNewTemplateDesc] = useState('');
+
   // Load templates on mount
-  useEffect(() => {
-    const loadTemplates = async () => {
-      try {
-        setIsLoading(true);
-        const response = await getTemplates();
-        setTemplates(response.items || []);
-        if (response.items && response.items.length > 0) {
-          setSelectedTemplateId(response.items[0].id);
-        }
-      } catch (err) {
-        console.error('템플릿 로드 실패:', err);
-        showToast('템플릿을 불러올 수 없습니다', 'error');
-      } finally {
-        setIsLoading(false);
+  const loadTemplates = async () => {
+    try {
+      setIsLoading(true);
+      const response = await getTemplates();
+      setTemplates(response.items || []);
+      if (response.items && response.items.length > 0 && !selectedTemplateId) {
+        setSelectedTemplateId(response.items[0].id);
       }
-    };
+    } catch (err) {
+      console.error('템플릿 로드 실패:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadTemplates();
   }, []);
 
+  const handleCreateTemplate = async () => {
+    if (!newTemplateName.trim()) {
+      showToast('템플릿명을 입력해주세요.', 'error');
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      const res = await createTemplateAPI({ name: newTemplateName.trim() });
+      showToast(`'${newTemplateName}' 템플릿을 생성했습니다.`, 'success');
+      setNewTemplateName('');
+      setNewTemplateDesc('');
+      setIsCreationModalOpen(false);
+      await loadTemplates();
+    } catch (err: any) {
+      showToast(err.message || '템플릿 생성 실패', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteTemplate = async () => {
+    if (!selectedTemplateId) return;
+    try {
+      setIsSubmitting(true);
+      await deleteTemplate(selectedTemplateId);
+      showToast('템플릿을 삭제했습니다.', 'success');
+      setIsStatusModalOpen(false);
+      setTemplates((prev) => prev.filter((t) => t.id !== selectedTemplateId));
+      setSelectedTemplateId(null);
+    } catch (err: any) {
+      showToast(err.message || '템플릿 삭제 실패', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
+  const activeCount = templates.length;
+  const roleCount = new Set(templates.map(t => t.role)).size || 1;
 
   return (
     <div className={styles.container}>
@@ -56,30 +102,36 @@ export default function TemplatesPage() {
 
         <div className={styles.content}>
           <div className={styles.statsWrapper}>
-            <div><div>3</div><div>개</div><div>활성 템플릿 수</div></div>
-            <div><div>3</div><div>개</div><div>다양한 역할 템플릿</div></div>
-            <div><div>54</div><div>개</div><div>모든 템플릿 항목 수</div></div>
-            <div><div>2</div><div>개</div><div>사용 중인 템플릿</div></div>
+            <div><div>{activeCount}</div><div>개</div><div>활성 템플릿 수</div></div>
+            <div><div>{roleCount}</div><div>개</div><div>다양한 역할 템플릿</div></div>
+            <div><div>{templates.reduce((acc, t) => acc + (t.items || t.itemCount || 0), 0)}</div><div>개</div><div>모든 템플릿 항목 수</div></div>
+            <div><div>{templates.filter(t => t.status === 'ACTIVE' || !t.status).length}</div><div>개</div><div>사용 중인 템플릿</div></div>
           </div>
 
           <div className={styles.mainLayout}>
             <div className={styles.listCard}>
             <h2>템플릿 목록</h2>
             <div className={styles.templates}>
-              {templates.map(t => (
-                <div key={t.id} className={styles.template} onClick={() => setSelectedTemplateId(t.id)}>
-                  <div className={styles.info}>
-                    <div className={styles.name}>{t.name} <span className={styles.role}>{t.role}</span> <span className={styles.status}>{t.status}</span></div>
-                    <div className={styles.meta}>{t.items}개 항목 · {t.team}</div>
-                    <div className={styles.date}>{t.date}</div>
-                  </div>
-                  <button className={styles.menu} onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedTemplateId(t.id);
-                    setIsActionsMenuOpen(true);
-                  }}><MoreVertical size={16} /></button>
+              {templates.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '32px', color: '#9CA3AF' }}>
+                  등록된 템플릿이 없습니다.
                 </div>
-              ))}
+              ) : (
+                templates.map(t => (
+                  <div key={t.id} className={`${styles.template} ${t.id === selectedTemplateId ? styles.selected : ''}`} onClick={() => setSelectedTemplateId(t.id)}>
+                    <div className={styles.info}>
+                      <div className={styles.name}>{t.name} <span className={styles.role}>{t.role || 'NEW_HIRE'}</span> <span className={styles.status}>{t.status || 'ACTIVE'}</span></div>
+                      <div className={styles.meta}>{t.items ?? t.itemCount ?? 0}개 항목 · {t.team || '전체'}</div>
+                      <div className={styles.date}>{t.createdAt ? new Date(t.createdAt).toLocaleDateString() : ''}</div>
+                    </div>
+                    <button className={styles.menu} onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedTemplateId(t.id);
+                      setIsActionsMenuOpen(true);
+                    }}><MoreVertical size={16} /></button>
+                  </div>
+                ))
+              )}
             </div>
             <button className={styles.addMore} onClick={() => setIsCreationModalOpen(true)}><Plus size={16} /> 템플릿 생성</button>
           </div>
@@ -89,26 +141,11 @@ export default function TemplatesPage() {
               {selectedTemplate && (
                 <>
                   <h3>{selectedTemplate.name}</h3>
-                  <div className={styles.badge}>{selectedTemplate.role}</div>
-                  <div className={styles.green}>{selectedTemplate.status}</div>
-                  <p className={styles.desc}>{selectedTemplate.team}<br/>운영 날짜: 2024.05.01 ~ 운영 2024.05.13</p>
-                  <div className={styles.stats2}>
-                    <div><div>18</div><div>총항목</div></div>
-                    <div><div>6</div><div>카테고리</div></div>
-                    <div><div>30일</div><div>길이</div></div>
-                    <div><div>2</div><div>사용중</div></div>
-                  </div>
-                  <h4>카테고리 미리보기</h4>
-                  <div className={styles.categories}>
-                    <div><span>1</span> 회사 이해 <span className={styles.count}>4개 항목</span></div>
-                    <div><span>2</span> 마케팅 프로세스 <span className={styles.count}>5개 항목</span></div>
-                    <div><span>3</span> 주요 툴 및 시스템 <span className={styles.count}>3개 항목</span></div>
-                    <div><span>4</span> 주요 프로젝트 <span className={styles.count}>3개 항목</span></div>
-                    <div><span>5</span> 커뮤니케이션 <span className={styles.count}>2개 항목</span></div>
-                    <div><span>6</span> 첫날 자료 <span className={styles.count}>1개 항목</span></div>
-                  </div>
+                  <div className={styles.badge}>{selectedTemplate.role || 'NEW_HIRE'}</div>
+                  <div className={styles.green}>{selectedTemplate.status || 'ACTIVE'}</div>
+                  <p className={styles.desc}>{selectedTemplate.team || '온보딩 표준'}<br/>등록일: {selectedTemplate.createdAt ? new Date(selectedTemplate.createdAt).toLocaleDateString() : '-'}</p>
                   <div className={styles.actions}>
-                    <button onClick={() => setIsCategoriesModalOpen(true)}><Edit2 size={16} /> 편집</button>
+                    <button onClick={() => setIsCategoriesModalOpen(true)}><Edit2 size={16} /> 카테고리 보기</button>
                     <button className={styles.delete} onClick={() => setIsStatusModalOpen(true)}><Trash2 size={16} /> 삭제</button>
                   </div>
                 </>
@@ -130,8 +167,8 @@ export default function TemplatesPage() {
             <>
               <ModalSecondaryButton onClick={() => setIsCreationModalOpen(false)}>취소</ModalSecondaryButton>
               <ModalPrimaryButton
-                loading={isPending('templates-0')}
-                onClick={() => run('templates-0', '생성이 완료되었습니다.', () => setIsCreationModalOpen(false))}
+                loading={isSubmitting}
+                onClick={handleCreateTemplate}
               >
                 생성
               </ModalPrimaryButton>
@@ -140,19 +177,35 @@ export default function TemplatesPage() {
         >
           <div className={styles.formGroup}>
             <label className={styles.label}>템플릿명</label>
-            <input type="text" placeholder="새로운 템플릿 이름" className={styles.input} />
+            <input
+              type="text"
+              value={newTemplateName}
+              onChange={(e) => setNewTemplateName(e.target.value)}
+              placeholder="예: 백엔드 개발자 30일 인수인계 템플릿"
+              className={styles.input}
+            />
           </div>
           <div className={styles.formGroup}>
             <label className={styles.label}>대상 역할</label>
-            <select className={styles.select}>
-              <option>NEW_HIRE</option>
-              <option>MEMBER</option>
-              <option>MANAGER</option>
+            <select
+              value={newTemplateRole}
+              onChange={(e) => setNewTemplateRole(e.target.value)}
+              className={styles.select}
+            >
+              <option value="NEW_HIRE">NEW_HIRE (신규 입사자)</option>
+              <option value="MEMBER">MEMBER (일반 팀원)</option>
+              <option value="MANAGER">MANAGER (온보딩 매니저)</option>
             </select>
           </div>
           <div className={styles.formGroup}>
             <label className={styles.label}>설명</label>
-            <textarea placeholder="템플릿 설명" className={styles.textarea} rows={3} />
+            <textarea
+              value={newTemplateDesc}
+              onChange={(e) => setNewTemplateDesc(e.target.value)}
+              placeholder="템플릿에 대한 간단한 설명을 입력하세요."
+              className={styles.textarea}
+              rows={3}
+            />
           </div>
         </Modal>
       )}
@@ -182,13 +235,25 @@ export default function TemplatesPage() {
         <Modal
           open
           onClose={() => setIsDetailsModalOpen(false)}
-          title="{selectedTemplate.name}"
-          footer={<ModalSecondaryButton onClick={() => setIsDetailsModalOpen(false)}>닫기</ModalSecondaryButton>}
+          title={selectedTemplate.name}
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsDetailsModalOpen(false)}>닫기</ModalSecondaryButton>
+              <ModalPrimaryButton
+                onClick={() => {
+                  setIsDetailsModalOpen(false);
+                  router.push('/30day-plan');
+                }}
+              >
+                30일 계획에서 확인
+              </ModalPrimaryButton>
+            </>
+          }
         >
-          <div className={styles.detail}><strong>역할:</strong> {selectedTemplate.role}</div>
-          <div className={styles.detail}><strong>상태:</strong> {selectedTemplate.status}</div>
-          <div className={styles.detail}><strong>항목 수:</strong> {selectedTemplate.items}</div>
-          <div className={styles.detail}><strong>팀:</strong> {selectedTemplate.team}</div>
+          <div className={styles.detail}><strong>역할:</strong> {selectedTemplate.role || 'NEW_HIRE'}</div>
+          <div className={styles.detail}><strong>상태:</strong> {selectedTemplate.status || 'ACTIVE'}</div>
+          <div className={styles.detail}><strong>항목 수:</strong> {selectedTemplate.items ?? selectedTemplate.itemCount ?? 0}개</div>
+          <div className={styles.detail}><strong>설명:</strong> {selectedTemplate.description || '표준 온보딩 템플릿'}</div>
         </Modal>
       )}
 
@@ -200,37 +265,52 @@ export default function TemplatesPage() {
           title="카테고리 관리"
           footer={
             <>
-              <ModalSecondaryButton onClick={() => setIsCategoriesModalOpen(false)}>취소</ModalSecondaryButton>
+              <ModalSecondaryButton onClick={() => setIsCategoriesModalOpen(false)}>닫기</ModalSecondaryButton>
               <ModalPrimaryButton
-                loading={isPending('templates-1')}
-                onClick={() => run('templates-1', '변경 내용을 저장했습니다.', () => setIsCategoriesModalOpen(false))}
+                onClick={() => {
+                  showToast('카테고리 설정이 저장되었습니다.', 'success');
+                  setIsCategoriesModalOpen(false);
+                }}
               >
-                저장
+                확인
               </ModalPrimaryButton>
             </>
           }
         >
-          {['회사 이해', '마케팅 프로세스', '주요 툴 및 시스템', '주요 프로젝트', '커뮤니케이션', '첫날 자료'].map((cat, i) => (
+          {['회사 및 조직 이해', '실무 업무 프로세스', '주요 툴 및 개발 환경', '주요 담당 프로젝트', '사내 커뮤니케이션 가이드', '첫 주차 필수 체크리스트'].map((cat, i) => (
             <div key={i} className={styles.categoryItem}>
               <span>{i + 1}. {cat}</span>
-              <button className={styles.editBtn}><Edit2 size={14} /></button>
+              <button className={styles.editBtn} onClick={() => showToast(`'${cat}' 카테고리 정보입니다.`, 'info')}><Edit2 size={14} /></button>
             </div>
           ))}
         </Modal>
       )}
 
       {/* 5. Template Members Modal */}
-      {isMembersModalOpen && (
+      {isMembersModalOpen && selectedTemplate && (
         <Modal
           open
           onClose={() => setIsMembersModalOpen(false)}
-          title="템플릿 멤버"
-          footer={<ModalSecondaryButton onClick={() => setIsMembersModalOpen(false)}>닫기</ModalSecondaryButton>}
+          title="템플릿 대상 멤버"
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsMembersModalOpen(false)}>닫기</ModalSecondaryButton>
+              <ModalPrimaryButton
+                onClick={() => {
+                  setIsMembersModalOpen(false);
+                  router.push('/members');
+                }}
+              >
+                구성원 관리로 이동
+              </ModalPrimaryButton>
+            </>
+          }
         >
+          <p style={{ fontSize: '14px', color: '#4B5563', margin: '0 0 12px' }}>
+            해당 템플릿의 대상 역할(<strong>{selectedTemplate.role || 'NEW_HIRE'}</strong>)을 부여받은 구성원 목록입니다.
+          </p>
           <div className={styles.memberList}>
-            <div className={styles.member}>김세원 (NEW_HIRE)</div>
-            <div className={styles.member}>이민수 (NEW_HIRE)</div>
-            <div className={styles.member}>최서연 (MEMBER)</div>
+            <div className={styles.member}>신규 입사자 구성원 그룹 ({selectedTemplate.role || 'NEW_HIRE'})</div>
           </div>
         </Modal>
       )}
@@ -245,8 +325,8 @@ export default function TemplatesPage() {
             <>
               <ModalSecondaryButton onClick={() => setIsStatusModalOpen(false)}>취소</ModalSecondaryButton>
               <ModalDangerButton
-                loading={isPending('templates-2')}
-                onClick={() => run('templates-2', '삭제했습니다.', () => setIsStatusModalOpen(false))}
+                loading={isSubmitting}
+                onClick={handleDeleteTemplate}
               >
                 삭제
               </ModalDangerButton>

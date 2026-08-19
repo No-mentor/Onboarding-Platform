@@ -1,6 +1,12 @@
 import { AuthResponse } from '@/types/auth';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const rawUrl = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  'http://localhost:8080'
+).trim().replace(/\/+$/, '');
+
+const API_BASE_URL = rawUrl.replace(/\/api\/v1\/?$/, '');
 const AUTH_ENDPOINT = `${API_BASE_URL}/api/v1/auth`;
 
 export interface SignupPayload {

@@ -46,7 +46,7 @@ export function CommonSidebar() {
 
   return (
     <aside className={styles.sidebar}>
-      <div className={styles.sidebarHeader}>
+      <Link href="/dashboard" className={styles.sidebarHeader} style={{ textDecoration: 'none', color: 'inherit' }}>
         <div className={styles.logo}>{workspace ? workspace.name.trim().charAt(0) : 'O'}</div>
         <div>
           <div className={styles.brandName}>{workspace?.name ?? 'OnboardOS'}</div>
@@ -54,7 +54,7 @@ export function CommonSidebar() {
             {workspace ? `onboardos.com/${workspace.slug}` : '업무 공간 없음'}
           </div>
         </div>
-      </div>
+      </Link>
 
       <nav className={styles.navMenu}>
         <div className={styles.navSection}>
@@ -95,16 +95,15 @@ export function CommonSidebar() {
       </nav>
 
       <div className={styles.sidebarFooter}>
-        <div className={styles.userCard}>
+        <Link href="/settings" className={styles.userCard} style={{ textDecoration: 'none', color: 'inherit' }}>
           <div className={styles.userAvatar}>{userInitial}</div>
           <div className={styles.userInfo}>
             <div className={styles.userName}>{userName}</div>
             <div className={styles.userRole}>
-              {[roleLabel, department].filter(Boolean).join(' · ') || '역할 정보 없음'}
+              {[roleLabel, department].filter(Boolean).join(' · ') || '내 설정 관리 →'}
             </div>
           </div>
-        </div>
-        <button className={styles.collapseBtn}>메뉴 접기</button>
+        </Link>
       </div>
     </aside>
   );

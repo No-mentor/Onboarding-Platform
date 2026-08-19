@@ -1,19 +1,21 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search, Download, MoreVertical, RotateCcw, ChevronLeft, ChevronRight, Bell, HelpCircle, X, Cloud, AlertTriangle, Trash2, FileText, Lock, Share2, MessageCircle, Sparkles, Send, Check, Settings } from 'lucide-react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFilePdf, faFileExcel, faFilePowerpoint } from '@fortawesome/free-solid-svg-icons';
+import { faFilePdf, faFileExcel, faFilePowerpoint, faFileWord } from '@fortawesome/free-solid-svg-icons';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton, ModalDangerButton } from '@/components/ui/modal';
 import { useModalAction } from '@/components/ui/use-modal-action';
-import { getDocuments, formatFileSize, formatFileType, type DocumentResponse } from '@/lib/api';
+import { getDocuments, uploadDocument, reprocessDocument, formatFileSize, formatFileType, sendChatMessage, type DocumentResponse } from '@/lib/api';
 import { deleteDocument } from '@/lib/document';
 import { useToast } from '@/components/ui/toast';
 import { getWorkspaceId } from '@/lib/storage';
 import styles from './file-management.module.css';
 
 export default function FileManagementPage() {
+  const router = useRouter();
   const { run, isPending } = useModalAction();
   const { showToast } = useToast();
   const [selectedFilter, setSelectedFilter] = useState('all');
@@ -22,6 +24,11 @@ export default function FileManagementPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [files, setFiles] = useState<DocumentResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // File Upload states
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Modal states
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -32,10 +39,15 @@ export default function FileManagementPage() {
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const [isRbacSidePanelOpen, setIsRbacSidePanelOpen] = useState(false);
 
+  // AI Modal chat states
+  const [aiQuestionInput, setAiQuestionInput] = useState('');
+  const [aiChatLogs, setAiChatLogs] = useState<Array<{ sender: 'user' | 'ai'; text: string; time: string }>>([]);
+  const [isAiAnswering, setIsAiAnswering] = useState(false);
+
   // Upload form states
-  const [uploadFileName, setUploadFileName] = useState('행사운영가이드');
+  const [uploadFileName, setUploadFileName] = useState('');
   const [uploadScope, setUploadScope] = useState('WORKSPACE');
-  const [uploadRoles, setUploadRoles] = useState(['NEW_HIRE']);
+  const [uploadRoles, setUploadRoles] = useState(['NEW_HIRE', 'MEMBER']);
   const [uploadDescription, setUploadDescription] = useState('');
 
   // Metadata form states
@@ -46,20 +58,89 @@ export default function FileManagementPage() {
 
   // Load files on mount
   useEffect(() => {
-    const loadFiles = async () => {
-      try {
-        setIsLoading(true);
-        const response = await getDocuments({ page: 0, size: 20 });
-        setFiles(response.items ?? []);
-      } catch (err) {
-        console.error('파일 목록 로드 실패:', err);
-        showToast('파일 목록을 불러올 수 없습니다', 'error');
-      } finally {
-        setIsLoading(false);
-      }
-    };
     loadFiles();
   }, []);
+
+  const loadFiles = async () => {
+    try {
+      setIsLoading(true);
+      const response = await getDocuments({ page: 0, size: 20 });
+      setFiles(response.items ?? []);
+    } catch (err) {
+      console.error('파일 목록 로드 실패:', err);
+      showToast('파일 목록을 불러올 수 없습니다', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUploadSubmit = async () => {
+    if (!selectedUploadFile) {
+      showToast('업로드할 파일을 선택해 주세요.', 'error');
+      return;
+    }
+    try {
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append('file', selectedUploadFile);
+      if (uploadFileName.trim()) {
+        formData.append('title', uploadFileName.trim());
+      }
+      formData.append('visibility', uploadScope);
+      if (uploadScope === 'ROLE_BASED' && uploadRoles.length > 0) {
+        formData.append('allowedRoles', uploadRoles.join(','));
+      }
+
+      await uploadDocument(formData);
+      showToast('파일이 성공적으로 업로드되었습니다.', 'success');
+      setIsUploadModalOpen(false);
+      setSelectedUploadFile(null);
+      setUploadFileName('');
+      await loadFiles();
+    } catch (err: any) {
+      console.error('업로드 실패:', err);
+      showToast(err.message || '파일 업로드에 실패했습니다.', 'error');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDownloadFile = (doc: DocumentResponse) => {
+    if (!doc) return;
+    const textData = `[OnboardOS 사내 문서: ${doc.title}]\n\n상태: ${doc.status}\n공개 범위: ${doc.visibility}\n학습 조각 수: ${doc.chunkCount ?? 0}\n등록일: ${formatDocDate(doc.createdAt)}\n업데이트: ${formatDocDate(doc.updatedAt)}\n`;
+    const blob = new Blob([textData], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = doc.title.includes('.') ? doc.title : `${doc.title}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast(`'${doc.title}' 다운로드가 시작되었습니다.`, 'success');
+  };
+
+  const handleAskDocumentAI = async () => {
+    if (!aiQuestionInput.trim() || isAiAnswering || !currentFile) return;
+    const q = aiQuestionInput.trim();
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setAiQuestionInput('');
+    setAiChatLogs((prev) => [...prev, { sender: 'user', text: q, time: timeStr }]);
+    setIsAiAnswering(true);
+
+    try {
+      const response = await sendChatMessage(`[문서: ${currentFile.title}] ${q}`);
+      const aiTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setAiChatLogs((prev) => [
+        ...prev,
+        { sender: 'ai', text: response.answer || '답변을 생성했습니다.', time: aiTime },
+      ]);
+    } catch (err: any) {
+      showToast(err.message || '답변 생성 실패', 'error');
+    } finally {
+      setIsAiAnswering(false);
+    }
+  };
 
   const getFileIcon = (type: string) => {
     switch (type) {
@@ -118,13 +199,13 @@ export default function FileManagementPage() {
             <p className={styles.description}>업로드된 업무 문서를 최신 상태와 권한 기준으로 관리하세요.</p>
           </div>
           <div className={styles.headerRight}>
-            <select className={styles.workspaceBtn}>
-              <option>마케팅팀 인수인계</option>
-            </select>
-            <button className={styles.notifBtn}>
+            <button className={styles.workspaceBtn} onClick={() => router.push('/workspace-selection')}>
+              워크스페이스 전환
+            </button>
+            <button className={styles.notifBtn} onClick={() => router.push('/notification-center')}>
               <Bell size={20} />
             </button>
-            <button className={styles.helpBtn}>
+            <button className={styles.helpBtn} onClick={() => router.push('/ai-chat')}>
               <HelpCircle size={18} />
             </button>
           </div>
@@ -265,10 +346,19 @@ export default function FileManagementPage() {
                 </div>
 
                 <div className={styles.detailsActions}>
-                  <button className={styles.aiBtn} onClick={() => setIsDetailsModalOpen(true)}>
+                  <button className={styles.aiBtn} onClick={() => {
+                    setAiChatLogs([
+                      {
+                        sender: 'ai',
+                        text: `'${currentFile.title}' 문서에 대해 궁금한 점을 질문해 보세요!`,
+                        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                      }
+                    ]);
+                    setIsDetailsModalOpen(true);
+                  }}>
                     AI에게 질문
                   </button>
-                  <button className={styles.downloadBtn}>
+                  <button className={styles.downloadBtn} onClick={() => handleDownloadFile(currentFile)}>
                     <Download size={16} /> 다운로드
                   </button>
                   <button className={styles.menuBtn} onClick={() => setIsActionsMenuOpen(true)}>
@@ -352,19 +442,44 @@ export default function FileManagementPage() {
             <>
               <ModalSecondaryButton onClick={() => setIsUploadModalOpen(false)}>취소</ModalSecondaryButton>
               <ModalPrimaryButton
-                loading={isPending('file-management-0')}
-                onClick={() => run('file-management-0', '파일을 업로드했습니다.', () => setIsUploadModalOpen(false))}
+                loading={isUploading}
+                onClick={handleUploadSubmit}
               >
                 <Cloud size={16} /> 업로드
               </ModalPrimaryButton>
             </>
           }
         >
+          {/* Hidden File Input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            accept=".pdf,.docx,.doc,.xlsx,.xls,.pptx,.ppt,.txt"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                setSelectedUploadFile(file);
+                if (!uploadFileName) {
+                  setUploadFileName(file.name.replace(/\.[^/.]+$/, ''));
+                }
+              }
+            }}
+          />
+
           {/* Drag and Drop Area */}
-          <div className={styles.uploadArea}>
-            <Cloud size={48} color="#9CA3AF" />
-            <p className={styles.uploadTitle}>파일을 드래그 앤 드롭하거나 클릭하여 업로드</p>
-            <p className={styles.uploadSubtitle}>PDF, DOCX, XLSX, PPTX</p>
+          <div
+            className={styles.uploadArea}
+            onClick={() => fileInputRef.current?.click()}
+            style={{ cursor: 'pointer', border: selectedUploadFile ? '2px dashed #4F46E5' : undefined }}
+          >
+            <Cloud size={48} color={selectedUploadFile ? '#4F46E5' : '#9CA3AF'} />
+            <p className={styles.uploadTitle}>
+              {selectedUploadFile ? `선택된 파일: ${selectedUploadFile.name}` : '파일을 드래그 앤 드롭하거나 클릭하여 업로드'}
+            </p>
+            <p className={styles.uploadSubtitle}>
+              {selectedUploadFile ? `${formatFileSize(selectedUploadFile.size)} • 클릭하여 변경` : 'PDF, DOCX, XLSX, PPTX, TXT'}
+            </p>
           </div>
 
           {/* Form Fields */}
@@ -386,34 +501,36 @@ export default function FileManagementPage() {
               onChange={(e) => setUploadScope(e.target.value)}
               className={styles.select}
             >
-              <option value="WORKSPACE">WORKSPACE</option>
-              <option value="ROLE_BASED">ROLE_BASED</option>
-              <option value="PRIVATE">PRIVATE</option>
+              <option value="WORKSPACE">WORKSPACE (전체 공개)</option>
+              <option value="ROLE_BASED">ROLE_BASED (지정 역할만)</option>
+              <option value="PRIVATE">PRIVATE (비공개)</option>
             </select>
           </div>
 
-          <div className={styles.formGroup}>
-            <label className={styles.label}>허용 역할</label>
-            <div className={styles.rolesContainer}>
-              {['NEW_HIRE', 'MEMBER'].map((role) => (
-                <div key={role} className={styles.roleCheckbox}>
-                  <input
-                    type="checkbox"
-                    id={`role-${role}`}
-                    checked={uploadRoles.includes(role)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setUploadRoles([...uploadRoles, role]);
-                      } else {
-                        setUploadRoles(uploadRoles.filter(r => r !== role));
-                      }
-                    }}
-                  />
-                  <label htmlFor={`role-${role}`} className={styles.roleLabel}>{role}</label>
-                </div>
-              ))}
+          {uploadScope === 'ROLE_BASED' && (
+            <div className={styles.formGroup}>
+              <label className={styles.label}>허용 역할</label>
+              <div className={styles.rolesContainer}>
+                {['NEW_HIRE', 'MEMBER', 'MANAGER', 'ADMIN'].map((role) => (
+                  <div key={role} className={styles.roleCheckbox}>
+                    <input
+                      type="checkbox"
+                      id={`role-${role}`}
+                      checked={uploadRoles.includes(role)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setUploadRoles([...uploadRoles, role]);
+                        } else {
+                          setUploadRoles(uploadRoles.filter(r => r !== role));
+                        }
+                      }}
+                    />
+                    <label htmlFor={`role-${role}`} className={styles.roleLabel}>{role}</label>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className={styles.formGroup}>
             <label className={styles.label}>설명 (선택)</label>
@@ -422,9 +539,8 @@ export default function FileManagementPage() {
               onChange={(e) => setUploadDescription(e.target.value)}
               placeholder="문서에 대한 설명을 입력하세요."
               className={styles.textarea}
-              rows={4}
+              rows={3}
             />
-            <span className={styles.charCount}>0 / 500</span>
           </div>
         </Modal>
       )}
@@ -434,52 +550,70 @@ export default function FileManagementPage() {
         <Modal
           open
           onClose={() => setIsDetailsModalOpen(false)}
-          title="AI에게 질문"
+          title={`AI 문서 질문 • ${currentFile.title}`}
         >
           <div className={styles.chatContainer}>
-            {/* Chat message from user */}
-            <div className={styles.chatTime}>10:24</div>
-            <div className={styles.userMessage}>
-              {currentFile.title}은 인제 창조된 됐?
-            </div>
+            <div style={{ maxHeight: '280px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px' }}>
+              {aiChatLogs.map((log, idx) => (
+                <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: log.sender === 'user' ? 'flex-end' : 'flex-start' }}>
+                  <div style={{ fontSize: '11px', color: '#9CA3AF', marginBottom: '2px' }}>{log.time}</div>
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '12px',
+                      maxWidth: '85%',
+                      fontSize: '13.5px',
+                      lineHeight: 1.5,
+                      backgroundColor: log.sender === 'user' ? '#4F46E5' : '#F3F4F6',
+                      color: log.sender === 'user' ? '#FFFFFF' : '#1F2937',
+                      whiteSpace: 'pre-line',
+                    }}
+                  >
+                    {log.text}
+                  </div>
+                </div>
+              ))}
 
-            {/* Chat message from AI */}
-            <div className={styles.chatTime}>10:24</div>
-            <div className={styles.aiMessage}>
-              <div className={styles.aiIcon}><Sparkles size={18} /></div>
-              <p>{currentFile.title}은 행사 기획 단계에서 중요한 참고 자료입니다. 또한 행사 주최자 작성 시, 미팅 운영 정책 적 작성 시, 미팅 참석자 현황 시, 중요 정책 및 보고서 작성 시 인도시 필수 메뉴입니다.</p>
-            </div>
-
-            {/* Sources */}
-            <div className={styles.sources}>
-              <span>출처</span>
-              <div className={styles.sourceButtons}>
-                <button className={styles.sourceBtn}>
-                  <FileText size={14} /> {currentFile.title}.pdf - p.3
-                </button>
-                <button className={styles.sourceBtn}>
-                  <FileText size={14} /> {currentFile.title}.pdf - p.5
-                </button>
-              </div>
+              {isAiAnswering && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#6B7280', fontSize: '13px' }}>
+                  <Sparkles size={14} color="#4F46E5" />
+                  <span>문서를 검색하고 답변을 생성하고 있습니다...</span>
+                </div>
+              )}
             </div>
 
             {/* Follow-up question */}
             <div className={styles.followUpContainer}>
               <input
                 type="text"
-                placeholder="추기 질문을 입력하세요"
+                placeholder="문서에 대해 추가 질문을 입력하세요 (Enter)"
+                value={aiQuestionInput}
+                onChange={(e) => setAiQuestionInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleAskDocumentAI();
+                  }
+                }}
+                disabled={isAiAnswering}
                 className={styles.followUpInput}
               />
-              <button className={styles.sendBtn}><Send size={16} /></button>
+              <button
+                className={styles.sendBtn}
+                onClick={handleAskDocumentAI}
+                disabled={!aiQuestionInput.trim() || isAiAnswering}
+              >
+                <Send size={16} />
+              </button>
             </div>
           </div>
 
-          <div className={styles.aiFooterButtons}>
-            <button className={styles.aiFooterBtn}>
-              <RotateCcw size={14} /> 재 질문
-            </button>
-            <button className={styles.aiFooterBtn}>
-              <Share2 size={14} /> 진 채팅으로 이동
+          <div className={styles.aiFooterButtons} style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button
+              className={styles.aiFooterBtn}
+              onClick={() => router.push('/ai-chat')}
+            >
+              <Share2 size={14} /> 전체 AI 채팅으로 이동
             </button>
           </div>
         </Modal>
@@ -497,8 +631,16 @@ export default function FileManagementPage() {
             <>
               <ModalSecondaryButton onClick={() => setIsReprocessConfirmOpen(false)}>취소</ModalSecondaryButton>
               <ModalDangerButton
-                loading={isPending('file-management-1')}
-                onClick={() => run('file-management-1', '문서 재처리를 시작했습니다.', () => setIsReprocessConfirmOpen(false))}
+                onClick={async () => {
+                  try {
+                    await reprocessDocument(currentFile.id);
+                    showToast('문서 재처리를 요청했습니다.', 'success');
+                    setIsReprocessConfirmOpen(false);
+                    await loadFiles();
+                  } catch (err: any) {
+                    showToast(err.message || '재처리 실패', 'error');
+                  }
+                }}
               >
                 재처리 시작
               </ModalDangerButton>
