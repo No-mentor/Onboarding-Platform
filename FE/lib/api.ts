@@ -579,15 +579,31 @@ export async function updateMemberRole(memberId: string, role: string): Promise<
   return response.json();
 }
 
-export async function acceptMemberInvitation(token: string): Promise<{ success: boolean }> {
+export interface AcceptInvitationResponse {
+  workspaceId: string;
+  role: string;
+  membershipId?: string;
+  onboardingPlanId?: string | null;
+}
+
+export async function acceptMemberInvitation(token: string): Promise<AcceptInvitationResponse> {
+  const authToken = getAuthToken();
+  if (!authToken) {
+    throw new Error('초대를 수락하려면 로그인이 필요합니다.');
+  }
+
   const response = await fetch(`${API_BASE}/members/invitations/${token}/accept`, {
     method: 'POST',
     headers: {
+      Authorization: `Bearer ${authToken}`,
       'Content-Type': 'application/json',
     },
   });
 
-  if (!response.ok) throw new Error('초대 수락 실패');
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || '초대 수락에 실패했습니다.');
+  }
   return response.json();
 }
 
