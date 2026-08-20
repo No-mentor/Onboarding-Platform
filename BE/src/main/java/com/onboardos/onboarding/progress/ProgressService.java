@@ -15,6 +15,7 @@ import com.onboardos.onboarding.domain.user.UserRole;
 import com.onboardos.onboarding.global.exception.BusinessException;
 import com.onboardos.onboarding.global.exception.ErrorCode;
 import com.onboardos.onboarding.global.security.UserPrincipal;
+import com.onboardos.onboarding.global.time.BusinessClock;
 import com.onboardos.onboarding.global.web.PageResponse;
 import com.onboardos.onboarding.global.workspace.WorkspaceAccessService;
 import com.onboardos.onboarding.progress.dto.AdminProgressDetailResponse;
@@ -22,7 +23,6 @@ import com.onboardos.onboarding.progress.dto.AdminProgressItemResponse;
 import com.onboardos.onboarding.progress.dto.MyProgressResponse;
 import com.onboardos.onboarding.progress.dto.MyProgressResponse.OverdueItem;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,6 +45,8 @@ public class ProgressService {
     private final OnboardingPlanItemRepository planItemRepository;
     private final MembershipRepository membershipRepository;
     private final UserRepository userRepository;
+    // "오늘"은 한국 사용자 기준(Asia/Seoul)이다. dayIndex/기한 경과 판정에 쓴다.
+    private final BusinessClock clock;
 
     @Transactional(readOnly = true)
     public MyProgressResponse myProgress(UserPrincipal principal, UUID workspaceId) {
@@ -96,7 +98,7 @@ public class ProgressService {
             int currentDay = 0;
             String status = "NO_PLAN";
             if (plan != null) {
-                long day = ChronoUnit.DAYS.between(plan.getStartDate(), LocalDate.now()) + 1;
+                long day = ChronoUnit.DAYS.between(plan.getStartDate(), clock.today()) + 1;
                 currentDay = (int) Math.min(30, Math.max(1, day));
                 status = classifyStatus(progress, currentDay, plan);
             }
@@ -160,7 +162,7 @@ public class ProgressService {
         long total = items.stream().filter(i -> i.getStatus() != ItemStatus.SKIPPED).count();
         long done = items.stream().filter(i -> i.getStatus() == ItemStatus.DONE).count();
 
-        long currentDay = ChronoUnit.DAYS.between(plan.getStartDate(), LocalDate.now()) + 1;
+        long currentDay = ChronoUnit.DAYS.between(plan.getStartDate(), clock.today()) + 1;
         int dayCap = (int) Math.min(30, Math.max(1, currentDay));
 
         List<OverdueItem> overdue = items.stream()

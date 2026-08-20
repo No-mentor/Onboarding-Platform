@@ -38,35 +38,47 @@ export function Modal({
   // 모달을 열기 전에 포커스가 있던 요소. 닫을 때 여기로 되돌린다.
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-        return;
-      }
+  /**
+   * 항상 최신 onClose 를 가리키는 ref.
+   * 부모가 매 렌더마다 새 인라인 함수(onClose={() => setOpen(false)})를 넘기는 경우가 많은데,
+   * onClose 를 아래 큰 useEffect 의 의존성에 그대로 넣으면 입력할 때마다(부모 상태 변경 → 리렌더
+   * → onClose identity 변경) effect 가 다시 실행되어 "모달이 열릴 때 한 번" 해야 할 초기 포커스
+   * 이동이 매 키 입력마다 다시 일어난다 (그 결과 포커스가 첫 번째 요소인 닫기 버튼으로 튄다).
+   * ref 로 최신 값만 참조하면 onClose 값이 바뀌어도 effect 를 다시 실행할 필요가 없다.
+   */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
-      // Tab 이 모달 밖으로 새어 나가지 않도록 순환시킨다
-      if (e.key !== 'Tab' || !modalRef.current) return;
+  // 참조가 고정돼 있어(빈 의존성 배열) 아래 effect 를 onClose 변경 때문에 다시 실행시키지 않는다.
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onCloseRef.current();
+      return;
+    }
 
-      const items = Array.from(
-        modalRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)
-      ).filter((el) => el.offsetParent !== null);
-      if (items.length === 0) return;
+    // Tab 이 모달 밖으로 새어 나가지 않도록 순환시킨다
+    if (e.key !== 'Tab' || !modalRef.current) return;
 
-      const first = items[0];
-      const last = items[items.length - 1];
+    const items = Array.from(
+      modalRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)
+    ).filter((el) => el.offsetParent !== null);
+    if (items.length === 0) return;
 
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    },
-    [onClose]
-  );
+    const first = items[0];
+    const last = items[items.length - 1];
 
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }, []);
+
+  // open 이 실제로 바뀔 때(닫힘→열림)만 실행된다. children/부모 리렌더로는 다시 실행되지 않는다.
   useEffect(() => {
     if (!open) return;
 
@@ -81,9 +93,13 @@ export function Modal({
 
     document.addEventListener('keydown', handleKeyDown);
 
-    // 모달이 열리면 첫 번째 요소로 포커스를 옮긴다
+    // 모달이 열리면 포커스를 옮긴다. 입력 요소가 있으면 그쪽을 우선한다 (닫기 버튼이 아니라
+    // 바로 입력할 수 있게). 없으면 첫 번째로 포커스 가능한 요소로.
     const focusTimer = window.setTimeout(() => {
-      const target = modalRef.current?.querySelector<HTMLElement>(FOCUSABLE);
+      const target =
+        modalRef.current?.querySelector<HTMLElement>(
+          'input:not([disabled]), textarea:not([disabled]), select:not([disabled])'
+        ) ?? modalRef.current?.querySelector<HTMLElement>(FOCUSABLE);
       target?.focus();
     }, 0);
 

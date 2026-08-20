@@ -12,6 +12,7 @@ import com.onboardos.onboarding.domain.plan.PlanStatus;
 import com.onboardos.onboarding.global.exception.BusinessException;
 import com.onboardos.onboarding.global.exception.ErrorCode;
 import com.onboardos.onboarding.global.security.UserPrincipal;
+import com.onboardos.onboarding.global.time.BusinessClock;
 import com.onboardos.onboarding.global.workspace.WorkspaceAccessService;
 import com.onboardos.onboarding.onboarding.dto.RecommendationResponse;
 import com.onboardos.onboarding.onboarding.dto.TodayRecommendationsResponse;
@@ -19,7 +20,9 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -38,6 +41,9 @@ public class RecommendationService {
     private final DailyRecommendationRepository recommendationRepository;
     private final WorkspaceAccessService workspaceAccessService;
     private final OnboardingSyncService syncService;
+    // "오늘"은 한국 사용자 기준(Asia/Seoul)이다. JVM 기본 타임존이 UTC 여도 자정~오전 9시 사이에
+    // 하루 전 날짜로 계산되지 않게 한다.
+    private final BusinessClock clock;
 
     /**
      * 오늘 할 일 추천 목록을 조회하거나, 없으면 계획 기반으로 생성한다.
@@ -51,7 +57,7 @@ public class RecommendationService {
     }
 
     private TodayRecommendationsResponse todayFor(UUID workspaceId, UUID userId, LocalDate date) {
-        LocalDate target = date == null ? LocalDate.now() : date;
+        LocalDate target = date == null ? clock.today() : date;
 
         OnboardingPlan plan = planRepository
                 .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, userId, PlanStatus.ACTIVE)
@@ -61,6 +67,12 @@ public class RecommendationService {
                 .findByWorkspaceIdAndUserIdAndRecommendDateOrderByPriorityAsc(
                         workspaceId, userId, target);
 
+        if (plan != null) {
+            // 방어선: 계획이 재생성됐는데 그 시점에 정리되지 못한(또는 다른 경로로 남은) 오늘의
+            // 추천이 있으면, 최소한 더 이상 존재하지 않는 계획 항목을 가리키는 추천은 보여주지 않는다.
+            existing = dropStaleForPlan(existing, plan);
+        }
+
         if (existing.isEmpty() && plan != null) {
             existing = generateFromPlanSafely(workspaceId, userId, target, plan);
         }
@@ -69,6 +81,22 @@ public class RecommendationService {
                 target,
                 existing.stream().map(RecommendationResponse::from).toList()
         );
+    }
+
+    /**
+     * planItemId 가 있는데 그 항목이 현재 활성 계획에 없으면(예전 계획이 재생성되며 archived 된 경우)
+     * stale 한 추천이다. planItemId 가 없는(fallback) 추천은 그대로 둔다.
+     */
+    private List<DailyRecommendation> dropStaleForPlan(List<DailyRecommendation> recs, OnboardingPlan plan) {
+        boolean hasPlanLinked = recs.stream().anyMatch(r -> r.getPlanItemId() != null);
+        if (!hasPlanLinked) {
+            return recs;
+        }
+        Set<UUID> validItemIds = planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(plan.getId())
+                .stream().map(OnboardingPlanItem::getId).collect(Collectors.toSet());
+        return recs.stream()
+                .filter(r -> r.getPlanItemId() == null || validItemIds.contains(r.getPlanItemId()))
+                .toList();
     }
 
     /**

@@ -297,6 +297,103 @@ class OnboardingSyncIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * 계획을 재생성하면 Day1 구성이 바뀔 수 있다(항목이 빠지거나 새로 생긴다).
+     * 이때 재생성 전에 이미 만들어져 있던 "오늘의 추천"이 새 계획과 일치하지 않으면(stale) 안 된다 —
+     * 예전 계획에만 있던 항목이 오늘 할 일 목록에 계속 노출되면 안 된다.
+     */
+    @Test
+    @DisplayName("계획을 재생성하면 오늘의 추천이 새 계획과 일치하도록 다시 만들어진다 (stale recommendation 제거)")
+    void todayRecommendationsMatchActivePlanAfterRegenerate() throws Exception {
+        String oldTemplateId = createTemplate("Old Day1 Template", """
+                [
+                  {"dayIndex":1,"type":"CHECKLIST","title":"계정 및 도구 접근 확인","sortOrder":0},
+                  {"dayIndex":1,"type":"PERSON","title":"Buddy 인사 미팅","sortOrder":1},
+                  {"dayIndex":1,"type":"PRACTICE","title":"로컬 개발환경 세팅","sortOrder":2}
+                ]
+                """);
+
+        MvcResult generated = mockMvc.perform(post("/api/v1/onboarding-plans/generate")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Workspace-Id", workspaceId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"templateId":"%s","force":false}
+                                """.formatted(oldTemplateId)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String planId = json(generated).get("planId").asText();
+
+        // 재생성 전, "오늘의 추천"이 예전 계획(3개 항목) 기준으로 먼저 만들어져 있는 상태를 재현한다.
+        JsonNode beforeRegenerate = json(mockMvc.perform(get("/api/v1/recommendations/today")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Workspace-Id", workspaceId))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(beforeRegenerate.get("items")).hasSize(3);
+
+        // 새 템플릿: "로컬 개발환경 세팅"이 빠지고 Day1 이 2개 항목으로 바뀐다.
+        String newTemplateId = createTemplate("New Day1 Template", """
+                [
+                  {"dayIndex":1,"type":"CHECKLIST","title":"계정 및 도구 접근 확인","sortOrder":0},
+                  {"dayIndex":1,"type":"PERSON","title":"Buddy 인사 미팅","sortOrder":1}
+                ]
+                """);
+
+        mockMvc.perform(post("/api/v1/onboarding-plans/{id}/regenerate", planId)
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Workspace-Id", workspaceId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"templateId":"%s","preserveCompleted":false}
+                                """.formatted(newTemplateId)))
+                .andExpect(status().isOk());
+
+        // 재생성 직후 GET /recommendations/today 는 새 계획의 Day1 (2개) 과 정확히 일치해야 한다.
+        JsonNode afterRegenerate = json(mockMvc.perform(get("/api/v1/recommendations/today")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Workspace-Id", workspaceId))
+                .andExpect(status().isOk())
+                .andReturn());
+        JsonNode itemsAfter = afterRegenerate.get("items");
+        assertThat(itemsAfter).hasSize(2);
+
+        java.util.Set<String> titlesAfter = new java.util.HashSet<>();
+        for (JsonNode item : itemsAfter) {
+            titlesAfter.add(item.get("title").asText());
+        }
+        assertThat(titlesAfter).containsExactlyInAnyOrder("계정 및 도구 접근 확인", "Buddy 인사 미팅");
+        assertThat(titlesAfter).doesNotContain("로컬 개발환경 세팅");
+
+        // 새로 만들어진 추천은 새 계획(현재 activePlanItem)만 가리켜야 한다.
+        JsonNode currentPlan = json(mockMvc.perform(get("/api/v1/onboarding-plans/me")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Workspace-Id", workspaceId)
+                        .param("includeItems", "true"))
+                .andExpect(status().isOk())
+                .andReturn());
+        java.util.Set<String> currentPlanItemIds = new java.util.HashSet<>();
+        for (JsonNode item : currentPlan.get("items")) {
+            currentPlanItemIds.add(item.get("id").asText());
+        }
+        for (JsonNode item : itemsAfter) {
+            assertThat(currentPlanItemIds).contains(text(item, "planItemId"));
+        }
+    }
+
+    private String createTemplate(String name, String itemsJson) throws Exception {
+        MvcResult created = mockMvc.perform(post("/api/v1/templates")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Workspace-Id", workspaceId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"%s","targetRole":"OWNER","isDefault":true,"items":%s}
+                                """.formatted(name, itemsJson)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return json(created).get("id").asText();
+    }
+
     private String text(JsonNode node, String field) {
         JsonNode value = node.get(field);
         return value == null || value.isNull() ? null : value.asText();

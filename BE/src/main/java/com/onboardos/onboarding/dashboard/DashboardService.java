@@ -11,6 +11,7 @@ import com.onboardos.onboarding.domain.plan.OnboardingPlan;
 import com.onboardos.onboarding.domain.plan.OnboardingPlanRepository;
 import com.onboardos.onboarding.domain.plan.PlanStatus;
 import com.onboardos.onboarding.global.security.UserPrincipal;
+import com.onboardos.onboarding.global.time.BusinessClock;
 import com.onboardos.onboarding.global.workspace.WorkspaceAccessService;
 import com.onboardos.onboarding.onboarding.RecommendationService;
 import com.onboardos.onboarding.onboarding.dto.RecommendationResponse;
@@ -31,6 +32,9 @@ public class DashboardService {
     private final RecommendationService recommendationService;
     private final OnboardingPlanRepository planRepository;
     private final ChecklistItemRepository checklistItemRepository;
+    // "오늘"은 한국 사용자 기준(Asia/Seoul)이다. JVM 기본 타임존이 UTC 여도 자정~오전 9시 사이에
+    // 하루 전 날짜로 계산되지 않게 한다. (createdAt/updatedAt 같은 Instant 타임스탬프는 그대로 UTC)
+    private final BusinessClock clock;
 
     /**
      * 이 메서드에는 일부러 @Transactional(readOnly = true) 를 달지 않는다.
@@ -41,10 +45,11 @@ public class DashboardService {
      */
     public DashboardResponse me(UserPrincipal principal, UUID workspaceId) {
         workspaceAccessService.requireMembership(workspaceId, principal.getId());
+        LocalDate businessToday = clock.today();
 
         // 오늘 추천이 없으면 여기서 생성까지 보장한다 (RecommendationService 가 쓰기 책임을 진다)
         TodayRecommendationsResponse today = recommendationService.today(
-                principal, workspaceId, LocalDate.now());
+                principal, workspaceId, businessToday);
         List<RecommendationResponse> todayItems = today.items();
 
         OnboardingPlan plan = planRepository
@@ -66,7 +71,7 @@ public class DashboardService {
         if (plan == null) {
             message = "온보딩 계획이 없습니다. 관리자에게 초대를 받거나 계획을 생성해 주세요.";
         } else {
-            long day = ChronoUnit.DAYS.between(plan.getStartDate(), LocalDate.now()) + 1;
+            long day = ChronoUnit.DAYS.between(plan.getStartDate(), businessToday) + 1;
             int currentDay = (int) Math.min(30, Math.max(1, day));
             planBlock = new PlanBlock(plan.getId(), currentDay, 30, plan.getStatus());
             message = "오늘 할 일과 진행률을 확인하세요.";

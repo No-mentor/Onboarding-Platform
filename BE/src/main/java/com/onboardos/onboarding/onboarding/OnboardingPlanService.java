@@ -5,6 +5,7 @@ import com.onboardos.onboarding.domain.document.DocumentRepository;
 import com.onboardos.onboarding.domain.document.DocumentStatus;
 import com.onboardos.onboarding.domain.plan.ChecklistItem;
 import com.onboardos.onboarding.domain.plan.ChecklistItemRepository;
+import com.onboardos.onboarding.domain.plan.DailyRecommendationRepository;
 import com.onboardos.onboarding.domain.plan.ItemStatus;
 import com.onboardos.onboarding.domain.plan.OnboardingPlan;
 import com.onboardos.onboarding.domain.plan.OnboardingPlanItem;
@@ -22,12 +23,12 @@ import com.onboardos.onboarding.document.service.DocumentPermissionService;
 import com.onboardos.onboarding.global.exception.BusinessException;
 import com.onboardos.onboarding.global.exception.ErrorCode;
 import com.onboardos.onboarding.global.security.UserPrincipal;
+import com.onboardos.onboarding.global.time.BusinessClock;
 import com.onboardos.onboarding.global.workspace.WorkspaceAccessService;
 import com.onboardos.onboarding.onboarding.dto.GeneratePlanRequest;
 import com.onboardos.onboarding.onboarding.dto.PlanItemResponse;
 import com.onboardos.onboarding.onboarding.dto.PlanResponse;
 import com.onboardos.onboarding.template.TemplateService;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -54,6 +55,8 @@ public class OnboardingPlanService {
     private final WorkspaceRepository workspaceRepository;
     private final PlanAiGenerationService aiGenerationService;
     private final OnboardingSyncService syncService;
+    private final DailyRecommendationRepository recommendationRepository;
+    private final BusinessClock clock;
     private boolean legacyTestMode;
 
     @Autowired
@@ -68,7 +71,9 @@ public class OnboardingPlanService {
             DocumentPermissionService documentPermissionService,
             WorkspaceRepository workspaceRepository,
             PlanAiGenerationService aiGenerationService,
-            OnboardingSyncService syncService
+            OnboardingSyncService syncService,
+            DailyRecommendationRepository recommendationRepository,
+            BusinessClock clock
     ) {
         this.planRepository = planRepository;
         this.planItemRepository = planItemRepository;
@@ -81,6 +86,8 @@ public class OnboardingPlanService {
         this.workspaceRepository = workspaceRepository;
         this.aiGenerationService = aiGenerationService;
         this.syncService = syncService;
+        this.recommendationRepository = recommendationRepository;
+        this.clock = clock;
         this.legacyTestMode = false;
     }
 
@@ -92,7 +99,8 @@ public class OnboardingPlanService {
                           WorkspaceAccessService workspaceAccessService,
                           TemplateService templateService) {
         this(planRepository, planItemRepository, checklistItemRepository, documentRepository,
-                membershipRepository, workspaceAccessService, templateService, null, null, null, null);
+                membershipRepository, workspaceAccessService, templateService, null, null, null, null,
+                null, new BusinessClock(java.time.Clock.system(BusinessClock.ZONE)));
         this.legacyTestMode = true;
     }
 
@@ -156,7 +164,7 @@ public class OnboardingPlanService {
         // detached 로 남는다. detached 객체에 recordGeneration() 을 호출하면
         // generatedBy·sourceTemplateId·version 이 DB 에 반영되지 않는다.
         OnboardingPlan plan = planRepository.save(
-                OnboardingPlan.create(workspaceId, userId, LocalDate.now()));
+                OnboardingPlan.create(workspaceId, userId, clock.today()));
 
         Membership targetMembership = membership;
         List<DocumentEntity> readyDocs = documentRepository
@@ -215,6 +223,17 @@ public class OnboardingPlanService {
                 .map(i -> ChecklistItem.create(workspaceId, userId, i.getId(), i.getTitle(), i.getDayIndex()))
                 .toList();
         checklistItemRepository.saveAll(checklists);
+
+        // 이 계획이 새로 활성화됐으니, "오늘"의 추천은 이 계획과 일치해야 한다.
+        // 예전 계획(이제는 archived)을 기준으로 만들어졌던 오늘의 추천은 완료/건너뜀 이력까지
+        // 포함해 전부 지운다 — 다른 날짜의 이력은 건드리지 않는다. 완료 여부의 소스 오브 트루스는
+        // PlanItem/ChecklistItem 상태이고(재생성 시 keepCompleted 로 이미 새 항목에 옮겨진다),
+        // "오늘의 추천"은 그때그때 다시 만들 수 있는 파생 데이터이기 때문이다.
+        // 다음 GET /recommendations/today 호출이 새 계획의 Day 1 항목 기준으로 다시 만든다.
+        if (recommendationRepository != null) {
+            recommendationRepository.deleteByWorkspaceIdAndUserIdAndRecommendDate(
+                    workspaceId, userId, plan.getStartDate());
+        }
 
         return toPlanResponse(plan, items);
     }
