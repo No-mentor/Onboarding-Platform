@@ -41,11 +41,11 @@ export default function LandingPage() {
           <div className={styles.logo}>
             <Image
               src="/logo.png"
-              alt="OnboardOS 로고"
+              alt="MenTalk 로고"
               width={40}
               height={40}
             />
-            <span className={styles.logoText}>OnboardOS</span>
+            <span className={styles.logoText}>MenTalk</span>
           </div>
           <nav className={styles.nav}>
             <Link href="#features" className={styles.navLink}>
@@ -202,7 +202,7 @@ export default function LandingPage() {
         <div className={styles.ctaContent}>
           <h2 className={styles.ctaTitle}>신입 온보딩의 혁신을 경험하세요</h2>
           <p className={styles.ctaDescription}>
-            OnboardOS로 조직의 온보딩 문화를 개선하고 팀의 성장을 가속화하세요.
+            MenTalk로 조직의 온보딩 문화를 개선하고 팀의 성장을 가속화하세요.
           </p>
           <div className={styles.ctaButtons}>
             <Link href="/login" className={styles.ctaButton}>
@@ -222,7 +222,7 @@ export default function LandingPage() {
             <div className={styles.footerBrand}>
               <div className={styles.footerLogo}>
                 <div className={styles.footerLogoIcon}>■</div>
-                <span className={styles.footerLogoText}>OnboardOS</span>
+                <span className={styles.footerLogoText}>MenTalk</span>
               </div>
               <p className={styles.footerTagline}>
                 신입·인수인계 담당자의 조직 적응을
@@ -248,7 +248,7 @@ export default function LandingPage() {
 
         <div className={styles.footerBottom}>
           <p className={styles.copyright}>
-            2024 OnboardOS. All rights reserved.
+            2026 MenTalk. All rights reserved.
           </p>
         </div>
       </footer>

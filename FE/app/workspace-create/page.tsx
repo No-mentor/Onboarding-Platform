@@ -91,8 +91,8 @@ export default function WorkspaceCreatePage() {
     <div className={styles.wrap}>
       <div className={styles.card}>
         <div className={styles.brand}>
-          <Image src="/logo.png" alt="OnboardOS Logo" width={28} height={28} />
-          <span className={styles.brandName}>OnboardOS</span>
+          <Image src="/logo.png" alt="MenTalk Logo" width={28} height={28} />
+          <span className={styles.brandName}>MenTalk</span>
         </div>
 
         <form onSubmit={handleSubmit}>

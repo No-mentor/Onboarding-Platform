@@ -17,7 +17,7 @@ public class SwaggerConfig {
     public OpenAPI onboardingOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("OnboardOS API")
+                        .title("MenTalk API")
                         .description("AI Organizational Operating System — Backend API (Identity 단계)")
                         .version("v1"))
                 .addSecurityItem(new SecurityRequirement().addList(BEARER))

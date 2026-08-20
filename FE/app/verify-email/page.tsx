@@ -11,7 +11,7 @@ function VerifyEmailContent() {
         <div>
           <Image
             src="/logo.png"
-            alt="OnboardOS 로고"
+            alt="MenTalk 로고"
             width={64}
             height={64}
             className="logo"
@@ -21,7 +21,7 @@ function VerifyEmailContent() {
             <path d="m3.3 7 8.7 5 8.7-5" />
             <path d="M12 22V12" />
           </svg>
-          <span>OnboardOS</span>
+          <span>MenTalk</span>
         </div>
 
         <div className="brand-copy">
@@ -29,7 +29,7 @@ function VerifyEmailContent() {
           <p>입력하신 이메일로 전송된 인증 코드를 입력하면 가입이 완료됩니다.</p>
         </div>
 
-        <p className="brand-foot">© 2026 OnboardOS</p>
+        <p className="brand-foot">© 2026 MenTalk</p>
       </aside>
 
       <main className="pane">

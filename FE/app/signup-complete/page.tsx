@@ -22,8 +22,8 @@ function SignupCompleteContent() {
     <div className="auth">
       <aside className="brand">
         <div className="logo">
-          <Image src="/logo.png" alt="OnboardOS Logo" width={80} height={80} priority />
-          <span>OnboardOS</span>
+          <Image src="/logo.png" alt="MenTalk Logo" width={80} height={80} priority />
+          <span>MenTalk</span>
         </div>
 
         <div className="brand-copy">
@@ -31,7 +31,7 @@ function SignupCompleteContent() {
           <p>이제 로그인하면 업무 공간에 참여하고 30일 계획을 받아볼 수 있습니다.</p>
         </div>
 
-        <p className="brand-foot">© 2026 OnboardOS</p>
+        <p className="brand-foot">© 2026 MenTalk</p>
       </aside>
 
       <main className="pane">
