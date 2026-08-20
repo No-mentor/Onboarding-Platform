@@ -11,12 +11,12 @@ export function AuthLayout({ initialTab = 'login' }: { initialTab?: 'login' | 's
         <div className="logo">
           <Image
             src="/logo.png"
-            alt="OnboardOS 로고"
+            alt="MenTalk 로고"
             width={80}
             height={80}
             priority
           />
-          <span>OnboardOS</span>
+          <span>MenTalk</span>
         </div>
 
         <div className="brand-copy">
@@ -71,7 +71,7 @@ export function AuthLayout({ initialTab = 'login' }: { initialTab?: 'login' | 's
           </div>
         </div>
 
-        <p className="brand-foot">© 2026 OnboardOS</p>
+        <p className="brand-foot">© 2026 MenTalk</p>
       </aside>
 
       <main className="pane">

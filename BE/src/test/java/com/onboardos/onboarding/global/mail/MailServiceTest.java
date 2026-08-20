@@ -90,7 +90,7 @@ class MailServiceTest {
         );
 
         MimeMessage sent = capturedSentMessage();
-        assertThat(sent.getSubject()).isEqualTo("[OnboardOS] 송하성 님이 팀하성 워크스페이스로 초대했습니다");
+        assertThat(sent.getSubject()).isEqualTo("[MenTalk] 송하성 님이 팀하성 워크스페이스로 초대했습니다");
         assertThat(sent.getAllRecipients()[0].toString()).isEqualTo("newbie@example.com");
 
         String body = allParts(sent);
@@ -116,7 +116,7 @@ class MailServiceTest {
                 "newbie@example.com", "팀하성", null, UserRole.MEMBER, EXPIRES_AT, "tok");
 
         MimeMessage sent = capturedSentMessage();
-        assertThat(sent.getSubject()).isEqualTo("[OnboardOS] 팀하성 워크스페이스에 초대되었습니다");
+        assertThat(sent.getSubject()).isEqualTo("[MenTalk] 팀하성 워크스페이스에 초대되었습니다");
         assertThat(allParts(sent)).contains("구성원");
     }
 

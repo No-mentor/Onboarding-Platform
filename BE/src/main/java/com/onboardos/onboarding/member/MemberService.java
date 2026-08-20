@@ -120,7 +120,7 @@ public class MemberService {
                 .orElse(null);
         mailService.sendInvitationEmail(
                 invitation.getEmail(),
-                workspace == null ? "OnboardOS" : workspace.getName(),
+                workspace == null ? "MenTalk" : workspace.getName(),
                 inviterName,
                 invitation.getRole(),
                 invitation.getExpiresAt(),
@@ -148,7 +148,7 @@ public class MemberService {
 
         String workspaceName = workspaceRepository.findByIdAndDeletedAtIsNull(invitation.getWorkspaceId())
                 .map(Workspace::getName)
-                .orElse("OnboardOS");
+                .orElse("MenTalk");
         String inviterName = invitation.getInvitedBy() == null ? null
                 : userRepository.findById(invitation.getInvitedBy())
                         .map(User::getName)
@@ -259,7 +259,7 @@ public class MemberService {
                 .orElse(null);
         mailService.sendInvitationEmail(
                 invitation.getEmail(),
-                workspace == null ? "OnboardOS" : workspace.getName(),
+                workspace == null ? "MenTalk" : workspace.getName(),
                 inviterName,
                 invitation.getRole(),
                 invitation.getExpiresAt(),

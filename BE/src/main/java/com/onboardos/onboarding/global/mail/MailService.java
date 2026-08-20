@@ -45,8 +45,8 @@ public class MailService {
         String inviter = inviterName == null || inviterName.isBlank() ? null : inviterName;
 
         String subject = inviter == null
-                ? "[OnboardOS] " + workspaceName + " 워크스페이스에 초대되었습니다"
-                : "[OnboardOS] " + inviter + " 님이 " + workspaceName + " 워크스페이스로 초대했습니다";
+                ? "[MenTalk] " + workspaceName + " 워크스페이스에 초대되었습니다"
+                : "[MenTalk] " + inviter + " 님이 " + workspaceName + " 워크스페이스로 초대했습니다";
 
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -76,9 +76,9 @@ public class MailService {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(properties.getFrom());
         message.setTo(toEmail);
-        message.setSubject("[OnboardOS] 이메일 인증 코드");
+        message.setSubject("[MenTalk] 이메일 인증 코드");
         message.setText(
-                "OnboardOS 이메일 인증 코드입니다.\n\n"
+                "MenTalk 이메일 인증 코드입니다.\n\n"
                         + "인증 코드: " + code + "\n\n"
                         + "이 코드는 5분간 유효합니다.\n"
                         + "본인이 요청하지 않았다면 이 메일을 무시해주세요."
@@ -145,7 +145,7 @@ public class MailService {
                 font-family:'Apple SD Gothic Neo',-apple-system,'Malgun Gothic',sans-serif;">
 
                         <tr><td style="background-color:#0765FC;padding:28px 32px;">
-                          <span style="color:#ffffff;font-size:19px;font-weight:700;letter-spacing:-0.3px;">OnboardOS</span>
+                          <span style="color:#ffffff;font-size:19px;font-weight:700;letter-spacing:-0.3px;">MenTalk</span>
                         </td></tr>
 
                         <tr><td style="padding:36px 32px 8px 32px;">

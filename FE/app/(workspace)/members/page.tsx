@@ -2,12 +2,11 @@
 
 import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, Mail, Bell, HelpCircle } from 'lucide-react';
+import { ChevronDown, Mail, HelpCircle } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { useToast } from '@/components/ui/toast';
 import { useMe } from '@/components/require-workspace';
-import { useNotifications } from '@/components/dashboard/panels/notifications-panel';
 import { getDisplayLabel } from '@/lib/display-labels';
 import {
   getMembers,
@@ -49,7 +48,6 @@ export default function MembersPage() {
   const router = useRouter();
   const me = useMe();
   const { showToast } = useToast();
-  const { unreadCount } = useNotifications();
 
   const [members, setMembers] = useState<MemberResponse[]>([]);
   const [totalMembers, setTotalMembers] = useState(0);
@@ -285,10 +283,6 @@ export default function MembersPage() {
             >
               <span>{me?.currentWorkspace?.name ?? '업무 공간'}</span>
               <ChevronDown size={16} />
-            </button>
-            <button className={styles.notifBtn} onClick={() => router.push('/notification-center')} title="알림 센터">
-              <Bell size={20} />
-              {unreadCount > 0 && <span className={styles.badge}>{unreadCount}</span>}
             </button>
             <button className={styles.helpBtn} onClick={() => setIsMemberRolesModalOpen(true)} title="역할 권한 안내">
               <HelpCircle size={18} />

@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, Lightbulb, Bell, HelpCircle, Zap, ClipboardList } from 'lucide-react';
+import { ChevronRight, Lightbulb, HelpCircle, Zap, ClipboardList } from 'lucide-react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFilePdf, faFileExcel } from '@fortawesome/free-solid-svg-icons';
 import { CommonSidebar } from '@/components/common-sidebar';
@@ -245,9 +245,6 @@ export default function DailyTasksPage() {
                 <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
               ))}
             </select>
-            <button className={styles.notifBtn} onClick={() => router.push('/notification-center')} title="알림 센터">
-              <Bell size={20} />
-            </button>
             <button className={styles.helpBtn} onClick={() => setIsTaskCategoriesModalOpen(true)} title="업무 카테고리 안내">
               <HelpCircle size={18} />
             </button>

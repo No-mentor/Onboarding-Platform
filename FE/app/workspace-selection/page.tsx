@@ -58,8 +58,8 @@ export default function WorkspaceSelectionPage() {
     <div className={styles.wrap}>
       <div className={styles.card}>
         <div className={styles.brand}>
-          <Image src="/logo.png" alt="OnboardOS Logo" width={28} height={28} />
-          <span className={styles.brandName}>OnboardOS</span>
+          <Image src="/logo.png" alt="MenTalk Logo" width={28} height={28} />
+          <span className={styles.brandName}>MenTalk</span>
         </div>
 
         <h1 className="title">업무 공간 선택</h1>

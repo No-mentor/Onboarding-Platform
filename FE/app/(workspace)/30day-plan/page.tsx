@@ -2,7 +2,7 @@
 
 import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Zap, Bell, HelpCircle, Check, ChevronDown } from 'lucide-react';
+import { Plus, Zap, HelpCircle, Check, ChevronDown } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { useToast } from '@/components/ui/toast';
@@ -241,9 +241,6 @@ export default function ThirtyDayPlanPage() {
             >
               <span>{me?.currentWorkspace?.name ?? '업무 공간'}</span>
               <ChevronDown size={14} />
-            </button>
-            <button className={styles.notifBtn} onClick={() => router.push('/notification-center')} title="알림 센터">
-              <Bell size={20} />
             </button>
             <button className={styles.helpBtn} onClick={() => router.push('/ai-chat')} title="AI 어시스턴트 질문">
               <HelpCircle size={18} />
