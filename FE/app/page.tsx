@@ -51,6 +51,9 @@ export default function LandingPage() {
             <Link href="#features" className={styles.navLink}>
               기능
             </Link>
+            <Link href="/pricing" className={styles.navLink}>
+              요금제
+            </Link>
             <Link href="/login" className={styles.navLink}>
               로그인
             </Link>
@@ -82,8 +85,8 @@ export default function LandingPage() {
               지금 시작하기
               <ArrowRight size={18} />
             </Link>
-            <Link href="/login" className={styles.ctaSecondary}>
-              로그인
+            <Link href="/pricing" className={styles.ctaSecondary}>
+              요금제 보기
             </Link>
           </div>
         </div>
@@ -208,8 +211,8 @@ export default function LandingPage() {
             <Link href="/login" className={styles.ctaButton}>
               무료로 시작하기
             </Link>
-            <Link href="/login" className={styles.ctaButtonSecond}>
-              로그인
+            <Link href="/pricing" className={styles.ctaButtonSecond}>
+              요금제 보기
             </Link>
           </div>
         </div>
@@ -234,6 +237,9 @@ export default function LandingPage() {
           <div className={styles.footerSection}>
             <h4 className={styles.footerSectionTitle}>서비스</h4>
             <ul className={styles.footerLinks}>
+              <li>
+                <Link href="/pricing">요금제</Link>
+              </li>
               <li>
                 <Link href="/login">로그인</Link>
               </li>

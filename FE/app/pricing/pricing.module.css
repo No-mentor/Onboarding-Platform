@@ -1,0 +1,917 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+/* Header — 랜딩 페이지와 동일한 규격을 유지한다 */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.7);
+  border-bottom: 1px solid rgba(7, 101, 252, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.headerContent {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 40px;
+  height: 72px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+}
+
+.logoText {
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.nav {
+  display: flex;
+  gap: 40px;
+  align-items: center;
+}
+
+.navLink {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-sub);
+  text-decoration: none;
+  transition: color 0.25s ease;
+  position: relative;
+}
+
+.navLink:hover {
+  color: var(--text);
+}
+
+.navLink::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--text);
+  transition: width 0.25s ease;
+}
+
+.navLink:hover::after {
+  width: 100%;
+}
+
+.navLinkActive {
+  color: var(--text);
+}
+
+.navLinkActive::after {
+  width: 100%;
+}
+
+/* Hero */
+.hero {
+  position: relative;
+  padding: 80px 40px 56px;
+  overflow: hidden;
+}
+
+.heroBackground {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 800px 400px at 50% 10%,
+    rgba(7, 101, 252, 0.04) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+.heroContent {
+  max-width: 760px;
+  margin: 0 auto;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  animation: slideUp 0.8s ease-out;
+}
+
+.heroBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(7, 101, 252, 0.08);
+  border: 1px solid rgba(7, 101, 252, 0.15);
+  border-radius: 24px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 24px;
+}
+
+.heroTitle {
+  font-size: 52px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0 0 20px;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+.highlight {
+  color: var(--accent);
+}
+
+.heroSubtitle {
+  font-size: 18px;
+  color: var(--text-sub);
+  line-height: 1.7;
+  margin: 0;
+}
+
+/* 결제 주기 토글 */
+.cycleToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 36px;
+  padding: 4px;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.cycleButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 20px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-sub);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.cycleButton:hover {
+  color: var(--text);
+}
+
+.cycleButtonActive {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(20, 20, 25, 0.06), 0 2px 8px rgba(20, 20, 25, 0.06);
+}
+
+.cycleSaving {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--status-success-bg);
+  color: var(--status-success-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* 공통 섹션 */
+.section {
+  padding: 72px 40px;
+}
+
+.sectionAlt {
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.sectionContent {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.sectionHeader {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.sectionTitle {
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0 0 14px;
+  letter-spacing: -0.03em;
+}
+
+.sectionSubtitle {
+  font-size: 16px;
+  color: var(--text-sub);
+  line-height: 1.7;
+  margin: 0 auto;
+  max-width: 640px;
+}
+
+/* 3층 과금 구조 */
+.pillarGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.pillarCard {
+  padding: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.pillarCard:hover {
+  border-color: var(--text);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.07);
+  transform: translateY(-6px);
+}
+
+.pillarIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(7, 101, 252, 0.08), rgba(7, 101, 252, 0.04));
+  border: 1px solid rgba(7, 101, 252, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+
+.pillarKicker {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.pillarTitle {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.pillarDesc {
+  font-size: 14.5px;
+  color: var(--text-sub);
+  line-height: 1.7;
+  margin: 0;
+}
+
+.pillarTag {
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+
+/* 플랜 카드 */
+.planGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.planCard {
+  position: relative;
+  padding: 32px 26px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.planCard:hover {
+  border-color: var(--text);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  transform: translateY(-6px);
+}
+
+.planCardFeatured {
+  background: var(--text);
+  border-color: var(--text);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.18);
+}
+
+.planCardFeatured:hover {
+  box-shadow: 0 28px 56px rgba(0, 0, 0, 0.24);
+}
+
+.planName {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.planTagline {
+  font-size: 13.5px;
+  color: var(--text-sub);
+  margin: -12px 0 0;
+}
+
+.planPriceRow {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.planPrice {
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.planPriceUnit {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+
+.planPriceNote {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  margin: -10px 0 0;
+  min-height: 18px;
+}
+
+.planSeat {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface-sunk);
+  border: 1px solid var(--border);
+}
+
+.planSeatLabel {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  text-transform: uppercase;
+}
+
+.planSeatValue {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 3px;
+}
+
+.planSeatExtra {
+  font-size: 12.5px;
+  color: var(--text-sub);
+  margin-top: 4px;
+}
+
+.planFeatures {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.planFeature {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 14px;
+  color: var(--text-sub);
+  line-height: 1.55;
+}
+
+.planFeature svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.planCta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: auto;
+  padding: 13px 20px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  border: 1.5px dashed var(--border-strong);
+  background: var(--surface-sunk);
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+/* 강조 카드 내부 색상 반전 */
+.planCardFeatured .planName,
+.planCardFeatured .planPrice,
+.planCardFeatured .planSeatValue {
+  color: var(--surface);
+}
+
+.planCardFeatured .planTagline,
+.planCardFeatured .planPriceUnit,
+.planCardFeatured .planFeature,
+.planCardFeatured .planSeatExtra {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.planCardFeatured .planPriceNote,
+.planCardFeatured .planSeatLabel {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.planCardFeatured .planFeature svg {
+  color: #6FA8FF;
+}
+
+.planCardFeatured .planSeat {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.planCardFeatured .planCta {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.planFootnote {
+  margin: 28px 0 0;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--text-faint);
+}
+
+/* 비교표 */
+.tableScroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table th,
+.table td {
+  padding: 13px 18px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  border-bottom: 2px solid var(--border-strong);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table td:not(:first-child),
+.table th:not(:first-child) {
+  text-align: center;
+  width: 16%;
+}
+
+.rowLabel {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.groupRow td {
+  padding: 11px 18px;
+  background: var(--panel);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  text-transform: uppercase;
+}
+
+.cellValue {
+  color: var(--text-sub);
+}
+
+.iconYes {
+  color: var(--success);
+}
+
+.iconNo {
+  color: var(--text-faint);
+}
+
+/* FAQ */
+.faqList {
+  max-width: 820px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.faqItem {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.25s ease;
+}
+
+.faqItem[open] {
+  border-color: var(--border-strong);
+}
+
+.faqQuestion {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 22px;
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+  letter-spacing: -0.01em;
+}
+
+.faqQuestion::-webkit-details-marker {
+  display: none;
+}
+
+.faqQuestion svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.faqAnswer {
+  padding: 0 22px 20px 54px;
+  font-size: 14.5px;
+  color: var(--text-sub);
+  line-height: 1.75;
+  margin: 0;
+}
+
+/* CTA */
+.cta {
+  padding: 80px 40px;
+  background: var(--text);
+}
+
+.ctaContent {
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.ctaTitle {
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--surface);
+  margin: 0 0 14px;
+  letter-spacing: -0.03em;
+}
+
+.ctaDescription {
+  font-size: 16.5px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.7;
+  margin: 0 0 32px;
+}
+
+.ctaButtons {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+}
+
+.ctaButton,
+.ctaButtonSecond {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 15px 32px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: not-allowed;
+  border: 1.5px dashed rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.ctaNotice {
+  margin: 18px 0 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.ctaTag {
+  display: inline-block;
+  margin-bottom: 16px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.72);
+  text-transform: uppercase;
+}
+
+/* Footer */
+.footer {
+  padding: 40px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+.footerContent {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-sub);
+  text-decoration: none;
+  transition: color 0.25s ease;
+}
+
+.backLink:hover {
+  color: var(--text);
+}
+
+.copyright {
+  font-size: 13px;
+  color: var(--text-faint);
+  margin: 0;
+}
+
+/* 프로토타입 고지 */
+.noticeBar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 13px 40px;
+  background: var(--status-warning-bg);
+  border-bottom: 1px solid rgba(128, 104, 61, 0.22);
+  text-align: center;
+}
+
+.noticeTag {
+  flex-shrink: 0;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--warning);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.noticeText {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--status-warning-text);
+}
+
+.noticeText strong {
+  font-weight: 700;
+}
+
+/* 설계 원칙 */
+.principleGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.principleCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 22px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.principleIcon {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--success);
+}
+
+.principleTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 5px;
+  letter-spacing: -0.01em;
+}
+
+.principleDesc {
+  font-size: 14px;
+  color: var(--text-sub);
+  line-height: 1.65;
+  margin: 0;
+}
+
+/* Animations */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 1280px) {
+  .headerContent,
+  .sectionContent,
+  .ctaContent,
+  .footerContent {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .planGrid {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .pillarGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .principleGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .planGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+
+  .splitGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .headerContent {
+    padding: 0 20px;
+    height: 64px;
+  }
+
+  .nav {
+    gap: 20px;
+  }
+
+  .navLink {
+    font-size: 13px;
+  }
+
+  .hero {
+    padding: 56px 20px 40px;
+  }
+
+  .heroTitle {
+    font-size: 36px;
+  }
+
+  .heroSubtitle {
+    font-size: 16px;
+  }
+
+  .section {
+    padding: 56px 20px;
+  }
+
+  .sectionTitle {
+    font-size: 28px;
+  }
+
+  .planGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .noticeBar {
+    padding: 12px 20px;
+  }
+
+  .cta {
+    padding: 56px 20px;
+  }
+
+  .ctaTitle {
+    font-size: 28px;
+  }
+
+  .ctaButtons {
+    flex-direction: column;
+  }
+
+  .footer {
+    padding: 28px 20px;
+  }
+
+  .faqAnswer {
+    padding-left: 22px;
+  }
+}
+
+@media (max-width: 480px) {
+  .heroTitle {
+    font-size: 30px;
+  }
+
+  .cycleToggle {
+    width: 100%;
+  }
+
+  .cycleButton {
+    flex: 1;
+    justify-content: center;
+    padding: 9px 12px;
+  }
+}
