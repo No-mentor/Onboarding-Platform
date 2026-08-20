@@ -16,6 +16,7 @@ import {
   dismissRecommendation,
   getRecommendationsToday,
   type RecommendationResponse,
+  type RecommendationStatus,
 } from '@/lib/api';
 import styles from './daily-tasks.module.css';
 
@@ -35,10 +36,9 @@ function sectionOf(type: string): SectionKey {
   return 'practice';
 }
 
-const STATUS_COLOR: Record<string, string> = {
+const STATUS_COLOR: Record<RecommendationStatus, string> = {
   DONE: '#287456',
   PENDING: '#80683D',
-  SKIPPED: '#9CA3AF',
   DISMISSED: '#9CA3AF',
 };
 
@@ -82,6 +82,13 @@ export default function DailyTasksPage() {
     void load();
   }, [load]);
 
+  /**
+   * 건너뛴(DISMISSED) 추천은 오늘 할 일 메인 목록에서 뺀다.
+   * "건너뛰기"를 눌렀는데 항목이 그대로 남아 있는 것처럼 보이면 안 되기 때문이다.
+   * 제외된 개수는 statusInfo.dismissed 로 별도 표시한다.
+   */
+  const visibleItems = useMemo(() => items.filter(i => i.status !== 'DISMISSED'), [items]);
+
   const grouped = useMemo(() => {
     const result: Record<SectionKey, RecommendationResponse[]> = {
       document: [],
@@ -89,11 +96,11 @@ export default function DailyTasksPage() {
       practice: [],
     };
     // 우선순위가 높은(숫자가 작은) 항목을 위로 올린다
-    for (const item of [...items].sort((a, b) => a.priority - b.priority)) {
+    for (const item of [...visibleItems].sort((a, b) => a.priority - b.priority)) {
       result[sectionOf(item.type)].push(item);
     }
     return result;
-  }, [items]);
+  }, [visibleItems]);
 
   const selectedTask = useMemo(
     () => items.find(item => item.id === selectedTaskId) ?? null,
@@ -102,15 +109,14 @@ export default function DailyTasksPage() {
 
   const statusInfo = useMemo(
     () => ({
-      done: items.filter(i => i.status === 'DONE').length,
-      pending: items.filter(i => i.status === 'PENDING').length,
-      skipped: items.filter(i => i.status === 'SKIPPED').length,
+      done: visibleItems.filter(i => i.status === 'DONE').length,
+      pending: visibleItems.filter(i => i.status === 'PENDING').length,
       dismissed: items.filter(i => i.status === 'DISMISSED').length,
     }),
-    [items]
+    [items, visibleItems]
   );
 
-  const total = items.length;
+  const total = visibleItems.length;
   const progressPercentage = total === 0 ? 0 : Math.round((statusInfo.done / total) * 100);
 
   const handleComplete = async (item: RecommendationResponse) => {
@@ -209,8 +215,12 @@ export default function DailyTasksPage() {
           <div style={{ padding: '16px', color: '#9CA3AF', textAlign: 'center' }}>항목이 없습니다</div>
         )}
 
+        {/*
+          현재 서버에는 추천을 새로 생성하는 API 가 없다. 이 버튼은 GET /recommendations/today 를
+          다시 부르는 새로고침일 뿐이므로, 새 추천을 만드는 것처럼 보이는 문구를 쓰지 않는다.
+        */}
         <button className={styles.addMoreBtn} onClick={() => void load()} disabled={isLoading}>
-          + 추천 다시 받기
+          추천 새로고침
         </button>
       </div>
     </div>
@@ -259,7 +269,6 @@ export default function DailyTasksPage() {
               <div className={styles.statusBadges}>
                 <div className={styles.badge} style={{ color: '#287456' }}>완료 {statusInfo.done}</div>
                 <div className={styles.badge} style={{ color: '#80683D' }}>대기 {statusInfo.pending}</div>
-                <div className={styles.badge} style={{ color: '#9CA3AF' }}>건너뜀 {statusInfo.skipped}</div>
                 <div className={styles.badge} style={{ color: '#9CA3AF' }}>제외 {statusInfo.dismissed}</div>
               </div>
             </div>
@@ -333,11 +342,11 @@ export default function DailyTasksPage() {
             </div>
             <div className={styles.goalItem}>
               <h4>추천 순서</h4>
-              {items.length === 0 ? (
+              {visibleItems.length === 0 ? (
                 <p>오늘 추천된 항목이 없습니다.</p>
               ) : (
                 <p>
-                  {[...items]
+                  {[...visibleItems]
                     .sort((a, b) => a.priority - b.priority)
                     .map((item, index) => `${index + 1}. ${item.title}`)
                     .join('\n')

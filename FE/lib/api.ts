@@ -86,8 +86,18 @@ export interface PageResponse<T> {
 /** 워크스페이스에서의 내 역할 (서버 UserRole) */
 export type WorkspaceRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER' | 'NEW_HIRE';
 
-/** 계획/체크리스트/추천 항목의 상태 (서버 ItemStatus) */
-export type ItemStatus = 'PENDING' | 'DONE' | 'SKIPPED' | 'DISMISSED';
+/**
+ * 계획/체크리스트/추천 항목의 상태. 서버 ItemStatus 는 세 테이블이 공유하는 Java enum이지만
+ * 실제로 허용되는 값은 테이블(도메인)마다 다르다 (DB CHECK 제약과 동일):
+ * - onboarding_plan_items.status: PENDING | DONE | SKIPPED
+ * - checklist_items.status:       PENDING | DONE
+ * - daily_recommendations.status: PENDING | DONE | DISMISSED
+ * 하나의 넓은 유니온으로 다루면 체크리스트에 SKIPPED 를 보내는 등 잘못된 조합이
+ * 컴파일 단계에서 걸러지지 않으므로, 도메인별로 분리해서 쓴다.
+ */
+export type PlanItemStatus = 'PENDING' | 'DONE' | 'SKIPPED';
+export type ChecklistStatus = 'PENDING' | 'DONE';
+export type RecommendationStatus = 'PENDING' | 'DONE' | 'DISMISSED';
 
 /** 계획 항목 종류 (서버 PlanItemType) */
 export type PlanItemType = 'DOCUMENT' | 'PERSON' | 'CHECKLIST' | 'PRACTICE';
@@ -101,7 +111,7 @@ export interface DashboardRecommendation {
   id: string;
   type: PlanItemType;
   title: string;
-  status: ItemStatus;
+  status: RecommendationStatus;
   priority: number;
   source: string | null;
   planItemId: string | null;
@@ -188,7 +198,7 @@ export interface PlanItemResponse {
   type: PlanItemType;
   title: string;
   description: string | null;
-  status: ItemStatus;
+  status: PlanItemStatus;
   documentId: string | null;
   /** 이 항목이 복사되어 온 템플릿 항목. 템플릿에서 만든 계획이 아니면 null */
   sourceTemplateItemId: string | null;
@@ -298,7 +308,7 @@ export async function regenerateOnboardingPlan(
   return response.json();
 }
 
-export async function updatePlanItemStatus(itemId: string, status: ItemStatus): Promise<PlanItemResponse> {
+export async function updatePlanItemStatus(itemId: string, status: PlanItemStatus): Promise<PlanItemResponse> {
   const response = await apiFetch(`${API_BASE}/onboarding-plans/items/${itemId}`, {
     method: 'PATCH',
     headers: workspaceHeaders(JSON_CONTENT),
@@ -314,7 +324,7 @@ export async function updatePlanItemStatus(itemId: string, status: ItemStatus): 
 export interface ChecklistItemResponse {
   id: string;
   title: string;
-  status: ItemStatus;
+  status: ChecklistStatus;
   /** 며칠차까지 끝내야 하는지 */
   dueDay: number | null;
   completedAt: string | null;
@@ -341,7 +351,7 @@ export async function getChecklists(status: ChecklistStatusFilter = 'ALL'): Prom
 
 export async function updateChecklistItemStatus(
   itemId: string,
-  status: ItemStatus
+  status: ChecklistStatus
 ): Promise<ChecklistItemResponse> {
   const response = await apiFetch(`${API_BASE}/checklists/items/${itemId}`, {
     method: 'PATCH',

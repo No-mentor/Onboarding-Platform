@@ -91,9 +91,42 @@ public class DailyRecommendation extends BaseTimeEntity {
         return r;
     }
 
+    /**
+     * 오늘 해당 날짜에 배정된 계획 항목이 하나도 없을 때 만드는 폴백 추천.
+     * 실제 계획 항목과 연결되지 않으므로 plan_item_id 는 항상 null 이다.
+     * (실제 저장되지 않는 임시 OnboardingPlanItem 의 id 를 FK 로 넣으면 제약 위반이 난다)
+     */
+    public static DailyRecommendation fallback(
+            UUID workspaceId,
+            UUID userId,
+            LocalDate date,
+            PlanItemType type,
+            String title,
+            int priority
+    ) {
+        DailyRecommendation r = new DailyRecommendation();
+        r.id = UUID.randomUUID();
+        r.workspaceId = workspaceId;
+        r.userId = userId;
+        r.recommendDate = date;
+        r.type = type;
+        r.title = title;
+        r.status = ItemStatus.PENDING;
+        r.priority = priority;
+        r.source = "SYSTEM";
+        r.planItemId = null;
+        r.metadata = "{}";
+        return r;
+    }
+
     public void markDone() {
         this.status = ItemStatus.DONE;
         this.completedAt = Instant.now();
+    }
+
+    public void markPending() {
+        this.status = ItemStatus.PENDING;
+        this.completedAt = null;
     }
 
     public void dismiss() {

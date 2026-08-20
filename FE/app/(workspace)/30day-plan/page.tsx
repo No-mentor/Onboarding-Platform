@@ -14,8 +14,8 @@ import {
   getTemplates,
   regenerateOnboardingPlan,
   updatePlanItemStatus,
-  type ItemStatus,
   type PlanItemResponse,
+  type PlanItemStatus,
   type PlanResponse,
   type TemplateResponse,
 } from '@/lib/api';
@@ -203,7 +203,7 @@ export default function ThirtyDayPlanPage() {
 
   const allItems = plan?.items ?? [];
   const completedCount = allItems.filter(i => i.status === 'DONE').length;
-  const skippedCount = allItems.filter(i => i.status === 'SKIPPED' || i.status === 'DISMISSED').length;
+  const skippedCount = allItems.filter(i => i.status === 'SKIPPED').length;
   const pendingCount = allItems.filter(i => i.status === 'PENDING').length;
   const totalCount = allItems.length;
   const overallPercent = Math.round(Number(plan?.progressPercent ?? 0));
@@ -254,7 +254,7 @@ export default function ThirtyDayPlanPage() {
 
   /** 항목 하나의 상태를 바꾼다 */
   const handleToggleItem = async (item: PlanItemResponse) => {
-    const nextStatus: ItemStatus = item.status === 'DONE' ? 'PENDING' : 'DONE';
+    const nextStatus: PlanItemStatus = item.status === 'DONE' ? 'PENDING' : 'DONE';
     setUpdatingItemId(item.id);
     try {
       await updatePlanItemStatus(item.id, nextStatus);
@@ -271,7 +271,7 @@ export default function ThirtyDayPlanPage() {
   /** 하루치를 한 번에 완료 처리한다 (이미 다 끝났으면 되돌린다) */
   const handleToggleDay = async (day: PlanDay, event?: React.MouseEvent) => {
     if (event) event.stopPropagation();
-    const nextStatus: ItemStatus = day.status === 'DONE' ? 'PENDING' : 'DONE';
+    const nextStatus: PlanItemStatus = day.status === 'DONE' ? 'PENDING' : 'DONE';
     const targets = day.items.filter(item => item.status !== nextStatus);
     if (targets.length === 0) return;
 

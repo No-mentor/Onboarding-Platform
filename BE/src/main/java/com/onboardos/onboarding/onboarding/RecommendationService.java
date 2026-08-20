@@ -1,7 +1,5 @@
 package com.onboardos.onboarding.onboarding;
 
-import com.onboardos.onboarding.domain.plan.ChecklistItem;
-import com.onboardos.onboarding.domain.plan.ChecklistItemRepository;
 import com.onboardos.onboarding.domain.plan.DailyRecommendation;
 import com.onboardos.onboarding.domain.plan.DailyRecommendationRepository;
 import com.onboardos.onboarding.domain.plan.ItemStatus;
@@ -17,14 +15,13 @@ import com.onboardos.onboarding.global.security.UserPrincipal;
 import com.onboardos.onboarding.global.workspace.WorkspaceAccessService;
 import com.onboardos.onboarding.onboarding.dto.RecommendationResponse;
 import com.onboardos.onboarding.onboarding.dto.TodayRecommendationsResponse;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,47 +35,35 @@ public class RecommendationService {
 
     private final OnboardingPlanRepository planRepository;
     private final OnboardingPlanItemRepository planItemRepository;
-    private final ChecklistItemRepository checklistItemRepository;
     private final DailyRecommendationRepository recommendationRepository;
     private final WorkspaceAccessService workspaceAccessService;
+    private final OnboardingSyncService syncService;
 
     /**
      * 오늘 할 일 추천 목록을 조회하거나, 없으면 계획 기반으로 생성한다.
+     * 대시보드 첫 진입처럼 아직 오늘 추천이 없는 상태에서도 호출되므로, 이 메서드가
+     * "오늘 추천이 반드시 존재하게 만드는" 쓰기 책임을 진다. (읽기 전용 트랜잭션에서는 호출하지 않는다)
      */
     @Transactional
     public TodayRecommendationsResponse today(UserPrincipal principal, UUID workspaceId, LocalDate date) {
         workspaceAccessService.requireMembership(workspaceId, principal.getId());
+        return todayFor(workspaceId, principal.getId(), date);
+    }
+
+    private TodayRecommendationsResponse todayFor(UUID workspaceId, UUID userId, LocalDate date) {
         LocalDate target = date == null ? LocalDate.now() : date;
 
         OnboardingPlan plan = planRepository
-                .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, principal.getId(), PlanStatus.ACTIVE)
+                .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, userId, PlanStatus.ACTIVE)
                 .orElse(null);
 
         List<DailyRecommendation> existing = recommendationRepository
                 .findByWorkspaceIdAndUserIdAndRecommendDateOrderByPriorityAsc(
-                        workspaceId, principal.getId(), target);
+                        workspaceId, userId, target);
 
         if (existing.isEmpty() && plan != null) {
-            existing = generateFromPlan(workspaceId, principal.getId(), target, plan);
+            existing = generateFromPlanSafely(workspaceId, userId, target, plan);
         }
-
-        return new TodayRecommendationsResponse(
-                target,
-                existing.stream().map(RecommendationResponse::from).toList()
-        );
-    }
-
-    /**
-     * 추천 조회 전용 (side-effect 없이 기존 추천만 반환).
-     * Dashboard 등에서 이미 생성된 추천만 가져올 때 사용한다.
-     */
-    @Transactional(readOnly = true)
-    public TodayRecommendationsResponse todayReadOnly(UUID workspaceId, UUID userId, LocalDate date) {
-        LocalDate target = date == null ? LocalDate.now() : date;
-
-        List<DailyRecommendation> existing = recommendationRepository
-                .findByWorkspaceIdAndUserIdAndRecommendDateOrderByPriorityAsc(
-                        workspaceId, userId, target);
 
         return new TodayRecommendationsResponse(
                 target,
@@ -97,7 +82,7 @@ public class RecommendationService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         rec.markDone();
 
-        syncPlanItemOnComplete(workspaceId, principal.getId(), rec);
+        syncService.syncCluster(workspaceId, principal.getId(), rec.getPlanItemId(), true);
 
         return RecommendationResponse.from(rec);
     }
@@ -118,6 +103,21 @@ public class RecommendationService {
 
     // --- private helpers ---
 
+    /**
+     * 동시 요청이 먼저 오늘 추천을 만들었을 수 있다 (uq_daily_reco_plan_item_day).
+     * 그 경우 새로 만들지 않고, 먼저 커밋된 추천을 그대로 읽어 돌려준다.
+     */
+    private List<DailyRecommendation> generateFromPlanSafely(
+            UUID workspaceId, UUID userId, LocalDate target, OnboardingPlan plan
+    ) {
+        try {
+            return generateFromPlan(workspaceId, userId, target, plan);
+        } catch (DataIntegrityViolationException raceLost) {
+            return recommendationRepository
+                    .findByWorkspaceIdAndUserIdAndRecommendDateOrderByPriorityAsc(workspaceId, userId, target);
+        }
+    }
+
     private List<DailyRecommendation> generateFromPlan(
             UUID workspaceId, UUID userId, LocalDate target, OnboardingPlan plan
     ) {
@@ -137,39 +137,18 @@ public class RecommendationService {
         }
 
         if (created.isEmpty()) {
-            // 오늘 할 일이 없으면 복습 추천 1건 생성
-            OnboardingPlanItem fallback = OnboardingPlanItem.create(
-                    plan.getId(), workspaceId, dayIndex, PlanItemType.PRACTICE,
-                    "오늘 학습 복습 및 질문 정리", "진행 가능한 항목이 없어 복습을 추천합니다.", 0, null, null
+            // 오늘 배정된 계획 항목이 없으면 복습 추천 1건을 만든다.
+            // 실제 계획 항목과 연결하지 않는다 (임시 항목을 저장하지 않고 FK 로 넣으면 제약 위반이 난다)
+            DailyRecommendation r = DailyRecommendation.fallback(
+                    workspaceId, userId, target, PlanItemType.PRACTICE,
+                    "오늘 학습 복습 및 질문 정리", 1
             );
-            DailyRecommendation r = DailyRecommendation.fromPlanItem(workspaceId, userId, target, fallback, 1);
-            recommendationRepository.save(r);
+            recommendationRepository.saveAndFlush(r);
             return List.of(r);
         }
 
         recommendationRepository.saveAll(created);
+        recommendationRepository.flush();
         return created;
-    }
-
-    private void syncPlanItemOnComplete(UUID workspaceId, UUID userId, DailyRecommendation rec) {
-        if (rec.getPlanItemId() != null) {
-            planItemRepository.findById(rec.getPlanItemId()).ifPresent(item -> {
-                item.markDone();
-                checklistItemRepository
-                        .findByWorkspaceIdAndUserIdAndPlanItemIdAndDeletedAtIsNull(
-                                workspaceId, userId, item.getId())
-                        .ifPresent(ChecklistItem::markDone);
-                planRepository.findById(item.getPlanId()).ifPresent(this::recalculateProgress);
-            });
-        }
-    }
-
-    private void recalculateProgress(OnboardingPlan plan) {
-        long total = planItemRepository.countByPlanIdAndStatusNot(plan.getId(), ItemStatus.SKIPPED);
-        long done = planItemRepository.countByPlanIdAndStatus(plan.getId(), ItemStatus.DONE);
-        BigDecimal percent = total == 0
-                ? BigDecimal.ZERO
-                : BigDecimal.valueOf(done * 100.0 / total).setScale(2, RoundingMode.HALF_UP);
-        plan.updateProgress(percent);
     }
 }

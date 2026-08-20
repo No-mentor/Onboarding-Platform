@@ -12,35 +12,17 @@ import {
   getChecklists,
   updateChecklistItemStatus,
   type ChecklistItemResponse,
+  type ChecklistStatus,
   type ChecklistSummaryResponse,
-  type ItemStatus,
 } from '@/lib/api';
 import styles from './checklist.module.css';
 
-/**
- * 서버 ItemStatus 를 화면 분류로 옮긴다.
- * 서버에는 '진행 중' 상태가 없고 PENDING / DONE / SKIPPED(=DISMISSED) 만 있다.
- */
-type ChecklistFilter = 'all' | 'PENDING' | 'DONE' | 'SKIPPED';
+/** 체크리스트는 checklist_items.status 와 동일하게 PENDING / DONE 만 쓴다 (건너뜀 없음) */
+type ChecklistFilter = 'all' | ChecklistStatus;
 
-/** SKIPPED 와 DISMISSED 는 화면에서 같은 칸으로 묶는다 */
-function toFilterStatus(status: ItemStatus): 'PENDING' | 'DONE' | 'SKIPPED' {
-  if (status === 'DONE') return 'DONE';
-  if (status === 'PENDING') return 'PENDING';
-  return 'SKIPPED';
-}
-
-const STATUS_CLASS: Record<'PENDING' | 'DONE' | 'SKIPPED', string> = {
+const STATUS_CLASS: Record<ChecklistStatus, string> = {
   DONE: styles.status_complete,
   PENDING: styles.status_pending,
-  SKIPPED: styles.status_progress,
-};
-
-/** 상태 변경 버튼이 돌아가는 순서 */
-const NEXT_STATUS: Record<'PENDING' | 'DONE' | 'SKIPPED', ItemStatus> = {
-  PENDING: 'DONE',
-  DONE: 'SKIPPED',
-  SKIPPED: 'PENDING',
 };
 
 export default function ChecklistPage() {
@@ -92,9 +74,8 @@ export default function ChecklistPage() {
 
   const counts = useMemo(
     () => ({
-      PENDING: items.filter(i => toFilterStatus(i.status) === 'PENDING').length,
-      DONE: items.filter(i => toFilterStatus(i.status) === 'DONE').length,
-      SKIPPED: items.filter(i => toFilterStatus(i.status) === 'SKIPPED').length,
+      PENDING: items.filter(i => i.status === 'PENDING').length,
+      DONE: items.filter(i => i.status === 'DONE').length,
     }),
     [items]
   );
@@ -111,9 +92,8 @@ export default function ChecklistPage() {
   const filteredItems = useMemo(
     () =>
       items.filter(item => {
-        const status = toFilterStatus(item.status);
-        if (activeTab !== 'all' && status !== activeTab) return false;
-        if (filterStatus !== 'all' && status !== filterStatus) return false;
+        if (activeTab !== 'all' && item.status !== activeTab) return false;
+        if (filterStatus !== 'all' && item.status !== filterStatus) return false;
         if (filterDay !== 'all' && String(item.dueDay ?? '') !== filterDay) return false;
         return true;
       }),
@@ -124,7 +104,7 @@ export default function ChecklistPage() {
   const totalCount = summary?.total ?? items.length;
   const completionRate = Math.round(Number(summary?.progressPercent ?? 0));
 
-  const changeStatus = async (item: ChecklistItemResponse, status: ItemStatus) => {
+  const changeStatus = async (item: ChecklistItemResponse, status: ChecklistStatus) => {
     setUpdatingId(item.id);
     try {
       await updateChecklistItemStatus(item.id, status);
@@ -198,12 +178,6 @@ export default function ChecklistPage() {
               >
                 완료 ({counts.DONE})
               </button>
-              <button
-                className={`${styles.tab} ${activeTab === 'SKIPPED' ? styles.tabActive : ''}`}
-                onClick={() => setActiveTab('SKIPPED')}
-              >
-                건너뜀 ({counts.SKIPPED})
-              </button>
             </div>
           </div>
 
@@ -211,8 +185,8 @@ export default function ChecklistPage() {
           <div className={styles.card}>
             <div className={styles.cardHeader}>
               <h2 className={styles.cardTitle}>업무 체크리스트</h2>
-              <button className={styles.progressInfo} onClick={() => setIsProgressDetailModalOpen(true)} aria-label="완료율 상세 보기">
-                <div className={styles.progressLabel}>완료율</div>
+              <button className={styles.progressInfo} onClick={() => setIsProgressDetailModalOpen(true)} aria-label="체크리스트 완료율 상세 보기">
+                <div className={styles.progressLabel}>체크리스트 완료율</div>
                 <div className={styles.progressValue}>{completionRate}%</div>
                 <div className={styles.progressBar}>
                   <div className={styles.progressFill} style={{ width: `${completionRate}%` }}></div>
@@ -231,51 +205,48 @@ export default function ChecklistPage() {
                     : '조건에 맞는 항목이 없습니다.'}
                 </div>
               ) : (
-                filteredItems.map((item) => {
-                  const status = toFilterStatus(item.status);
-                  return (
-                    <div key={item.id} className={styles.checklistItem}>
-                      <div className={styles.checkboxWrapper}>
-                        <input
-                          type="checkbox"
-                          checked={status === 'DONE'}
-                          onChange={() => void toggleCheck(item)}
-                          disabled={updatingId !== null}
-                          className={styles.checkbox}
-                        />
-                      </div>
-                      <div className={styles.itemContent}>
-                        <div className={styles.itemTitle}>{item.title}</div>
-                      </div>
-                      <div className={styles.itemDay}>
-                        {item.dueDay !== null && item.dueDay !== undefined ? `${item.dueDay}일차` : '기한 없음'}
-                      </div>
-                      <button
-                        className={`${styles.itemStatus} ${STATUS_CLASS[status]}`}
-                        onClick={() => {
-                          setSelectedItemId(item.id);
-                          setIsTaskOverviewModalOpen(true);
-                        }}
-                      >
-                        {getDisplayLabel(item.status)}
-                      </button>
-                      <button
-                        className={`${styles.statusActionBtn} ${status === 'DONE' ? styles.undoBtn : ''}`}
+                filteredItems.map((item) => (
+                  <div key={item.id} className={styles.checklistItem}>
+                    <div className={styles.checkboxWrapper}>
+                      <input
+                        type="checkbox"
+                        checked={item.status === 'DONE'}
+                        onChange={() => void toggleCheck(item)}
                         disabled={updatingId !== null}
-                        onClick={() => {
-                          if (status === 'DONE') {
-                            void changeStatus(item, 'PENDING');
-                            return;
-                          }
-                          setSelectedItemId(item.id);
-                          setIsChecklistActionsModalOpen(true);
-                        }}
-                      >
-                        {status === 'DONE' ? <><RotateCcw size={16} /> 되돌리기</> : <><span>상태 변경</span><ChevronDown size={16} /></>}
-                      </button>
+                        className={styles.checkbox}
+                      />
                     </div>
-                  );
-                })
+                    <div className={styles.itemContent}>
+                      <div className={styles.itemTitle}>{item.title}</div>
+                    </div>
+                    <div className={styles.itemDay}>
+                      {item.dueDay !== null && item.dueDay !== undefined ? `${item.dueDay}일차` : '기한 없음'}
+                    </div>
+                    <button
+                      className={`${styles.itemStatus} ${STATUS_CLASS[item.status]}`}
+                      onClick={() => {
+                        setSelectedItemId(item.id);
+                        setIsTaskOverviewModalOpen(true);
+                      }}
+                    >
+                      {getDisplayLabel(item.status)}
+                    </button>
+                    <button
+                      className={`${styles.statusActionBtn} ${item.status === 'DONE' ? styles.undoBtn : ''}`}
+                      disabled={updatingId !== null}
+                      onClick={() => {
+                        if (item.status === 'DONE') {
+                          void changeStatus(item, 'PENDING');
+                          return;
+                        }
+                        setSelectedItemId(item.id);
+                        setIsChecklistActionsModalOpen(true);
+                      }}
+                    >
+                      {item.status === 'DONE' ? <><RotateCcw size={16} /> 되돌리기</> : <><span>항목 관리</span><ChevronDown size={16} /></>}
+                    </button>
+                  </div>
+                ))
               )}
             </div>
 
@@ -317,7 +288,7 @@ export default function ChecklistPage() {
               <span className={styles.tagBadge}>
                 {selectedItem.dueDay !== null && selectedItem.dueDay !== undefined ? `${selectedItem.dueDay}일차` : '기한 없음'}
               </span>
-              <span className={`${styles.statusBadge} ${STATUS_CLASS[toFilterStatus(selectedItem.status)]}`}>
+              <span className={`${styles.statusBadge} ${STATUS_CLASS[selectedItem.status]}`}>
                 {getDisplayLabel(selectedItem.status)}
               </span>
             </div>
@@ -351,11 +322,11 @@ export default function ChecklistPage() {
         <Modal
           open
           onClose={() => setIsProgressDetailModalOpen(false)}
-          title="진행도 상세"
+          title="체크리스트 완료율 상세"
           footer={<ModalSecondaryButton onClick={() => setIsProgressDetailModalOpen(false)}>닫기</ModalSecondaryButton>}
         >
           <div className={styles.progressCard}>
-            <div className={styles.progressLabel}>전체 완료율</div>
+            <div className={styles.progressLabel}>체크리스트 완료율</div>
             <div className={styles.progressValue}>{completionRate}%</div>
             <div className={styles.progressBar}>
               <div style={{ width: `${completionRate}%` }}></div>
@@ -371,10 +342,6 @@ export default function ChecklistPage() {
             <div className={styles.breakdownItem}>
               <span>대기</span>
               <span className={styles.breakdownValue} style={{ color: '#9CA3AF' }}>{counts.PENDING}개</span>
-            </div>
-            <div className={styles.breakdownItem}>
-              <span>건너뜀</span>
-              <span className={styles.breakdownValue} style={{ color: '#0765FC' }}>{counts.SKIPPED}개</span>
             </div>
           </div>
         </Modal>
@@ -406,7 +373,6 @@ export default function ChecklistPage() {
               ['all', `전체 ${items.length}`],
               ['PENDING', `대기 ${counts.PENDING}`],
               ['DONE', `완료 ${counts.DONE}`],
-              ['SKIPPED', `건너뜀 ${counts.SKIPPED}`],
             ] as const).map(([id, label]) => (
               <button
                 key={id}
@@ -428,7 +394,6 @@ export default function ChecklistPage() {
               <option value="all">전체</option>
               <option value="PENDING">대기</option>
               <option value="DONE">완료</option>
-              <option value="SKIPPED">건너뜀</option>
             </select>
           </div>
 
@@ -496,13 +461,6 @@ export default function ChecklistPage() {
           </div>
 
           <div className={styles.actionList}>
-            <button
-              className={styles.actionItem}
-              disabled={updatingId !== null}
-              onClick={() => void changeStatus(selectedItem, NEXT_STATUS[toFilterStatus(selectedItem.status)])}
-            >
-              다음 상태로 변경 ({getDisplayLabel(NEXT_STATUS[toFilterStatus(selectedItem.status)])})
-            </button>
             <button
               className={styles.actionItem}
               onClick={() => {

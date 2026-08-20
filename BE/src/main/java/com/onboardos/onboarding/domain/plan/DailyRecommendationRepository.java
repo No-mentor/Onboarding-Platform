@@ -16,5 +16,7 @@ public interface DailyRecommendationRepository extends JpaRepository<DailyRecomm
 
     Optional<DailyRecommendation> findByIdAndWorkspaceIdAndUserId(UUID id, UUID workspaceId, UUID userId);
 
+    List<DailyRecommendation> findByWorkspaceIdAndUserIdAndPlanItemId(UUID workspaceId, UUID userId, UUID planItemId);
+
     void deleteByWorkspaceIdAndUserIdAndRecommendDate(UUID workspaceId, UUID userId, LocalDate date);
 }

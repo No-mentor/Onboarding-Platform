@@ -27,8 +27,6 @@ import com.onboardos.onboarding.onboarding.dto.GeneratePlanRequest;
 import com.onboardos.onboarding.onboarding.dto.PlanItemResponse;
 import com.onboardos.onboarding.onboarding.dto.PlanResponse;
 import com.onboardos.onboarding.template.TemplateService;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,6 +53,7 @@ public class OnboardingPlanService {
     private final DocumentPermissionService documentPermissionService;
     private final WorkspaceRepository workspaceRepository;
     private final PlanAiGenerationService aiGenerationService;
+    private final OnboardingSyncService syncService;
     private boolean legacyTestMode;
 
     @Autowired
@@ -68,7 +67,8 @@ public class OnboardingPlanService {
             @Lazy TemplateService templateService,
             DocumentPermissionService documentPermissionService,
             WorkspaceRepository workspaceRepository,
-            PlanAiGenerationService aiGenerationService
+            PlanAiGenerationService aiGenerationService,
+            OnboardingSyncService syncService
     ) {
         this.planRepository = planRepository;
         this.planItemRepository = planItemRepository;
@@ -80,6 +80,7 @@ public class OnboardingPlanService {
         this.documentPermissionService = documentPermissionService;
         this.workspaceRepository = workspaceRepository;
         this.aiGenerationService = aiGenerationService;
+        this.syncService = syncService;
         this.legacyTestMode = false;
     }
 
@@ -91,7 +92,7 @@ public class OnboardingPlanService {
                           WorkspaceAccessService workspaceAccessService,
                           TemplateService templateService) {
         this(planRepository, planItemRepository, checklistItemRepository, documentRepository,
-                membershipRepository, workspaceAccessService, templateService, null, null, null);
+                membershipRepository, workspaceAccessService, templateService, null, null, null, null);
         this.legacyTestMode = true;
     }
 
@@ -310,7 +311,7 @@ public class OnboardingPlanService {
                         }
                     }
                 }
-                recalculateProgress(newPlan);
+                syncService.recalculateProgress(newPlan);
             });
             return getPlanForUser(workspaceId, existing.getUserId());
         }
@@ -343,12 +344,17 @@ public class OnboardingPlanService {
 
     /**
      * 계획 항목 상태를 변경한다 (DONE/PENDING).
+     * 연결된 체크리스트·오늘의 추천도 같은 상태로 동기화한다.
      */
     @Transactional
     public PlanItemResponse updateItemStatus(
             UserPrincipal principal, UUID workspaceId, UUID itemId, ItemStatus status
     ) {
         workspaceAccessService.requireMembership(workspaceId, principal.getId());
+        if (status != ItemStatus.DONE && status != ItemStatus.PENDING) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "계획 항목 상태는 PENDING 또는 DONE만 허용됩니다.");
+        }
         OnboardingPlanItem item = planItemRepository.findByIdAndWorkspaceId(itemId, workspaceId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "계획 항목이 없습니다."));
 
@@ -358,12 +364,7 @@ public class OnboardingPlanService {
             workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
         }
 
-        if (status == ItemStatus.DONE) {
-            item.markDone();
-        } else {
-            item.markPending();
-        }
-        recalculateProgress(plan);
+        syncService.syncCluster(workspaceId, plan.getUserId(), item.getId(), status == ItemStatus.DONE);
         return PlanItemResponse.from(item);
     }
 
@@ -375,15 +376,6 @@ public class OnboardingPlanService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "온보딩 계획이 없습니다."));
         List<OnboardingPlanItem> items = planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(plan.getId());
         return toPlanResponse(plan, items);
-    }
-
-    void recalculateProgress(OnboardingPlan plan) {
-        long total = planItemRepository.countByPlanIdAndStatusNot(plan.getId(), ItemStatus.SKIPPED);
-        long done = planItemRepository.countByPlanIdAndStatus(plan.getId(), ItemStatus.DONE);
-        BigDecimal percent = total == 0
-                ? BigDecimal.ZERO
-                : BigDecimal.valueOf(done * 100.0 / total).setScale(2, RoundingMode.HALF_UP);
-        plan.updateProgress(percent);
     }
 
     // --- private methods ---

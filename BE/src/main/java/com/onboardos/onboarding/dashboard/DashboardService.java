@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -33,18 +32,26 @@ public class DashboardService {
     private final OnboardingPlanRepository planRepository;
     private final ChecklistItemRepository checklistItemRepository;
 
-    @Transactional(readOnly = true)
+    /**
+     * 이 메서드에는 일부러 @Transactional(readOnly = true) 를 달지 않는다.
+     * 오늘 추천이 아직 없으면 만들어야 하는데(대시보드 첫 진입에서도 오늘 할 일이 보여야 한다),
+     * 그 쓰기 책임은 RecommendationService.today() 가 자신의 트랜잭션 안에서 진다.
+     * 여기서 읽기 전용 트랜잭션을 열면 REQUIRED 전파로 같은(읽기 전용) 트랜잭션에 합류해
+     * 내부 INSERT 가 "read-only transaction" 오류로 막힌다.
+     */
     public DashboardResponse me(UserPrincipal principal, UUID workspaceId) {
         workspaceAccessService.requireMembership(workspaceId, principal.getId());
+
+        // 오늘 추천이 없으면 여기서 생성까지 보장한다 (RecommendationService 가 쓰기 책임을 진다)
+        TodayRecommendationsResponse today = recommendationService.today(
+                principal, workspaceId, LocalDate.now());
+        List<RecommendationResponse> todayItems = today.items();
 
         OnboardingPlan plan = planRepository
                 .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(
                         workspaceId, principal.getId(), PlanStatus.ACTIVE)
                 .orElse(null);
 
-        TodayRecommendationsResponse today = recommendationService.todayReadOnly(
-                workspaceId, principal.getId(), LocalDate.now());
-        List<RecommendationResponse> todayItems = today.items();
         int todayDone = (int) todayItems.stream().filter(i -> i.status() == ItemStatus.DONE).count();
 
         List<ChecklistItem> checklists = checklistItemRepository

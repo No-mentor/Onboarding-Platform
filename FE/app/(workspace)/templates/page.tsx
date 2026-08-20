@@ -59,12 +59,26 @@ function formatMinutes(total: number): string {
   return `${hours}시간 ${minutes}분`;
 }
 
-/** 상세 응답의 items 를 편집기가 쓰는 payload 로 옮긴다 */
-function toPayloads(items: TemplateItemResponse[] | null): TemplateItemPayload[] {
+/**
+ * 편집기 안에서만 쓰는, 항목 하나를 가리키는 안정적인 key.
+ * index 를 key 로 쓰면 삭제·이동 중에 React 가 엉뚱한 행에 같은 DOM 을 재사용해
+ * 입력 포커스가 다른 행으로 튀는 것처럼 보인다. 저장 payload 에는 포함하지 않는다.
+ */
+interface EditableTemplateItem extends TemplateItemPayload {
+  _key: string;
+}
+
+function newClientKey(): string {
+  return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `tmp-${Math.random()}`;
+}
+
+/** 상세 응답의 items 를 편집기가 쓰는 payload 로 옮긴다. 서버 item id 를 그대로 안정 key 로 쓴다 */
+function toPayloads(items: TemplateItemResponse[] | null): EditableTemplateItem[] {
   return (items ?? [])
     .slice()
     .sort((a, b) => a.dayIndex - b.dayIndex || a.sortOrder - b.sortOrder)
     .map(i => ({
+      _key: i.id,
       dayIndex: i.dayIndex,
       type: i.type,
       title: i.title,
@@ -75,13 +89,19 @@ function toPayloads(items: TemplateItemResponse[] | null): TemplateItemPayload[]
     }));
 }
 
+/** AI 초안(TemplateItemPayload[])에 편집기용 안정 key 를 붙인다 */
+function toEditable(items: TemplateItemPayload[]): EditableTemplateItem[] {
+  return items.map(i => ({ ...i, _key: newClientKey() }));
+}
+
 /**
  * 저장 직전 정리.
  * - 제목이 빈 항목은 버린다
  * - sortOrder 를 화면 순서대로 다시 매긴다
  * - documentId 는 DOCUMENT 항목에만 남긴다 (서버가 비-DOCUMENT 의 documentId 를 거부한다)
+ * - _key 는 화면 전용이라 payload 에 넣지 않는다
  */
-function toSavePayload(items: TemplateItemPayload[]): TemplateItemPayload[] {
+function toSavePayload(items: EditableTemplateItem[]): TemplateItemPayload[] {
   return items
     .filter(i => i.title.trim())
     .map((item, index) => {
@@ -96,6 +116,11 @@ function toSavePayload(items: TemplateItemPayload[]): TemplateItemPayload[] {
       if (typeof item.estimatedMinutes === 'number') payload.estimatedMinutes = item.estimatedMinutes;
       return payload;
     });
+}
+
+/** DOCUMENT 항목인데 문서가 연결되지 않은 첫 항목. 있으면 저장을 막아야 한다 */
+function findUnlinkedDocumentItem(items: EditableTemplateItem[]): EditableTemplateItem | undefined {
+  return items.find(i => i.type === 'DOCUMENT' && !i.documentId && i.title.trim());
 }
 
 /** 서버는 documentId 만 주므로, 화면에 이름을 보여 주려면 문서 목록에서 찾아야 한다 */
@@ -119,18 +144,18 @@ function TemplateItemsEditor({
   documents,
   onChange,
 }: {
-  items: TemplateItemPayload[];
+  items: EditableTemplateItem[];
   maxDay: number;
   disabled: boolean;
   /** DOCUMENT 항목에서 고를 수 있는 READY 문서 */
   documents: DocumentResponse[];
-  onChange: (next: TemplateItemPayload[]) => void;
+  onChange: (next: EditableTemplateItem[]) => void;
 }) {
   /**
    * 유형이 바뀌면 documentId 를 정리한다.
    * 서버는 비-DOCUMENT 항목의 documentId 를 받지 않으므로 남겨 두면 검증에 걸린다.
    */
-  const patch = (index: number, part: Partial<TemplateItemPayload>) =>
+  const patch = (index: number, part: Partial<EditableTemplateItem>) =>
     onChange(items.map((item, i) => {
       if (i !== index) return item;
       const next = { ...item, ...part };
@@ -153,6 +178,7 @@ function TemplateItemsEditor({
     onChange([
       ...items,
       {
+        _key: newClientKey(),
         dayIndex: items.length === 0 ? 1 : Math.min(maxDay, items[items.length - 1].dayIndex + 1),
         type: 'CHECKLIST',
         title: '',
@@ -192,7 +218,7 @@ function TemplateItemsEditor({
         ) : (
           items.map((item, index) => (
             <div
-              key={index}
+              key={item._key}
               style={{
                 display: 'flex', flexDirection: 'column', gap: '6px', padding: '10px 12px',
                 borderTop: index === 0 ? 'none' : '1px solid #f1f5f9',
@@ -219,7 +245,9 @@ function TemplateItemsEditor({
                   style={{ width: '108px', padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
                 >
                   {ITEM_TYPES.map(t => (
-                    <option key={t} value={t}>{getDisplayLabel(t)}</option>
+                    <option key={t} value={t} disabled={t === 'DOCUMENT' && documents.length === 0}>
+                      {getDisplayLabel(t)}
+                    </option>
                   ))}
                 </select>
                 <input
@@ -281,24 +309,39 @@ function TemplateItemsEditor({
                 </button>
               </div>
 
-              {/* DOCUMENT 항목만 문서를 연결한다. 제목이 아니라 documentId 를 보낸다 */}
+              {/*
+                DOCUMENT 항목은 문서 연결이 필수다. 서버가 documentId 없는 DOCUMENT 항목을 400 으로
+                거부하므로 ("연결 안 함" 을 허용하면 저장 시점에야 실패한다), 여기서 항상 실제
+                문서를 고르게 하고 문서가 없으면 저장 자체를 findUnlinkedDocumentItem 으로 막는다.
+              */}
               {item.type === 'DOCUMENT' && (
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', paddingLeft: '2px' }}>
-                  <span style={{ fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap' }}>연결 문서</span>
-                  <select
-                    value={item.documentId ?? ''}
-                    onChange={(e) => patch(index, { documentId: e.target.value || undefined })}
-                    disabled={disabled}
-                    style={{ flex: 1, padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px' }}
-                  >
-                    <option value="">연결 안 함</option>
-                    {documents.map(doc => (
-                      <option key={doc.id} value={doc.id}>{doc.title}</option>
-                    ))}
-                  </select>
-                  {documents.length === 0 && (
-                    <span style={{ fontSize: '12px', color: '#94a3b8', whiteSpace: 'nowrap' }}>
-                      처리 완료된 문서 없음
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '2px' }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap' }}>연결 문서</span>
+                    <select
+                      value={item.documentId ?? ''}
+                      onChange={(e) => patch(index, { documentId: e.target.value || undefined })}
+                      disabled={disabled || documents.length === 0}
+                      style={{
+                        flex: 1, padding: '7px', borderRadius: '6px', fontSize: '12.5px',
+                        border: `1px solid ${!item.documentId ? '#dc2626' : '#cbd5e1'}`,
+                      }}
+                    >
+                      <option value="" disabled>
+                        {documents.length === 0 ? '연결 가능한 문서 없음' : '문서를 선택하세요'}
+                      </option>
+                      {documents.map(doc => (
+                        <option key={doc.id} value={doc.id}>{doc.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {documents.length === 0 ? (
+                    <span style={{ fontSize: '12px', color: '#985050' }}>
+                      먼저 처리 완료(READY)된 문서를 업로드해야 이 항목을 저장할 수 있습니다.
+                    </span>
+                  ) : !item.documentId && (
+                    <span style={{ fontSize: '12px', color: '#985050' }}>
+                      문서를 선택해야 저장할 수 있습니다.
                     </span>
                   )}
                 </div>
@@ -336,14 +379,14 @@ export default function TemplatesPage() {
   const [newRole, setNewRole] = useState<WorkspaceRole>('NEW_HIRE');
   const [newDescription, setNewDescription] = useState('');
   // 항목 없이 저장하면 계획에 반영되지 않으므로 생성 폼에서도 항목을 받는다
-  const [newItems, setNewItems] = useState<TemplateItemPayload[]>([]);
+  const [newItems, setNewItems] = useState<EditableTemplateItem[]>([]);
   const [newIsDefault, setNewIsDefault] = useState(true);
 
   // 편집 폼
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState<WorkspaceRole>('NEW_HIRE');
   const [editDescription, setEditDescription] = useState('');
-  const [editItems, setEditItems] = useState<TemplateItemPayload[]>([]);
+  const [editItems, setEditItems] = useState<EditableTemplateItem[]>([]);
   const [editIsDefault, setEditIsDefault] = useState(false);
 
 
@@ -362,7 +405,7 @@ export default function TemplatesPage() {
   /** 생성된 초안. null 이면 아직 조건 입력 단계 */
   const [draft, setDraft] = useState<GeneratedTemplateResponse | null>(null);
   const [draftName, setDraftName] = useState('');
-  const [draftItems, setDraftItems] = useState<TemplateItemPayload[]>([]);
+  const [draftItems, setDraftItems] = useState<EditableTemplateItem[]>([]);
   const [draftIsDefault, setDraftIsDefault] = useState(true);
 
   const openGenerateModal = async () => {
@@ -395,7 +438,7 @@ export default function TemplatesPage() {
       });
       setDraft(result);
       setDraftName(result.name);
-      setDraftItems(result.items);
+      setDraftItems(toEditable(result.items));
       if (!result.aiGenerated) {
         showToast(result.fallbackReason ?? 'AI를 사용할 수 없어 기본 골격을 만들었습니다.', 'error');
       }
@@ -413,6 +456,11 @@ export default function TemplatesPage() {
     }
     if (draftItems.length === 0) {
       showToast('항목이 하나도 없습니다.', 'error');
+      return;
+    }
+    const unlinked = findUnlinkedDocumentItem(draftItems);
+    if (unlinked) {
+      showToast(`"${unlinked.title || '제목 없음'}" 항목에 연결할 문서를 선택해 주세요.`, 'error');
       return;
     }
     setIsSaving(true);
@@ -562,6 +610,11 @@ export default function TemplatesPage() {
       showToast('항목을 1개 이상 추가해 주세요. 항목이 없는 템플릿은 저장할 수 없습니다.', 'error');
       return;
     }
+    const unlinked = findUnlinkedDocumentItem(newItems);
+    if (unlinked) {
+      showToast(`"${unlinked.title || '제목 없음'}" 항목에 연결할 문서를 선택해 주세요.`, 'error');
+      return;
+    }
     setIsSaving(true);
     try {
       const created = await createTemplate({
@@ -594,6 +647,11 @@ export default function TemplatesPage() {
     const payload = toSavePayload(editItems);
     if (payload.length === 0) {
       showToast('항목을 1개 이상 남겨 주세요. 항목이 없으면 계획에 반영되지 않습니다.', 'error');
+      return;
+    }
+    const unlinked = findUnlinkedDocumentItem(editItems);
+    if (unlinked) {
+      showToast(`"${unlinked.title || '제목 없음'}" 항목에 연결할 문서를 선택해 주세요.`, 'error');
       return;
     }
     setIsSaving(true);

@@ -340,7 +340,7 @@ function DashboardContent() {
             {/* Progress Card */}
             <section className={styles.card}>
               <div className={styles.progressHeader}>
-                <h2 className={styles.cardTitle}>인수인계 진행</h2>
+                <h2 className={styles.cardTitle}>전체 온보딩 진행률</h2>
                 {plan?.planId && (
                   <span className={styles.bottleneck}>
                     {plan.currentDay}일차 / {plan.totalDays}일
