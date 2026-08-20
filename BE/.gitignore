@@ -1,0 +1,8 @@
+.env
+/storage/
+build/
+.gradle/
+out/
+*.iml
+.idea/
+bin/

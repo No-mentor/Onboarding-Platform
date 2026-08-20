@@ -1,0 +1,252 @@
+:root {
+  --sidebar-blue: #0765FC;
+  --sidebar-blue-deep: #053584;
+  --sidebar-blue-mid: #0754D1;
+  --color-border: #E5E7EB;
+}
+
+.sidebar {
+  width: 276px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 106% -2%, rgba(255, 255, 255, 0.3) 0, rgba(255, 255, 255, 0) 27%),
+    radial-gradient(circle at -15% 62%, rgba(61, 152, 255, 0.42) 0, rgba(61, 152, 255, 0) 32%),
+    linear-gradient(165deg, var(--sidebar-blue) 0%, var(--sidebar-blue-mid) 48%, var(--sidebar-blue-deep) 100%);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  padding: 22px 16px 20px;
+  gap: 28px;
+  overflow-y: auto;
+  border-right: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 10px 0 32px rgba(7, 62, 151, 0.12);
+  transition: width 0.24s ease, padding 0.24s ease;
+}
+
+.sidebar.collapsed {
+  width: 84px;
+  padding-inline: 12px;
+}
+
+.collapsed .sidebarHeader {
+  justify-content: center;
+  padding-inline: 6px;
+}
+
+.collapsed .mentalkLogo,
+.collapsed .label,
+.collapsed .userInfo {
+  display: none;
+}
+
+.collapsed .navItem,
+.collapsed .userCard {
+  justify-content: center;
+}
+
+.collapsed .navItem {
+  padding-inline: 10px;
+}
+
+.collapsed .collapseBtn {
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.sidebarHeader {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 62px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(3, 37, 96, 0.2), rgba(3, 37, 96, 0.08)) padding-box,
+    linear-gradient(135deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.07) 52%, rgba(133, 193, 255, 0.2)) border-box;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 10px 26px rgba(2, 31, 83, 0.13);
+  backdrop-filter: blur(14px) saturate(120%);
+}
+
+.mainLogo {
+  width: 46px;
+  height: 46px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow:
+    0 6px 16px rgba(2, 26, 73, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.mainLogoImage {
+  width: 38px;
+  height: auto;
+  object-fit: contain;
+}
+
+.mentalkLogo {
+  width: 158px;
+  height: auto;
+  min-width: 0;
+  object-fit: contain;
+}
+
+.navMenu {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.navSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.78);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  border: none;
+  background: none;
+}
+
+.navItem:hover {
+  background-color: rgba(255, 255, 255, 0.13);
+  color: white;
+  transform: translateX(2px);
+}
+
+.navItem.active {
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--sidebar-blue);
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(3, 34, 91, 0.22);
+}
+
+.iconComponent {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  stroke-width: 1.5;
+}
+
+.label {
+  flex: 1;
+}
+
+.divider {
+  height: 1px;
+  margin: 0 8px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+}
+
+.sidebarFooter {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.userCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background-color: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.userCard:hover {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.userAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.96);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--sidebar-blue);
+  flex-shrink: 0;
+}
+
+.userInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.userName {
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+}
+
+.userRole {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 2px 0 0 0;
+}
+
+.collapseBtn {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: center;
+  transition: all 0.2s;
+  border-radius: 8px;
+}
+
+.collapseBtn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: white;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}

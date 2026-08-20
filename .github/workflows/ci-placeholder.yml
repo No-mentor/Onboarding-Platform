@@ -4,9 +4,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
   push:
-    branches: [main]
+    branches: [main, dev]
 
 jobs:
   docs-layout:
@@ -24,4 +24,6 @@ jobs:
           test -f docs/OnboardOS_ERD.md
           test -f scripts/generate_docs.py
           test -f .github/PULL_REQUEST_TEMPLATE.md
-          echo "OK: core docs and templates present"
+          test -d FE && test -f FE/README.md
+          test -d BE && test -f BE/README.md
+          echo "OK: core docs, templates, FE/BE layout present"

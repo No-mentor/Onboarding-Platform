@@ -1,0 +1,35 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  mail:
+    host: localhost
+    port: 9999
+    properties:
+      mail:
+        smtp:
+          auth: false
+          connectiontimeout: 500
+          timeout: 500
+          writetimeout: 500
+
+app:
+  jwt:
+    secret: test-secret-key-that-is-long-enough-123456
+    expiration-ms: 3600000
+  storage:
+    provider: local
+    root: ./build/test-storage
+  ai:
+    enabled: false
+    openai-api-key: ""
+
+logging:
+  level:
+    root: WARN
+    com.onboardos: INFO

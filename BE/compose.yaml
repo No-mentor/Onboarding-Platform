@@ -1,0 +1,33 @@
+name: onboarding
+
+services:
+  db:
+    # pgvector 확장 포함 이미지
+    image: pgvector/pgvector:pg17
+    container_name: onboarding-db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    ports:
+      - "${DB_PORT:-5432}:5432"
+
+    volumes:
+      - onboarding-db-data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  onboarding-db-data:

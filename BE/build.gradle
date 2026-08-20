@@ -1,0 +1,104 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '4.0.7'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.onboardos'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(17)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-restclient'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'org.springframework.boot:spring-boot-starter-flyway'
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
+	implementation 'org.apache.pdfbox:pdfbox:3.0.5'
+
+	// JWT
+	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+	// LangChain4j + OpenAI (임베딩·채팅)
+	implementation platform('dev.langchain4j:langchain4j-bom:0.36.2')
+	implementation 'dev.langchain4j:langchain4j'
+	implementation 'dev.langchain4j:langchain4j-open-ai'
+
+	// Swagger / OpenAPI
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+
+	compileOnly 'org.projectlombok:lombok'
+	runtimeOnly 'org.postgresql:postgresql'
+	runtimeOnly 'org.flywaydb:flyway-database-postgresql'
+	annotationProcessor 'org.projectlombok:lombok'
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	testImplementation 'org.testcontainers:junit-jupiter'
+	testImplementation 'org.testcontainers:postgresql'
+	testCompileOnly 'org.projectlombok:lombok'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testAnnotationProcessor 'org.projectlombok:lombok'
+}
+
+tasks.named('bootRun') {
+	// Spring Boot 는 .env 를 자동으로 읽지 않는다.
+	// 이게 없으면 ./gradlew bootRun 으로 켤 때 OPENAI_API_KEY·MAIL_*·JWT_SECRET 가 빠져
+	// AI 가 템플릿 폴백으로 떨어지고 메일 발송이 실패한다.
+	def envFile = file('.env')
+	if (envFile.exists()) {
+		envFile.readLines('UTF-8').each { line ->
+			def trimmed = line.trim()
+			if (trimmed && !trimmed.startsWith('#') && trimmed.contains('=')) {
+				def separator = trimmed.indexOf('=')
+				environment trimmed.substring(0, separator).trim(), trimmed.substring(separator + 1).trim()
+			}
+		}
+	}
+}
+
+tasks.named('test') {
+	useJUnitPlatform {
+		// Docker/Testcontainers 통합 테스트와 실제 API 수동 검증은 기본 test 에서 제외
+		excludeTags 'integration', 'manual-ai'
+	}
+}
+
+tasks.register('integrationTest', Test) {
+	description = 'Testcontainers 통합 테스트 (Docker 필요)'
+	group = 'verification'
+	shouldRunAfter test
+	useJUnitPlatform {
+		includeTags 'integration'
+		excludeTags 'manual-ai'
+	}
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+}
+
+tasks.register('manualAiTest', Test) {
+	description = '실제 OpenAI API 키로 수동 실행하는 검증 (CI 자동 실행 대상 아님, Docker 필요)'
+	group = 'verification'
+	useJUnitPlatform {
+		includeTags 'manual-ai'
+	}
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+}
+
