@@ -14,6 +14,7 @@ import com.onboardos.onboarding.domain.template.OnboardingTemplateItem;
 import com.onboardos.onboarding.domain.template.OnboardingTemplateItemRepository;
 import com.onboardos.onboarding.domain.template.OnboardingTemplateRepository;
 import com.onboardos.onboarding.domain.user.Membership;
+import com.onboardos.onboarding.domain.user.MembershipRepository;
 import com.onboardos.onboarding.domain.user.User;
 import com.onboardos.onboarding.domain.user.UserRepository;
 import com.onboardos.onboarding.domain.user.UserRole;
@@ -32,9 +33,12 @@ import com.onboardos.onboarding.template.dto.TemplateResponse;
 import com.onboardos.onboarding.template.dto.UpdateTemplateRequest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+import java.util.HashSet;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
@@ -54,6 +58,7 @@ public class TemplateService {
     private final OnboardingPlanRepository planRepository;
     private final OnboardingPlanService onboardingPlanService;
     private final UserRepository userRepository;
+    private final MembershipRepository membershipRepository;
 
     public TemplateService(
             OnboardingTemplateRepository templateRepository,
@@ -63,7 +68,8 @@ public class TemplateService {
             DocumentPermissionService documentPermissionService,
             OnboardingPlanRepository planRepository,
             @Lazy OnboardingPlanService onboardingPlanService,
-            UserRepository userRepository
+            UserRepository userRepository,
+            MembershipRepository membershipRepository
     ) {
         this.templateRepository = templateRepository;
         this.itemRepository = itemRepository;
@@ -73,6 +79,7 @@ public class TemplateService {
         this.planRepository = planRepository;
         this.onboardingPlanService = onboardingPlanService;
         this.userRepository = userRepository;
+        this.membershipRepository = membershipRepository;
     }
 
     public record SelectedTemplate(UUID templateId, List<OnboardingTemplateItem> items) {}
@@ -150,7 +157,8 @@ public class TemplateService {
     public Optional<SelectedTemplate> selectForPlan(UUID workspaceId, UUID templateId, UserRole role) {
         if (templateId != null) {
             OnboardingTemplate template = requireTemplate(workspaceId, templateId);
-            if (role == null || template.getTargetRole() != role) {
+            // templateId 가 직접 지정된 경우, role 이 일치하거나 role 이 null (관리자 일괄 적용 등)이면 허용
+            if (role != null && template.getTargetRole() != role) {
                 throw new BusinessException(ErrorCode.VALIDATION_ERROR, "대상 역할과 호환되지 않는 템플릿입니다.");
             }
             return Optional.of(selected(template));
@@ -234,18 +242,25 @@ public class TemplateService {
     @Transactional(readOnly = true)
     public AffectedUsersResponse getAffectedUsers(UserPrincipal principal, UUID workspaceId, UUID templateId) {
         workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
-        requireTemplate(workspaceId, templateId);
+        OnboardingTemplate template = requireTemplate(workspaceId, templateId);
 
-        List<OnboardingPlan> affectedPlans = planRepository
-                .findByWorkspaceIdAndSourceTemplateIdAndStatusAndDeletedAtIsNull(
-                        workspaceId, templateId, PlanStatus.ACTIVE);
+        UserRole targetRole = template.getTargetRole();
+        Set<UUID> targetUserIds = collectTargetUserIds(workspaceId, templateId, targetRole, principal.getId());
 
-        List<AffectedUsersResponse.AffectedUserSummary> summaries = affectedPlans.stream()
-                .map(plan -> {
-                    User user = userRepository.findById(plan.getUserId()).orElse(null);
+        // 한 번에 User 와 Plan 을 조회해서 N+1 방지
+        Map<UUID, User> userMap = userRepository.findAllById(targetUserIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        Map<UUID, UUID> userPlanMap = planRepository
+                .findByWorkspaceIdAndStatusAndDeletedAtIsNull(workspaceId, PlanStatus.ACTIVE).stream()
+                .filter(plan -> targetUserIds.contains(plan.getUserId()))
+                .collect(Collectors.toMap(OnboardingPlan::getUserId, OnboardingPlan::getId, (a, b) -> a));
+
+        List<AffectedUsersResponse.AffectedUserSummary> summaries = targetUserIds.stream()
+                .map(userId -> {
+                    User user = userMap.get(userId);
                     return new AffectedUsersResponse.AffectedUserSummary(
-                            plan.getUserId(),
-                            plan.getId(),
+                            userId,
+                            userPlanMap.get(userId),
                             user != null ? user.getEmail() : null,
                             user != null ? user.getName() : null
                     );
@@ -256,36 +271,72 @@ public class TemplateService {
     }
 
     /**
-     * 이 템플릿을 sourceTemplateId로 사용 중인 모든 활성 계획을 최신 템플릿으로 재생성한다.
+     * 이 템플릿을 적용할 대상 사용자를 모은다.
+     * 1) targetRole 에 해당하는 활성 멤버 전체 (계획 유무 무관)
+     * 2) sourceTemplateId 가 일치하는 활성 계획 보유자
+     * 관리자 자신은 제외.
      */
-    @Transactional
+    private Set<UUID> collectTargetUserIds(UUID workspaceId, UUID templateId,
+                                           UserRole targetRole, UUID excludeUserId) {
+        Set<UUID> targetUserIds = new HashSet<>();
+        if (targetRole != null) {
+            membershipRepository.findByWorkspaceIdAndRoleAndDeletedAtIsNull(workspaceId, targetRole).stream()
+                    .filter(Membership::isActive)
+                    .map(Membership::getUserId)
+                    .forEach(targetUserIds::add);
+        }
+        planRepository.findByWorkspaceIdAndSourceTemplateIdAndStatusAndDeletedAtIsNull(
+                workspaceId, templateId, PlanStatus.ACTIVE).stream()
+                .map(OnboardingPlan::getUserId)
+                .forEach(targetUserIds::add);
+
+        targetUserIds.remove(excludeUserId);
+        return targetUserIds;
+    }
+
+    /**
+     * 이 템플릿을 대상 사용자 전원에게 일괄 적용한다.
+     * 각 사용자 적용은 독립 트랜잭션으로 처리되어, 한 명이 실패해도 나머지는 정상 커밋된다.
+     * (이 메서드 자체는 트랜잭션 바깥에서 실행된다)
+     */
     public ApplyTemplateResponse applyToActivePlans(UserPrincipal principal, UUID workspaceId,
                                                     UUID templateId, ApplyTemplateRequest request) {
+        // 권한 검사와 템플릿 조회는 여기서 한다
         workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
-        requireTemplate(workspaceId, templateId);
+        OnboardingTemplate template = requireTemplate(workspaceId, templateId);
 
-        List<OnboardingPlan> affectedPlans = planRepository
-                .findByWorkspaceIdAndSourceTemplateIdAndStatusAndDeletedAtIsNull(
-                        workspaceId, templateId, PlanStatus.ACTIVE);
+        UserRole targetRole = template.getTargetRole();
+        Set<UUID> targetUserIds = collectTargetUserIds(workspaceId, templateId, targetRole, principal.getId());
 
-        if (affectedPlans.isEmpty()) {
+        if (targetUserIds.isEmpty()) {
             return ApplyTemplateResponse.success(List.of());
         }
 
         boolean keepCompleted = request != null && request.shouldKeepCompleted();
+
+        // 기존 계획이 있는 사용자의 planId 를 미리 조회
+        Map<UUID, UUID> userPlanMap = planRepository
+                .findByWorkspaceIdAndStatusAndDeletedAtIsNull(workspaceId, PlanStatus.ACTIVE).stream()
+                .filter(plan -> targetUserIds.contains(plan.getUserId()))
+                .collect(Collectors.toMap(OnboardingPlan::getUserId, OnboardingPlan::getId, (a, b) -> a));
+
         List<ApplyTemplateResponse.AffectedUser> results = new ArrayList<>();
 
-        for (OnboardingPlan plan : affectedPlans) {
+        for (UUID userId : targetUserIds) {
             try {
-                onboardingPlanService.generateForUser(
-                        workspaceId, plan.getUserId(), true, templateId, false);
-                results.add(new ApplyTemplateResponse.AffectedUser(
-                        plan.getUserId(), "SUCCESS", null));
+                UUID existingPlanId = userPlanMap.get(userId);
+                if (existingPlanId != null && keepCompleted) {
+                    // 기존 계획이 있고 완료 항목 유지 → regenerate 사용
+                    onboardingPlanService.regenerate(principal, workspaceId, existingPlanId, true, templateId);
+                } else {
+                    // 계획이 없거나 전체 재생성 → generateForUser 사용
+                    onboardingPlanService.generateForUser(workspaceId, userId, true, templateId, false);
+                }
+                results.add(new ApplyTemplateResponse.AffectedUser(userId, "SUCCESS", null));
             } catch (Exception e) {
                 log.warn("템플릿 일괄 적용 실패: userId={}, templateId={}, error={}",
-                        plan.getUserId(), templateId, e.getMessage());
-                results.add(new ApplyTemplateResponse.AffectedUser(
-                        plan.getUserId(), "FAILED", e.getMessage()));
+                        userId, templateId, e.getMessage());
+                results.add(new ApplyTemplateResponse.AffectedUser(userId, "FAILED", e.getMessage()));
             }
         }
 

@@ -1300,6 +1300,9 @@ export default function TemplatesPage() {
                     <UsersRound size={16} style={{ color: '#64748b', flexShrink: 0 }} />
                     <span style={{ color: '#0f172a' }}>{user.name ?? '이름 없음'}</span>
                     <span style={{ color: '#94a3b8', fontSize: '12px' }}>{user.email}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: '11px', color: user.planId ? '#64748b' : '#dc2626' }}>
+                      {user.planId ? '재생성' : '새로 생성'}
+                    </span>
                   </div>
                 ))}
               </div>

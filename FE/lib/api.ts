@@ -1076,7 +1076,7 @@ export async function deleteTemplate(templateId: string): Promise<void> {
 
 export interface AffectedUserSummary {
   userId: string;
-  planId: string;
+  planId: string | null;
   email: string | null;
   name: string | null;
 }
