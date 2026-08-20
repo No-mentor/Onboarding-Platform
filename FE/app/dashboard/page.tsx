@@ -7,6 +7,7 @@ import { ChevronRight, ChevronDown, Bell, HelpCircle, Building2, Settings, Check
 import { AiOutlineFilePdf, AiOutlineFileExcel, AiOutlineFile } from 'react-icons/ai';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
+import { Markdown } from '@/components/ui/markdown';
 import { DailyTasksModal } from '@/components/dashboard/modals/daily-tasks-modal';
 import { AllFilesModal } from '@/components/dashboard/modals/all-files-modal';
 import { NotificationsPanel, useNotifications } from '@/components/dashboard/panels/notifications-panel';
@@ -640,7 +641,7 @@ function DashboardContent() {
         {answer && !isAsking && (
           <div className={styles.answerBox}>
             <div className={styles.answerLabel}>답변</div>
-            <p className={styles.answerText}>{answer}</p>
+            <Markdown text={answer} className={styles.answerText} />
             {citations.length > 0 && (
               <p className={styles.citations}>참고 문서: {citations.join(', ')}</p>
             )}

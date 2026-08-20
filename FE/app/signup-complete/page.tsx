@@ -8,6 +8,15 @@ function SignupCompleteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get('email') ?? '';
+  const redirect = searchParams.get('redirect');
+
+  /** 초대 링크에서 시작한 가입이면 로그인 후 그 화면으로 돌아가도록 파라미터를 이어 준다 */
+  const loginHref = (() => {
+    const params = new URLSearchParams();
+    if (email) params.set('email', email);
+    if (redirect && redirect.startsWith('/')) params.set('redirect', redirect);
+    return params.size > 0 ? `/login?${params.toString()}` : '/login';
+  })();
 
   return (
     <div className="auth">
@@ -64,7 +73,7 @@ function SignupCompleteContent() {
             className="submit"
             type="button"
             style={{ marginTop: '30px' }}
-            onClick={() => router.push('/login')}
+            onClick={() => router.push(loginHref)}
           >
             로그인하러 가기
           </button>

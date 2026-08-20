@@ -50,6 +50,9 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**"
                         ).permitAll()
+                        // 초대 링크를 연 사람이 로그인 전에 초대 내용을 확인할 수 있어야 한다.
+                        // 토큰을 아는 것 자체가 인증이며, 수락(POST)은 여전히 로그인을 요구한다.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/members/invitations/*").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
                 )

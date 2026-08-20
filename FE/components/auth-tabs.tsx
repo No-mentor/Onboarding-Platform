@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LoginForm } from './login-form';
 import { SignupForm } from './signup-form';
 
@@ -8,6 +8,16 @@ type AuthTab = 'login' | 'signup';
 
 export function AuthTabs({ initialTab = 'login' }: { initialTab?: AuthTab }) {
   const [activeTab, setActiveTab] = useState<AuthTab>(initialTab);
+
+  // 초대 화면에서 "계정 만들기" 로 넘어오면 회원가입 탭이 먼저 열려야 한다.
+  // (서버 렌더 결과와 어긋나지 않도록 마운트 후에 바꾼다)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (new URLSearchParams(window.location.search).get('tab') === 'signup') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setActiveTab('signup');
+    }
+  }, []);
 
   return (
     <>

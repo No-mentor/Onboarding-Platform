@@ -1,0 +1,124 @@
+/*
+ * AI 답변 마크다운 스타일.
+ * 글자 크기·색·줄간격은 감싸는 쪽(메시지 버블 / 답변 박스)을 그대로 물려받아
+ * 어느 화면에 넣어도 톤이 어긋나지 않게 한다.
+ */
+
+.root {
+  font-size: inherit;
+  color: inherit;
+  line-height: inherit;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * 감싸는 클래스(messageText·answerText)가 white-space: pre-wrap 을 갖고 있다.
+ * 블록을 직접 그리므로 그대로 두면 줄바꿈이 두 번 먹는다.
+ * 클래스를 두 번 써서 우선순위를 올려, 어느 쪽 스타일시트가 나중에 오더라도 이 값이 이긴다.
+ */
+.root.root {
+  white-space: normal;
+}
+
+.root > *:first-child {
+  margin-top: 0;
+}
+
+.root > *:last-child {
+  margin-bottom: 0;
+}
+
+.paragraph {
+  margin: 0 0 0.65em;
+}
+
+.heading {
+  margin: 1em 0 0.45em;
+  font-weight: 700;
+  line-height: 1.4;
+  /* 본문보다 살짝만 키운다 (답변 안의 소제목이므로) */
+  font-size: 1.08em;
+}
+
+.list {
+  margin: 0 0 0.65em;
+  padding-left: 1.25em;
+}
+
+.list li {
+  margin: 0 0 0.3em;
+}
+
+.list li::marker {
+  color: var(--text-faint, #9a9aa1);
+}
+
+.strong {
+  font-weight: 700;
+}
+
+.code {
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--surface-sunk, #f4f4f5);
+  font-family: var(--font-geist-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.92em;
+}
+
+.pre {
+  margin: 0 0 0.65em;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--surface-sunk, #f4f4f5);
+  overflow-x: auto;
+}
+
+.pre code {
+  font-family: var(--font-geist-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.92em;
+  white-space: pre;
+}
+
+.quote {
+  margin: 0 0 0.65em;
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--border-strong, #d6d6d9);
+  color: var(--text-sub, #6b6b72);
+}
+
+.rule {
+  margin: 0.9em 0;
+  border: 0;
+  border-top: 1px solid var(--border-strong, #d6d6d9);
+}
+
+.link {
+  color: #0765fc;
+  text-decoration: underline;
+}
+
+/* 표는 좁은 화면에서 본문을 밀지 않도록 자기 영역에서만 스크롤한다 */
+.tableWrap {
+  margin: 0 0 0.65em;
+  overflow-x: auto;
+}
+
+.table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95em;
+}
+
+.table th,
+.table td {
+  padding: 7px 10px;
+  border: 1px solid var(--border-strong, #d6d6d9);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  background: var(--surface-sunk, #f4f4f5);
+  font-weight: 600;
+}

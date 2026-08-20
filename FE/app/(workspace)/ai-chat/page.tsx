@@ -7,6 +7,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFilePdf, faFileExcel } from '@fortawesome/free-solid-svg-icons';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
+import { Markdown } from '@/components/ui/markdown';
 import { useToast } from '@/components/ui/toast';
 import { useMe } from '@/components/require-workspace';
 import { saveWorkspaceId } from '@/lib/storage';
@@ -333,7 +334,11 @@ function AIChatContent() {
                           <span className={styles.messageTime}>{line.time}</span>
                         </div>
                       )}
-                      <p className={styles.messageText}>{line.text}</p>
+                      {line.role === 'assistant' ? (
+                        <Markdown text={line.text} className={styles.messageText} />
+                      ) : (
+                        <p className={styles.messageText}>{line.text}</p>
+                      )}
                       {line.citations.length > 0 && (
                         <div className={styles.citations}>
                           <span className={styles.citationsLabel}>출처</span>
@@ -546,7 +551,7 @@ function AIChatContent() {
             </div>
           ) : (
             <div className={styles.responseCard}>
-              <p>{selectedLine.text}</p>
+              <Markdown text={selectedLine.text} />
               <div className={styles.responseStats}>
                 <div className={styles.stat}>출처: {selectedLine.citations.length}개</div>
                 <div className={styles.stat}>시간: {selectedLine.time || '방금'}</div>
