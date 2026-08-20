@@ -495,7 +495,7 @@ export interface InvitationResponse {
   role: WorkspaceRole;
   token: string;
   expiresAt: string;
-  status: 'PENDING' | 'ACCEPTED' | 'EXPIRED' | 'REVOKED';
+  status: InvitationStatus;
 }
 
 export interface InviteMemberPayload {
@@ -514,6 +514,94 @@ export async function inviteMember(payload: InviteMemberPayload): Promise<Invita
   });
 
   if (!response.ok) throw new Error(await errorMessage(response, '멤버 초대 실패'));
+  return response.json();
+}
+
+export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'EXPIRED' | 'REVOKED';
+
+/** GET /members/invitations 목록 한 줄 (서버 InvitationListItemResponse 와 1:1) */
+export interface InvitationListItem {
+  invitationId: string;
+  email: string;
+  role: WorkspaceRole;
+  department: string | null;
+  careerLevel: string | null;
+  title: string | null;
+  status: InvitationStatus;
+  /** status 가 PENDING 이어도 기한이 지났으면 true */
+  expired: boolean;
+  inviterName: string | null;
+  expiresAt: string;
+  createdAt: string;
+}
+
+/**
+ * 보낸 초대 목록. 수락 전 초대는 멤버 목록(GET /members)에 나타나지 않으므로
+ * "누구에게 초대를 보냈는지" 는 이 API 로만 확인할 수 있다.
+ */
+export async function getInvitations(
+  page = 0,
+  size = 20,
+  status?: InvitationStatus
+): Promise<PageResponse<InvitationListItem>> {
+  const params = new URLSearchParams({ page: String(page), size: String(size) });
+  if (status) params.set('status', status);
+
+  const response = await apiFetch(`${API_BASE}/members/invitations?${params.toString()}`, {
+    headers: workspaceHeaders(),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '초대 목록을 불러오지 못했습니다.'));
+  return response.json();
+}
+
+/** 초대 취소. 취소하면 같은 주소로 다시 초대할 수 있다 (OWNER/ADMIN 만) */
+export async function revokeInvitation(invitationId: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/members/invitations/${invitationId}`, {
+    method: 'DELETE',
+    headers: workspaceHeaders(),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '초대 취소에 실패했습니다.'));
+}
+
+/** 초대 재발송. 토큰은 유지되고 기한만 7일 뒤로 늘어난다 (OWNER/ADMIN 만) */
+export async function resendInvitation(invitationId: string): Promise<InvitationResponse> {
+  const response = await apiFetch(`${API_BASE}/members/invitations/${invitationId}/resend`, {
+    method: 'POST',
+    headers: workspaceHeaders(JSON_CONTENT),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '초대 재발송에 실패했습니다.'));
+  return response.json();
+}
+
+/** GET /members/invitations/{token} 응답 (서버 InvitationPreviewResponse 와 1:1) */
+export interface InvitationPreview {
+  /** 초대받은 주소. 이 계정으로만 수락할 수 있다 */
+  email: string;
+  workspaceName: string;
+  inviterName: string | null;
+  role: WorkspaceRole;
+  department: string | null;
+  title: string | null;
+  expiresAt: string;
+  status: InvitationStatus;
+  /** false 면 acceptBlockedReason 에 이유가 담긴다 */
+  acceptable: boolean;
+  acceptBlockedReason: string | null;
+}
+
+/**
+ * 초대 내용 조회. 토큰을 아는 것 자체가 인증이라 로그인 없이 부를 수 있다.
+ * 수락 화면에서 로그인 전에 "어느 팀에, 누가, 어떤 주소로" 초대했는지 보여 주기 위한 것.
+ */
+export async function getInvitationPreview(invitationToken: string): Promise<InvitationPreview> {
+  // 인증 헤더를 붙이지 않는다. 만료된 토큰이 남아 있어도 401 로 로그인 화면에 튕기지 않도록
+  // apiFetch 대신 fetch 를 직접 쓴다.
+  const response = await fetch(`${API_BASE}/members/invitations/${encodeURIComponent(invitationToken)}`);
+
+  if (!response.ok) throw new Error(await errorMessage(response, '초대 정보를 불러오지 못했습니다.'));
   return response.json();
 }
 

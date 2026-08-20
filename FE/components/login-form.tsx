@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { login, AuthError } from '@/lib/auth';
 import { resendVerificationCode } from '@/lib/api';
@@ -25,6 +25,16 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
   const [isSendingCode, setIsSendingCode] = useState(false);
   // 끄면 sessionStorage 에 저장해 탭을 닫을 때 로그아웃된다
   const [rememberMe, setRememberMe] = useState(true);
+
+  // 초대 링크에서 넘어오면 초대받은 주소를 미리 채워 준다 (다른 주소로 로그인하면 수락이 안 되므로)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const invitedEmail = new URLSearchParams(window.location.search).get('email');
+    if (invitedEmail) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEmail(invitedEmail);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

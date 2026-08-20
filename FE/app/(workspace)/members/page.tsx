@@ -11,8 +11,12 @@ import { useNotifications } from '@/components/dashboard/panels/notifications-pa
 import { getDisplayLabel } from '@/lib/display-labels';
 import {
   getMembers,
+  getInvitations,
   inviteMember,
+  resendInvitation,
+  revokeInvitation,
   updateMember,
+  type InvitationListItem,
   type MemberResponse,
   type MembershipStatus,
   type WorkspaceRole,
@@ -54,6 +58,13 @@ export default function MembersPage() {
   const [isInviting, setIsInviting] = useState(false);
   const [isUpdatingRole, setIsUpdatingRole] = useState(false);
 
+  // 수락 전 초대는 멤버 목록에 나타나지 않아 따로 조회한다
+  const [invitations, setInvitations] = useState<InvitationListItem[]>([]);
+  const [isLoadingInvitations, setIsLoadingInvitations] = useState(true);
+  const [invitationError, setInvitationError] = useState<string | null>(null);
+  /** 재발송·취소 중인 초대 id. 그 줄의 버튼만 잠근다 */
+  const [busyInvitationId, setBusyInvitationId] = useState<string | null>(null);
+
   const [activeRole, setActiveRole] = useState<'all' | WorkspaceRole>('all');
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
@@ -85,11 +96,27 @@ export default function MembersPage() {
     }
   }, []);
 
+  const loadInvitations = useCallback(async () => {
+    setIsLoadingInvitations(true);
+    setInvitationError(null);
+    try {
+      // 수락된 초대는 멤버 목록에 이미 나오므로 화면에서 걸러 낸다
+      const response = await getInvitations(0, MEMBER_FETCH_SIZE);
+      setInvitations((response.items ?? []).filter(item => item.status !== 'ACCEPTED'));
+    } catch (err) {
+      setInvitationError(err instanceof Error ? err.message : '초대 목록을 불러오지 못했습니다.');
+      setInvitations([]);
+    } finally {
+      setIsLoadingInvitations(false);
+    }
+  }, []);
+
   useEffect(() => {
     // 진입 시 1회 조회 (결과 도착 후 setState)
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
-  }, [load]);
+    void loadInvitations();
+  }, [load, loadInvitations]);
 
   const selectedMember = useMemo(
     () => members.find(m => m.id === selectedMemberId) ?? null,
@@ -143,11 +170,39 @@ export default function MembersPage() {
       setInviteEmail('');
       setInviteDepartment('');
       setIsInviteModalOpen(false);
-      await load();
+      await Promise.all([load(), loadInvitations()]);
     } catch (err) {
       showToast(err instanceof Error ? err.message : '초대 발송에 실패했습니다.', 'error');
     } finally {
       setIsInviting(false);
+    }
+  };
+
+  /** 보낸 초대를 다시 발송한다. 토큰은 유지되고 기한만 7일 뒤로 늘어난다 */
+  const handleResendInvitation = async (invitation: InvitationListItem) => {
+    try {
+      setBusyInvitationId(invitation.invitationId);
+      await resendInvitation(invitation.invitationId);
+      showToast(`${invitation.email}로 초대 메일을 다시 보냈습니다.`, 'success');
+      await loadInvitations();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '초대 재발송에 실패했습니다.', 'error');
+    } finally {
+      setBusyInvitationId(null);
+    }
+  };
+
+  /** 초대를 취소한다. 취소하면 같은 주소로 다시 초대할 수 있다 */
+  const handleRevokeInvitation = async (invitation: InvitationListItem) => {
+    try {
+      setBusyInvitationId(invitation.invitationId);
+      await revokeInvitation(invitation.invitationId);
+      showToast(`${invitation.email}로 보낸 초대를 취소했습니다.`, 'success');
+      await loadInvitations();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '초대 취소에 실패했습니다.', 'error');
+    } finally {
+      setBusyInvitationId(null);
     }
   };
 
@@ -273,6 +328,116 @@ export default function MembersPage() {
               <button className={styles.sendBtn} onClick={() => void handleSendInvite()} disabled={isInviting}>
                 {isInviting ? '발송 중...' : '초대 발송'}
               </button>
+            </div>
+          </div>
+
+          {/* 대기 중인 초대 — 수락 전이라 멤버 목록에는 아직 없는 사람들 */}
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <h2 className={styles.cardTitle}>
+                보낸 초대 {invitations.length > 0 && `(${invitations.length})`}
+              </h2>
+              <button
+                className={styles.roleTab}
+                onClick={() => void loadInvitations()}
+                disabled={isLoadingInvitations}
+              >
+                {isLoadingInvitations ? '불러오는 중...' : '새로고침'}
+              </button>
+            </div>
+
+            <div className={styles.tableContainer}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>이메일</th>
+                    <th>역할</th>
+                    <th>부서</th>
+                    <th>초대한 사람</th>
+                    <th>상태</th>
+                    <th>기한</th>
+                    <th>액션</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoadingInvitations ? (
+                    <tr><td colSpan={7} className={styles.dateCell}>불러오는 중...</td></tr>
+                  ) : invitationError ? (
+                    <tr>
+                      <td colSpan={7} className={styles.dateCell}>
+                        {invitationError}{' '}
+                        <button onClick={() => void loadInvitations()}>다시 시도</button>
+                      </td>
+                    </tr>
+                  ) : invitations.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className={styles.dateCell}>
+                        수락을 기다리는 초대가 없습니다. 위에서 새 멤버를 초대해 보세요.
+                      </td>
+                    </tr>
+                  ) : (
+                    invitations.map((invitation) => {
+                      const isBusy = busyInvitationId === invitation.invitationId;
+                      // 기한이 지난 PENDING 은 서버가 expired=true 로 알려 준다
+                      const statusLabel = invitation.expired
+                        ? '만료됨'
+                        : getDisplayLabel(invitation.status);
+                      const statusColor = invitation.expired || invitation.status !== 'PENDING'
+                        ? '#985050'
+                        : '#80683D';
+
+                      return (
+                        <tr key={invitation.invitationId}>
+                          <td>{invitation.email}</td>
+                          <td>
+                            <span
+                              className={styles.roleBadge}
+                              style={{ color: ROLE_COLORS[invitation.role] ?? '#0765FC' }}
+                            >
+                              {getDisplayLabel(invitation.role)}
+                            </span>
+                          </td>
+                          <td>{invitation.department ?? '-'}</td>
+                          <td>{invitation.inviterName ?? '-'}</td>
+                          <td>
+                            <span className={styles.statusBadge} style={{ color: statusColor }}>
+                              <span className={styles.statusDot} style={{ backgroundColor: statusColor }} />
+                              {statusLabel}
+                            </span>
+                          </td>
+                          <td className={styles.dateCell}>
+                            {new Date(invitation.expiresAt).toLocaleDateString('ko-KR', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                            })}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button
+                                className={styles.invitationBtn}
+                                onClick={() => void handleResendInvitation(invitation)}
+                                disabled={isBusy}
+                              >
+                                {isBusy ? '처리 중...' : '재발송'}
+                              </button>
+                              {invitation.status === 'PENDING' && (
+                                <button
+                                  className={styles.cancelBtn}
+                                  onClick={() => void handleRevokeInvitation(invitation)}
+                                  disabled={isBusy}
+                                >
+                                  취소
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { signup, AuthError } from '@/lib/auth';
 import { verifyEmail, resendVerificationCode } from '@/lib/api';
@@ -38,6 +38,15 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
+
+  // 초대 링크에서 "이 주소로 계정 만들기" 로 넘어오면 초대받은 주소를 미리 채워 준다
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const invitedEmail = new URLSearchParams(window.location.search).get('email');
+    if (invitedEmail) {
+      setFormData(prev => ({ ...prev, email: invitedEmail }));
+    }
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -166,7 +175,14 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
       await verifyEmail(formData.email.trim(), code);
       showToast('이메일이 인증되었습니다.', 'success');
       localStorage.removeItem('pending_verification_email');
-      router.push(`/signup-complete?email=${encodeURIComponent(formData.email.trim())}`);
+
+      // 초대 링크에서 넘어왔다면 가입 완료 후에도 그 화면으로 돌아갈 수 있게 이어서 넘긴다
+      const params = new URLSearchParams({ email: formData.email.trim() });
+      const redirect = typeof window === 'undefined'
+        ? null
+        : new URLSearchParams(window.location.search).get('redirect');
+      if (redirect && redirect.startsWith('/')) params.set('redirect', redirect);
+      router.push(`/signup-complete?${params.toString()}`);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : '인증에 실패했습니다';
       showToast(errorMsg, 'error');
