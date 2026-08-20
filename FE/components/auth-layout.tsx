@@ -4,14 +4,14 @@ import React from 'react';
 import Image from 'next/image';
 import { AuthTabs } from './auth-tabs';
 
-export function AuthLayout() {
+export function AuthLayout({ initialTab = 'login' }: { initialTab?: 'login' | 'signup' }) {
   return (
     <div className="auth">
       <aside className="brand">
         <div className="logo">
           <Image
             src="/logo.png"
-            alt="OnboardOS Logo"
+            alt="OnboardOS 로고"
             width={80}
             height={80}
             priority
@@ -42,7 +42,7 @@ export function AuthLayout() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
-            <span>AI 답변에는 <b>출처와 권한 검증</b>이 함께 붙습니다</span>
+            <span>인공지능 답변에는 <b>출처와 권한 검증</b>이 함께 붙습니다</span>
           </li>
         </ul>
 
@@ -76,7 +76,7 @@ export function AuthLayout() {
 
       <main className="pane">
         <div className="card">
-          <AuthTabs />
+          <AuthTabs initialTab={initialTab} />
         </div>
       </main>
     </div>

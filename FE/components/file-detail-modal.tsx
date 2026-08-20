@@ -2,18 +2,27 @@
 
 import React, { useState } from 'react';
 import { X, RefreshCw, Trash2, AlertCircle } from 'lucide-react';
-import { DocumentResponse, reprocessDocument, deleteDocument } from '@/lib/document';
+import {
+  deleteDocument,
+  formatDateTime,
+  formatFileSize,
+  formatFileType,
+  reprocessDocument,
+  type DocumentResponse,
+} from '@/lib/api';
+import { useToast } from './ui/toast';
+import { getDisplayLabel } from '@/lib/display-labels';
 import styles from './file-detail-modal.module.css';
 
 interface FileDetailModalProps {
   file: DocumentResponse | null;
   isOpen: boolean;
-  workspaceId: string;
   onClose: () => void;
   onRefresh: () => void;
 }
 
-export function FileDetailModal({ file, isOpen, workspaceId, onClose, onRefresh }: FileDetailModalProps) {
+export function FileDetailModal({ file, isOpen, onClose, onRefresh }: FileDetailModalProps) {
+  const { showToast } = useToast();
   const [isReprocessing, setIsReprocessing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,8 +33,8 @@ export function FileDetailModal({ file, isOpen, workspaceId, onClose, onRefresh 
     setError(null);
 
     try {
-      await reprocessDocument(workspaceId, file.id);
-      alert('파일 재처리를 시작했습니다.');
+      await reprocessDocument(file.id);
+      showToast('파일 재처리를 시작했습니다.', 'success');
       onRefresh();
       onClose();
     } catch (err) {
@@ -41,8 +50,8 @@ export function FileDetailModal({ file, isOpen, workspaceId, onClose, onRefresh 
     setError(null);
 
     try {
-      await deleteDocument(workspaceId, file.id);
-      alert('파일이 삭제되었습니다.');
+      await deleteDocument(file.id);
+      showToast('파일이 삭제되었습니다.', 'success');
       onRefresh();
       onClose();
     } catch (err) {
@@ -58,7 +67,7 @@ export function FileDetailModal({ file, isOpen, workspaceId, onClose, onRefresh 
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
-          <h2 className={styles.title}>{file.name}</h2>
+          <h2 className={styles.title}>{file.title}</h2>
           <button className={styles.closeBtn} onClick={onClose}>
             <X size={20} />
           </button>
@@ -71,28 +80,32 @@ export function FileDetailModal({ file, isOpen, workspaceId, onClose, onRefresh 
             <div className={styles.infoGrid}>
               <div className={styles.infoItem}>
                 <span className={styles.label}>파일명</span>
-                <span className={styles.value}>{file.name}</span>
+                <span className={styles.value}>{file.title}</span>
               </div>
               <div className={styles.infoItem}>
                 <span className={styles.label}>파일 타입</span>
-                <span className={styles.value}>{file.type}</span>
+                <span className={styles.value}>
+                  {getDisplayLabel(formatFileType(file.mimeType, file.title))}
+                </span>
               </div>
               <div className={styles.infoItem}>
                 <span className={styles.label}>크기</span>
-                <span className={styles.value}>{(file.size / 1024).toFixed(2)} KB</span>
+                <span className={styles.value}>{formatFileSize(file.sizeBytes)}</span>
               </div>
               <div className={styles.infoItem}>
-                <span className={styles.label}>업로드자</span>
-                <span className={styles.value}>{file.uploadedBy}</span>
+                <span className={styles.label}>공개 범위</span>
+                <span className={styles.value}>
+                  {file.visibility ? getDisplayLabel(file.visibility) : '-'}
+                </span>
               </div>
               <div className={styles.infoItem}>
                 <span className={styles.label}>업로드 날짜</span>
-                <span className={styles.value}>{file.uploadedAt}</span>
+                <span className={styles.value}>{formatDateTime(file.createdAt)}</span>
               </div>
-              {file.processedAt && (
+              {file.updatedAt && (
                 <div className={styles.infoItem}>
                   <span className={styles.label}>처리 완료</span>
-                  <span className={styles.value}>{file.processedAt}</span>
+                  <span className={styles.value}>{formatDateTime(file.updatedAt)}</span>
                 </div>
               )}
             </div>
@@ -103,13 +116,18 @@ export function FileDetailModal({ file, isOpen, workspaceId, onClose, onRefresh 
             <h3 className={styles.sectionTitle}>처리 상태</h3>
             <div className={styles.statusBox}>
               <span className={`${styles.status} ${styles[`status-${file.status.toLowerCase()}`]}`}>
-                {file.status === 'READY' ? '준비됨' : file.status === 'PROCESSING' ? '분석중' : file.status === 'PENDING' ? '대기중' : '실패'}
+                {getDisplayLabel(file.status)}
               </span>
               {file.status === 'PROCESSING' && (
-                <p className={styles.statusNote}>현재 AI가 문서를 분석중입니다. 잠시 후 다시 확인해주세요.</p>
+                <p className={styles.statusNote}>현재 인공지능이 문서를 분석중입니다. 잠시 후 다시 확인해주세요.</p>
               )}
               {file.status === 'FAILED' && (
-                <p className={styles.statusNote}>문서 분석에 실패했습니다. 다시 시도해주세요.</p>
+                <p className={styles.statusNote}>
+                  {file.errorMessage ?? '문서 분석에 실패했습니다. 다시 시도해주세요.'}
+                </p>
+              )}
+              {file.status === 'READY' && file.chunkCount !== null && file.chunkCount !== undefined && (
+                <p className={styles.statusNote}>{file.chunkCount}개의 학습 조각으로 나뉘어 저장되었습니다.</p>
               )}
             </div>
           </div>
@@ -130,7 +148,7 @@ export function FileDetailModal({ file, isOpen, workspaceId, onClose, onRefresh 
           {file.status !== 'PROCESSING' && (
             <button
               className={styles.primaryBtn}
-              onClick={handleReprocess}
+              onClick={() => void handleReprocess()}
               disabled={isReprocessing}
             >
               <RefreshCw size={16} />
@@ -139,7 +157,7 @@ export function FileDetailModal({ file, isOpen, workspaceId, onClose, onRefresh 
           )}
           <button
             className={styles.dangerBtn}
-            onClick={handleDelete}
+            onClick={() => void handleDelete()}
             disabled={isDeleting}
           >
             <Trash2 size={16} />

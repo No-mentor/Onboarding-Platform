@@ -21,9 +21,9 @@ export default function LandingPage() {
     },
     {
       icon: Zap,
-      title: 'AI 기반 맞춤 추천',
-      description: 'AI가 학습한 업무 자료를 바탕으로 필요한 내용을 정확하게 추천합니다.',
-      highlights: ['RAG 기술 적용', 'Context 기반 추천', '실시간 학습'],
+      title: '인공지능 기반 맞춤 추천',
+      description: '인공지능이 학습한 업무 자료를 바탕으로 필요한 내용을 정확하게 추천합니다.',
+      highlights: ['문서 검색 증강 적용', '맥락 기반 추천', '실시간 학습'],
     },
     {
       icon: Users,
@@ -41,7 +41,7 @@ export default function LandingPage() {
           <div className={styles.logo}>
             <Image
               src="/logo.png"
-              alt="OnboardOS Logo"
+              alt="OnboardOS 로고"
               width={40}
               height={40}
             />
@@ -70,11 +70,11 @@ export default function LandingPage() {
             신입 인수인계의 미래
           </div>
           <h1 className={styles.heroTitle}>
-            AI가 설계하는<br />
+            인공지능이 설계하는<br />
             <span className={styles.highlight}>신입 온보딩 플랫폼</span>
           </h1>
           <p className={styles.heroSubtitle}>
-            체계적인 온보딩 프로세스와 AI 기반 추천으로
+            체계적인 온보딩 프로세스와 인공지능 기반 추천으로
             신입 직원의 빠른 적응과 팀의 효율성을 동시에 달성하세요.
           </p>
           <div className={styles.heroCTA}>
@@ -148,7 +148,7 @@ export default function LandingPage() {
                 <Clock size={20} />
                 <div>
                   <div className={styles.valueItemTitle}>효율적인 학습</div>
-                  <div className={styles.valueItemDesc}>AI가 추천하는 맞춤형 업무로 빠른 적응</div>
+                  <div className={styles.valueItemDesc}>인공지능이 추천하는 맞춤형 업무로 빠른 적응</div>
                 </div>
               </li>
               <li className={styles.valueItem}>
@@ -226,7 +226,7 @@ export default function LandingPage() {
               </div>
               <p className={styles.footerTagline}>
                 신입·인수인계 담당자의 조직 적응을
-                AI가 설계·운영·분석하는 엔터프라이즈 SaaS
+                인공지능이 설계·운영·분석하는 엔터프라이즈 SaaS
               </p>
             </div>
           </div>

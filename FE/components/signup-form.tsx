@@ -1,12 +1,17 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { signup, AuthError } from '@/lib/auth';
 import { verifyEmail, resendVerificationCode } from '@/lib/api';
 import { useToast } from './ui/toast';
 
-export function SignupForm() {
+interface SignupFormProps {
+  /** 로그인 탭으로 옮겨 갈 때 (같은 화면의 탭이라 라우팅하지 않는다) */
+  onSwitchToLogin?: () => void;
+}
+
+export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
   const router = useRouter();
   const { showToast } = useToast();
 
@@ -33,6 +38,15 @@ export function SignupForm() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
+
+  // 초대 링크에서 "이 주소로 계정 만들기" 로 넘어오면 초대받은 주소를 미리 채워 준다
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const invitedEmail = new URLSearchParams(window.location.search).get('email');
+    if (invitedEmail) {
+      setFormData(prev => ({ ...prev, email: invitedEmail }));
+    }
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -117,9 +131,8 @@ export function SignupForm() {
         name: formData.name.trim(),
       });
 
-      // 디버깅용 로그
-      console.log('[Signup Response]', response);
-      console.log('emailSent:', response.emailSent);
+      // 인증 화면을 새로 열어도 이메일을 이어받을 수 있게 남겨 둔다
+      localStorage.setItem('pending_verification_email', formData.email.trim());
 
       if (response.emailSent) {
         showToast('인증 코드가 발송되었습니다. 이메일을 확인해주세요.', 'success');
@@ -161,7 +174,15 @@ export function SignupForm() {
     try {
       await verifyEmail(formData.email.trim(), code);
       showToast('이메일이 인증되었습니다.', 'success');
-      setTimeout(() => router.push('/login'), 1500);
+      localStorage.removeItem('pending_verification_email');
+
+      // 초대 링크에서 넘어왔다면 가입 완료 후에도 그 화면으로 돌아갈 수 있게 이어서 넘긴다
+      const params = new URLSearchParams({ email: formData.email.trim() });
+      const redirect = typeof window === 'undefined'
+        ? null
+        : new URLSearchParams(window.location.search).get('redirect');
+      if (redirect && redirect.startsWith('/')) params.set('redirect', redirect);
+      router.push(`/signup-complete?${params.toString()}`);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : '인증에 실패했습니다';
       showToast(errorMsg, 'error');
@@ -227,7 +248,7 @@ export function SignupForm() {
                 }}
                 onFocus={e => {
                   e.target.style.borderColor = 'var(--accent)';
-                  e.target.style.boxShadow = '0 0 0 3px rgba(78, 78, 82, 0.11)';
+                  e.target.style.boxShadow = '0 0 0 3px rgba(7, 101, 252, 0.11)';
                 }}
                 onBlur={e => {
                   e.target.style.borderColor = 'var(--border-strong)';
@@ -372,7 +393,7 @@ export function SignupForm() {
           <input type="checkbox" name="terms" checked={checks.terms} onChange={handleChange} disabled={isLoading} />
           <i className="mark" />
           <span>
-            <a href="#">이용약관</a>과 <a href="#">개인정보 처리방침</a>에 동의합니다.{' '}
+            <span>이용약관</span>과 <span>개인정보 처리방침</span>에 동의합니다.{' '}
             <span style={{ color: 'var(--text-faint)' }}>(필수)</span>
           </span>
         </label>
@@ -399,7 +420,7 @@ export function SignupForm() {
       </div>
 
       <p className="foot">
-        이미 계정이 있으신가요? <button className="link" type="button" disabled={isLoading}>로그인</button>
+        이미 계정이 있으신가요? <button className="link" type="button" disabled={isLoading} onClick={onSwitchToLogin}>로그인</button>
       </p>
     </form>
   );

@@ -1,15 +1,15 @@
 /* Color Palette */
 :root {
-  --color-dark-purple: #3D1E53;
-  --color-bright-purple: #6C46A2;
+  --color-dark-purple: #053584;
+  --color-bright-purple: #0765FC;
   --color-bg-light: #F9FAFB;
   --color-card-white: #FFFFFF;
   --color-text-dark: #111827;
   --color-text-medium: #6B7280;
   --color-text-light: #9CA3AF;
-  --color-emerald: #10B981;
+  --color-emerald: #287456;
   --color-teal: #14B8A6;
-  --color-orange: #F97316;
+  --color-orange: #80683D;
   --color-border: #E5E7EB;
 }
 
@@ -241,6 +241,10 @@
   flex-shrink: 0;
 }
 
+.workspaceMenuWrap {
+  position: relative;
+}
+
 .workspaceBtn {
   display: flex;
   align-items: center;
@@ -260,6 +264,93 @@
 .workspaceBtn:hover {
   background-color: var(--color-bg-light);
   border-color: var(--color-text-light);
+}
+
+.workspaceBtnOpen {
+  border-color: rgba(7, 101, 252, 0.35);
+  box-shadow: 0 0 0 3px rgba(7, 101, 252, 0.08);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.workspaceBtn svg {
+  transition: transform 0.2s ease;
+}
+
+.workspaceBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.workspaceDropdown {
+  position: absolute;
+  top: calc(100% + 9px);
+  right: 0;
+  z-index: 81;
+  width: 280px;
+  padding: 8px;
+  border: 1px solid #e3e7ee;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.16), 0 3px 8px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(14px);
+}
+
+.workspaceDropdownTitle {
+  padding: 9px 11px 7px;
+  color: #8a94a6;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.workspaceOption,
+.workspaceManage {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #344054;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.workspaceOption:hover,
+.workspaceManage:hover {
+  background: #f4f7fb;
+}
+
+.workspaceOptionActive {
+  color: #0765fc;
+  background: #edf4ff;
+}
+
+.workspaceOption span {
+  flex: 1;
+}
+
+.workspaceCheck {
+  color: #0765fc;
+}
+
+.workspaceDropdownDivider {
+  height: 1px;
+  margin: 7px -8px;
+  background: #e8ebf0;
 }
 
 .notifBtn {
@@ -294,6 +385,7 @@
 }
 
 .helpBtn {
+  text-decoration: none;
   width: 40px;
   height: 40px;
   border: none;
@@ -358,7 +450,7 @@
 .count {
   font-size: 12px;
   font-weight: 600;
-  color: #0066FF;
+  color: #0765FC;
   background-color: #E3F2FD;
   padding: 6px 12px;
   border-radius: 12px;
@@ -373,52 +465,89 @@
 
 .taskItem {
   display: grid;
-  grid-template-columns: 70px 1fr 90px;
+  grid-template-columns: 116px minmax(180px, 1fr) minmax(150px, 210px);
   gap: 16px;
   align-items: center;
   padding: 14px;
-  background-color: var(--color-bg-light);
+  background-color: #ffffff;
   border-radius: 10px;
   border: 1px solid var(--color-border);
   transition: all 0.2s;
 }
 
 .taskItem:hover {
-  border-color: var(--color-text-light);
+  border-color: #a9c8fa;
+  background-color: #fbfdff;
+  box-shadow: 0 3px 10px rgba(16, 24, 40, 0.05);
 }
 
-.taskLabel {
-  padding: 6px 12px;
-  border-radius: 20px;
+.taskType {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  gap: 8px;
+  padding: 5px 10px 5px 6px;
+  border: 1px solid #e4e8ee;
+  border-radius: 10px;
   font-size: 11px;
-  font-weight: 600;
-  color: white;
-  text-align: center;
+  font-weight: 700;
   white-space: nowrap;
 }
 
-.label_문서 {
-  background-color: var(--color-teal);
+.taskFileIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #edf0f4;
+  font-size: 19px;
 }
 
-.label_체크 {
-  background-color: var(--color-emerald);
+.taskTypePdf {
+  color: #475467;
+  background: #ffffff;
 }
 
-.label_실습 {
-  background-color: var(--color-orange);
+.taskTypeExcel {
+  color: #475467;
+  background: #ffffff;
+}
+
+.taskTypePdf .taskFileIcon {
+  color: #cf4b56;
+}
+
+.taskTypeExcel .taskFileIcon {
+  color: #16825d;
 }
 
 .taskTitle {
   color: var(--color-text-dark);
   font-weight: 500;
   font-size: 13px;
+  min-width: 0;
 }
 
 .taskTime {
   text-align: right;
   color: var(--color-text-medium);
   font-size: 11px;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+@media (max-width: 1050px) {
+  .taskItem {
+    grid-template-columns: 110px minmax(0, 1fr);
+  }
+
+  .taskTime {
+    grid-column: 2;
+    text-align: left;
+  }
 }
 
 .viewAllBtn {
@@ -481,11 +610,19 @@
   flex-shrink: 0;
   min-width: 200px;
   text-align: center;
+  cursor: pointer;
 }
 
 .fileCard:hover {
   border-color: var(--color-text-light);
   background-color: #F3F4F6;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.fileCard:focus-visible {
+  outline: 2px solid #0765fc;
+  outline-offset: 3px;
 }
 
 .fileIcon {
@@ -548,8 +685,8 @@
 }
 
 .aiBtn:hover {
-  background-color: #5a3a8c;
-  box-shadow: 0 4px 12px rgba(108, 70, 162, 0.3);
+  background-color: #0555D8;
+  box-shadow: 0 4px 12px rgba(7, 101, 252, 0.3);
 }
 
 .progressHeader {
@@ -563,7 +700,8 @@
   font-size: 11px;
   font-weight: 600;
   color: var(--color-orange);
-  background-color: rgba(249, 115, 22, 0.1);
+  background-color: #f6f2e9;
+  border: 1px solid #e9dfca;
   padding: 4px 10px;
   border-radius: 10px;
 }
@@ -623,7 +761,7 @@
 }
 
 .aiPanel {
-  background: linear-gradient(135deg, var(--color-dark-purple) 0%, #2D1740 100%);
+  background: linear-gradient(135deg, var(--color-dark-purple) 0%, #032459 100%);
   border-radius: 16px;
   padding: 28px;
   color: white;
@@ -680,8 +818,8 @@
 }
 
 .aiSubmitBtn:hover {
-  background-color: #5a3a8c;
-  box-shadow: 0 4px 12px rgba(108, 70, 162, 0.4);
+  background-color: #0555D8;
+  box-shadow: 0 4px 12px rgba(7, 101, 252, 0.4);
 }
 
 /* ── 모달 본문 스타일 ────────────────────────────────
@@ -702,7 +840,7 @@
 .modalInput:focus {
   outline: none;
   border-color: var(--color-bright-purple);
-  box-shadow: 0 0 0 3px rgba(108, 70, 162, 0.12);
+  box-shadow: 0 0 0 3px rgba(7, 101, 252, 0.12);
 }
 
 .modalProgress {
@@ -747,6 +885,81 @@
   font-weight: 600;
   color: var(--color-text-dark);
   margin-bottom: 14px;
+}
+
+.fileDetailHeading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 18px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.fileDetailHeading .modalInfoTitle {
+  margin-bottom: 7px;
+  font-size: 17px;
+}
+
+.fileDetailIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  font-size: 30px;
+}
+
+.fileDetailIcon svg {
+  width: 30px;
+  height: 30px;
+}
+
+.fileDetailPdf {
+  color: #d1495a;
+  background: #fff1f2;
+}
+
+.fileDetailExcel {
+  color: #087a49;
+  background: #ecfdf3;
+}
+
+.fileDetailStatus {
+  display: inline-flex;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #edf5f1;
+  color: #287456;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.fileDetailActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 18px;
+}
+
+.fileDetailActions button {
+  padding: 8px 12px;
+  border: 1px solid #dfe4eb;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #344054;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fileDetailActions button:hover {
+  border-color: rgba(7, 101, 252, 0.35);
+  color: #0765fc;
+  background: #f8faff;
 }
 
 .modalInfoRow {
@@ -819,7 +1032,7 @@
 
 .modalListItem:hover {
   border-color: var(--color-bright-purple);
-  background-color: rgba(108, 70, 162, 0.04);
+  background-color: rgba(7, 101, 252, 0.04);
 }
 
 .modalListMeta {
@@ -873,4 +1086,79 @@
   .tabItem:hover {
     transform: none;
   }
+}
+
+.placeholder {
+  padding: 22px 4px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-faint);
+}
+
+.errorBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(180, 52, 47, 0.07);
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.errorBanner button {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: 1px solid rgba(180, 52, 47, 0.3);
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.askError {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+.askStatus {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+.answerBox {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 8px;
+  background: var(--surface-sunk);
+}
+
+.answerLabel {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-faint);
+  margin-bottom: 7px;
+}
+
+.answerText {
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.citations {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-sub);
 }

@@ -51,7 +51,7 @@ class MemberServiceAuthorizationTest {
         actor(UserRole.OWNER);
         service.invite(principal, workspaceId, invitation(UserRole.OWNER));
         verify(invitations).save(any());
-        verify(mail).sendInvitationEmail(any(), any(), any());
+        verify(mail).sendInvitationEmail(any(), any(), any(), any(), any(), any());
     }
 
     @Test void adminInvitationForAdminSucceeds() {
@@ -64,7 +64,7 @@ class MemberServiceAuthorizationTest {
         actor(UserRole.ADMIN);
         assertForbidden(() -> service.invite(principal, workspaceId, invitation(UserRole.OWNER)));
         verify(invitations, never()).save(any());
-        verify(mail, never()).sendInvitationEmail(any(), any(), any());
+        verify(mail, never()).sendInvitationEmail(any(), any(), any(), any(), any(), any());
         verify(users, never()).findByEmailAndDeletedAtIsNull(any());
     }
 

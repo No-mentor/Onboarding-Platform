@@ -1,16 +1,10 @@
 package com.onboardos.onboarding.global.security;
 
-import tools.jackson.databind.json.JsonMapper;
 import com.onboardos.onboarding.global.exception.ErrorCode;
-import com.onboardos.onboarding.global.exception.ErrorResponse;
-import jakarta.servlet.http.HttpServletResponse;
-import java.time.Instant;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -31,7 +25,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final JsonMapper jsonMapper;
+    private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -50,37 +44,20 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**"
                         ).permitAll()
+                        // 초대 링크를 연 사람이 로그인 전에 초대 내용을 확인할 수 있어야 한다.
+                        // 토큰을 아는 것 자체가 인증이며, 수락(POST)은 여전히 로그인을 요구한다.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/members/invitations/*").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint((request, response, authException) ->
-                                writeError(response, ErrorCode.UNAUTHORIZED, request.getRequestURI()))
+                        .authenticationEntryPoint(restAuthenticationEntryPoint)
                         .accessDeniedHandler((request, response, accessDeniedException) ->
-                                writeError(response, ErrorCode.FORBIDDEN, request.getRequestURI()))
+                                restAuthenticationEntryPoint.write(response, ErrorCode.FORBIDDEN, request.getRequestURI()))
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
-    }
-
-    private void writeError(HttpServletResponse response, ErrorCode code, String path)
-            throws java.io.IOException {
-
-        response.setStatus(code.getStatus().value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-
-        ErrorResponse body = ErrorResponse.builder()
-                .timestamp(Instant.now())
-                .status(code.getStatus().value())
-                .error(code.getStatus().getReasonPhrase())
-                .code(code.getCode())
-                .message(code.getDefaultMessage())
-                .path(path)
-                .traceId(UUID.randomUUID().toString().substring(0, 8))
-                .build();
-
-        jsonMapper.writeValue(response.getOutputStream(), body);
     }
 
     @Bean

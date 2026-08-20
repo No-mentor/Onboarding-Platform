@@ -1,7 +1,7 @@
-import { AuthResponse } from '@/types/auth';
+import type { AuthResponse, WorkspaceSummary } from '@/types/auth';
+import { AUTH_ENDPOINT } from './config';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-const AUTH_ENDPOINT = `${API_BASE_URL}/api/v1/auth`;
+export type { WorkspaceRole, WorkspaceSummary } from '@/types/auth';
 
 export interface SignupPayload {
   email: string;
@@ -67,17 +67,41 @@ export async function login(payload: LoginPayload): Promise<AuthResponse> {
   return response.json();
 }
 
+/** /auth/me 의 워크스페이스 항목 (서버 WorkspaceSummaryResponse 와 1:1) */
+export type MeWorkspace = WorkspaceSummary;
+
+/** GET /auth/me 응답 (서버 MeResponse 와 1:1) */
+export interface MeResponse {
+  id: string;
+  email: string;
+  name: string;
+  /** X-Workspace-Id 를 보내면 그 워크스페이스, 아니면 목록의 첫 번째 */
+  currentWorkspace: MeWorkspace | null;
+  profile: {
+    department: string | null;
+    careerLevel: string | null;
+    title: string | null;
+  } | null;
+  workspaces: MeWorkspace[];
+}
+
 /**
  * 현재 사용자 정보 조회
+ * @param workspaceId 넘기면 해당 워크스페이스 기준으로 currentWorkspace/profile 이 채워진다
  * @throws {AuthError} 인증 실패 또는 API 에러
  */
-export async function fetchMe(token: string): Promise<any> {
+export async function fetchMe(token: string, workspaceId?: string | null): Promise<MeResponse> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
+  if (workspaceId) {
+    headers['X-Workspace-Id'] = workspaceId;
+  }
+
   const response = await fetch(`${AUTH_ENDPOINT}/me`, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+    headers,
   });
 
   if (!response.ok) {
@@ -152,6 +176,17 @@ export class AuthError extends Error {
    */
   isForbidden(): boolean {
     return this.status === 403;
+  }
+
+  /**
+   * 이메일 인증 미완료 여부
+   * BE 는 403 + code=EMAIL_NOT_VERIFIED 로 응답한다.
+   */
+  isEmailNotVerified(): boolean {
+    return (
+      this.status === 403 &&
+      (this.code === 'EMAIL_NOT_VERIFIED' || this.message.includes('이메일 인증'))
+    );
   }
 
   /**

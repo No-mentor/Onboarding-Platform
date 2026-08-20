@@ -94,4 +94,15 @@ public class Invitation extends BaseTimeEntity {
     public void markExpired() {
         this.status = InvitationStatus.EXPIRED;
     }
+
+    /** 초대한 사람이 취소했을 때. 같은 주소로 다시 초대할 수 있게 된다 */
+    public void markRevoked() {
+        this.status = InvitationStatus.REVOKED;
+    }
+
+    /** 재발송. 토큰은 그대로 두고 기한만 늘린다 (이미 보낸 메일의 링크도 계속 살아 있어야 하므로) */
+    public void renew(Instant expiresAt) {
+        this.status = InvitationStatus.PENDING;
+        this.expiresAt = expiresAt;
+    }
 }

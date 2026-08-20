@@ -76,6 +76,15 @@
   background-color: #f9fafb;
 }
 
+.fileRow {
+  cursor: pointer;
+}
+
+.fileRow:focus-visible {
+  outline: 2px solid #0765fc;
+  outline-offset: -2px;
+}
+
 .fileName {
   font-weight: 500;
   color: #111827 !important;
@@ -90,18 +99,18 @@
 }
 
 .statusReady {
-  background-color: #dcfce7;
-  color: #16a34a;
+  background-color: #edf5f1;
+  color: #287456;
 }
 
 .statusProcessing {
-  background-color: #dbeafe;
-  color: #2563eb;
+  background-color: #edf2f7;
+  color: #45658a;
 }
 
 .statusFailed {
-  background-color: #fee2e2;
-  color: #dc2626;
+  background-color: #f8eeee;
+  color: #985050;
 }
 
 .aiBtn {
@@ -111,7 +120,7 @@
   padding: 6px 12px;
   border: none;
   border-radius: 6px;
-  background-color: #6c46a2;
+  background-color: #0765FC;
   color: #ffffff;
   font-size: 11px;
   font-weight: 600;
@@ -120,7 +129,7 @@
 }
 
 .aiBtn:hover {
-  background-color: #5a3a8c;
+  background-color: #0555D8;
 }
 
 .pagination {
@@ -160,13 +169,13 @@
 }
 
 .active {
-  background-color: #6c46a2;
-  border-color: #6c46a2;
+  background-color: #0765FC;
+  border-color: #0765FC;
   color: #ffffff;
 }
 
 .active:hover {
-  background-color: #5a3a8c;
+  background-color: #0555D8;
   color: #ffffff;
 }
 
@@ -178,4 +187,39 @@
   font-size: 13px;
   color: #111827;
   cursor: pointer;
+}
+
+.stateRow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.retryBtn {
+  padding: 7px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background-color: #ffffff;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #111827;
+  cursor: pointer;
+}
+
+.pageInfo {
+  padding: 0 10px;
+  font-size: 12.5px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.pageBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }

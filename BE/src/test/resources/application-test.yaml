@@ -23,6 +23,7 @@ app:
     secret: test-secret-key-that-is-long-enough-123456
     expiration-ms: 3600000
   storage:
+    provider: local
     root: ./build/test-storage
   ai:
     enabled: false
