@@ -224,6 +224,8 @@ export interface PlanResponse {
   generatedBy: PlanGeneratedBy | null;
   /** TEMPLATE 로 만든 경우 그 템플릿 id */
   sourceTemplateId: string | null;
+  sourceTemplateName: string | null;
+  sourceTemplateDescription: string | null;
   itemCount: number;
   items: PlanItemResponse[] | null;
 }

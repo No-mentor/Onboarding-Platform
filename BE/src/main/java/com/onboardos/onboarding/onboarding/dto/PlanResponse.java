@@ -16,6 +16,8 @@ public record PlanResponse(
         BigDecimal progressPercent,
         String generatedBy,
         UUID sourceTemplateId,
+        String sourceTemplateName,
+        String sourceTemplateDescription,
         int itemCount,
         List<PlanItemResponse> items
 ) {

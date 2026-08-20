@@ -56,6 +56,7 @@ public class OnboardingPlanService {
     private final PlanAiGenerationService aiGenerationService;
     private final OnboardingSyncService syncService;
     private final DailyRecommendationRepository recommendationRepository;
+    private final com.onboardos.onboarding.domain.template.OnboardingTemplateRepository templateRepository;
     private final BusinessClock clock;
     private boolean legacyTestMode;
 
@@ -73,6 +74,7 @@ public class OnboardingPlanService {
             PlanAiGenerationService aiGenerationService,
             OnboardingSyncService syncService,
             DailyRecommendationRepository recommendationRepository,
+            com.onboardos.onboarding.domain.template.OnboardingTemplateRepository templateRepository,
             BusinessClock clock
     ) {
         this.planRepository = planRepository;
@@ -87,6 +89,7 @@ public class OnboardingPlanService {
         this.aiGenerationService = aiGenerationService;
         this.syncService = syncService;
         this.recommendationRepository = recommendationRepository;
+        this.templateRepository = templateRepository;
         this.clock = clock;
         this.legacyTestMode = false;
     }
@@ -100,7 +103,7 @@ public class OnboardingPlanService {
                           TemplateService templateService) {
         this(planRepository, planItemRepository, checklistItemRepository, documentRepository,
                 membershipRepository, workspaceAccessService, templateService, null, null, null, null,
-                null, new BusinessClock(java.time.Clock.system(BusinessClock.ZONE)));
+                null, null, new BusinessClock(java.time.Clock.system(BusinessClock.ZONE)));
         this.legacyTestMode = true;
     }
 
@@ -536,6 +539,15 @@ public class OnboardingPlanService {
     }
 
     private PlanResponse toPlanResponse(OnboardingPlan plan, List<OnboardingPlanItem> items) {
+        String templateName = null;
+        String templateDescription = null;
+        if (plan.getSourceTemplateId() != null) {
+            var template = templateRepository.findById(plan.getSourceTemplateId()).orElse(null);
+            if (template != null) {
+                templateName = template.getName();
+                templateDescription = template.getDescription();
+            }
+        }
         return new PlanResponse(
                 plan.getId(),
                 plan.getUserId(),
@@ -546,6 +558,8 @@ public class OnboardingPlanService {
                 plan.getProgressPercent(),
                 plan.getGeneratedBy(),
                 plan.getSourceTemplateId(),
+                templateName,
+                templateDescription,
                 items.size(),
                 items.stream().map(PlanItemResponse::from).toList()
         );

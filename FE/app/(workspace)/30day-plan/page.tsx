@@ -319,7 +319,18 @@ export default function ThirtyDayPlanPage() {
         <div className={styles.header}>
           <div>
             <h1 className={styles.heading}>30일 인수인계 계획</h1>
-            <p className={styles.description}>AI가 생성한 계획을 일자별로 확인하고 항목 상태를 관리하세요.</p>
+            <p className={styles.description}>
+              {plan?.generatedBy === 'TEMPLATE' && plan.sourceTemplateName
+                ? `${plan.sourceTemplateName} 템플릿 기반 계획`
+                : plan?.generatedBy === 'AI'
+                  ? 'AI가 문서를 분석하여 생성한 계획'
+                  : plan?.generatedBy === 'FALLBACK'
+                    ? '기본 골격으로 생성된 계획'
+                    : '일자별로 확인하고 항목 상태를 관리하세요.'}
+              {plan?.sourceTemplateDescription && (
+                <> — {plan.sourceTemplateDescription}</>
+              )}
+            </p>
           </div>
           <div className={styles.headerRight}>
             <button

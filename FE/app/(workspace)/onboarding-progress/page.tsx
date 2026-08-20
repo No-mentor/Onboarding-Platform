@@ -148,15 +148,14 @@ export default function OnboardingProgressPage() {
     setIsProgressDetailModalOpen(true);
     setIsDetailLoading(true);
     try {
-      // 진행 요약과 실제 계획 항목을 함께 받아 온다 (계획이 없으면 planId 가 null)
-      const [response, planResponse] = await Promise.all([
-        getAdminProgressDetail(newbie.userId),
-        newbie.planId ? getOnboardingPlanById(newbie.planId).catch(() => null) : Promise.resolve(null),
-      ]);
+      const response = await getAdminProgressDetail(newbie.userId);
       setDetail(response);
+      const activePlanId = response.planId ?? newbie.planId;
+      const planResponse = activePlanId
+        ? await getOnboardingPlanById(activePlanId).catch(() => null)
+        : null;
       setDetailPlan(planResponse);
     } catch (err) {
-      // 계획이 없는 신입은 서버가 404 를 준다
       setDetailError(err instanceof Error ? err.message : '상세 정보를 불러오지 못했습니다.');
     } finally {
       setIsDetailLoading(false);
