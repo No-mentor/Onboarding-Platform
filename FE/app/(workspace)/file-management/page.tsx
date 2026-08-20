@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, MoreVertical, RotateCcw, ChevronLeft, ChevronRight, Bell, HelpCircle, X, Cloud, AlertTriangle, Trash2, FileText, Lock, MessageCircle, Sparkles, Send, Check, Settings } from 'lucide-react';
+import { Search, MoreVertical, RotateCcw, ChevronLeft, ChevronRight, HelpCircle, X, Cloud, AlertTriangle, Trash2, FileText, Lock, MessageCircle, Sparkles, Send, Check, Settings } from 'lucide-react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFilePdf, faFileExcel, faFilePowerpoint } from '@fortawesome/free-solid-svg-icons';
 import { useRouter } from 'next/navigation';
@@ -317,9 +317,6 @@ export default function FileManagementPage() {
                 <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
               ))}
             </select>
-            <button className={styles.notifBtn} onClick={() => router.push('/notification-center')} title="알림 센터">
-              <Bell size={20} />
-            </button>
             <button className={styles.helpBtn} onClick={() => router.push('/ai-chat')} title="AI 질문">
               <HelpCircle size={18} />
             </button>

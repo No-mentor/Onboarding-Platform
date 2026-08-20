@@ -2,12 +2,11 @@
 
 import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, RotateCcw, Bell, HelpCircle } from 'lucide-react';
+import { ChevronDown, RotateCcw, HelpCircle } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { useToast } from '@/components/ui/toast';
 import { useMe } from '@/components/require-workspace';
-import { useNotifications } from '@/components/dashboard/panels/notifications-panel';
 import { getDisplayLabel } from '@/lib/display-labels';
 import {
   getChecklists,
@@ -48,7 +47,6 @@ export default function ChecklistPage() {
   const router = useRouter();
   const me = useMe();
   const { showToast } = useToast();
-  const { unreadCount } = useNotifications();
 
   const [activeTab, setActiveTab] = useState<ChecklistFilter>('all');
   const [summary, setSummary] = useState<ChecklistSummaryResponse | null>(null);
@@ -163,10 +161,6 @@ export default function ChecklistPage() {
             >
               <span>{me?.currentWorkspace?.name ?? '업무 공간'}</span>
               <ChevronDown size={16} />
-            </button>
-            <button className={styles.notifBtn} onClick={() => router.push('/notification-center')} aria-label="알림 열기" title="알림 센터">
-              <Bell size={20} />
-              {unreadCount > 0 && <span className={styles.badge}>{unreadCount}</span>}
             </button>
             <button className={styles.helpBtn} onClick={() => setIsTaskCategoriesModalOpen(true)} aria-label="도움말 열기" title="업무 카테고리 안내">
               <HelpCircle size={18} />

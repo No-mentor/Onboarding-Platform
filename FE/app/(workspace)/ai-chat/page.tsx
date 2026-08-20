@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Send, Plus, RefreshCw, Bell, HelpCircle, Zap } from 'lucide-react';
+import { Send, Plus, RefreshCw, HelpCircle, Zap } from 'lucide-react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFilePdf, faFileExcel } from '@fortawesome/free-solid-svg-icons';
 import { CommonSidebar } from '@/components/common-sidebar';
@@ -263,9 +263,6 @@ function AIChatContent() {
                 <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
               ))}
             </select>
-            <button className={styles.notifBtn} onClick={() => router.push('/notification-center')} title="알림 센터">
-              <Bell size={20} />
-            </button>
             <button className={styles.helpBtn} onClick={() => setIsDocumentReferenceModalOpen(true)} title="참고 문서 보기">
               <HelpCircle size={18} />
             </button>

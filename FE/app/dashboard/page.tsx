@@ -3,14 +3,13 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, ChevronDown, Bell, HelpCircle, Building2, Settings, Check } from 'lucide-react';
+import { ChevronRight, ChevronDown, HelpCircle, Building2, Settings, Check } from 'lucide-react';
 import { AiOutlineFilePdf, AiOutlineFileExcel, AiOutlineFile } from 'react-icons/ai';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { Markdown } from '@/components/ui/markdown';
 import { DailyTasksModal } from '@/components/dashboard/modals/daily-tasks-modal';
 import { AllFilesModal } from '@/components/dashboard/modals/all-files-modal';
-import { NotificationsPanel, useNotifications } from '@/components/dashboard/panels/notifications-panel';
 import { RequireWorkspace, useMe } from '@/components/require-workspace';
 import { WorkspaceEmptyState } from '@/components/workspace-empty-state';
 import { useToast } from '@/components/ui/toast';
@@ -34,7 +33,6 @@ function DashboardContent() {
   const router = useRouter();
   const me = useMe();
   const { showToast } = useToast();
-  const { unreadCount } = useNotifications();
 
   const userName = me?.name ?? '사용자';
   const workspaces = me?.workspaces ?? [];
@@ -42,7 +40,6 @@ function DashboardContent() {
 
   const [showDailyTasksModal, setShowDailyTasksModal] = useState(false);
   const [showAllFilesModal, setShowAllFilesModal] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
 
   const [isOnboardingProgressModalOpen, setIsOnboardingProgressModalOpen] = useState(false);
@@ -209,10 +206,6 @@ function DashboardContent() {
                 </>
               )}
             </div>
-            <button className={styles.notifBtn} onClick={() => setShowNotifications(!showNotifications)}>
-              <Bell size={20} />
-              {unreadCount > 0 && <span className={styles.badge}>{unreadCount}</span>}
-            </button>
             <Link href="/settings" className={styles.helpBtn} aria-label="설정">
               <HelpCircle size={18} />
             </Link>
@@ -459,9 +452,6 @@ function DashboardContent() {
             openAskModal(`${file.title} 문서에 대해 알려줘`);
           }}
         />
-      )}
-      {showNotifications && (
-        <NotificationsPanel onClose={() => setShowNotifications(false)} />
       )}
 
       {/* 인수인계 진행도 */}
