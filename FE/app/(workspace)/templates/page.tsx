@@ -876,7 +876,7 @@ export default function TemplatesPage() {
                   </div>
                   <div className={styles.actions}>
                     <button onClick={() => void openEditModal(selectedTemplate)}><Edit2 size={16} /> 편집</button>
-                    <button onClick={() => void openApplyModal(selectedTemplate.id)}><RefreshCw size={16} /> 신입에게 적용</button>
+                    <button onClick={() => void openApplyModal(selectedTemplate.id)}><RefreshCw size={16} /> 적용</button>
                     <button className={styles.delete} onClick={() => setIsDeleteModalOpen(true)}><Trash2 size={16} /> 삭제</button>
                   </div>
                 </>
@@ -1014,7 +1014,7 @@ export default function TemplatesPage() {
           }
         >
           <p style={{ fontSize: '12px', color: '#94a3b8', lineHeight: 1.7, marginTop: 0, marginBottom: '14px' }}>
-            여기서 저장한 뒤 상세 화면의 &quot;신입에게 적용&quot; 버튼을 누르면 기존 계획에도 반영됩니다.
+            여기서 저장한 뒤 상세 화면의 &quot;적용&quot; 버튼을 누르면 기존 계획에도 반영됩니다.
           </p>
           <div className={styles.formGroup}>
             <label className={styles.label}>템플릿명</label>
@@ -1255,7 +1255,7 @@ export default function TemplatesPage() {
         <Modal
           open
           onClose={() => setIsApplyModalOpen(false)}
-          title="신입에게 템플릿 적용"
+          title="템플릿 적용"
           subtitle={`"${selectedTemplate.name}" 템플릿의 최신 내용을 기존 계획에 반영합니다.`}
           footer={
             <>
@@ -1318,7 +1318,7 @@ export default function TemplatesPage() {
                 <span>
                   완료된 항목 유지<br />
                   <span style={{ color: '#94a3b8', fontSize: '12px' }}>
-                    체크하면 신입이 이미 완료한 항목은 새 계획에서도 완료 상태로 유지됩니다.
+                    체크하면 이미 완료한 항목은 새 계획에서도 완료 상태로 유지됩니다.
                   </span>
                 </span>
               </label>

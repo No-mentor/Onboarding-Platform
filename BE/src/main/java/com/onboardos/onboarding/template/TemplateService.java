@@ -278,15 +278,10 @@ public class TemplateService {
     private Set<UUID> collectTargetUserIds(UUID workspaceId, UUID templateId,
                                            UserRole targetRole, UUID excludeUserId) {
         Set<UUID> targetUserIds = new HashSet<>();
-        if (targetRole != null) {
-            membershipRepository.findByWorkspaceIdAndRoleAndDeletedAtIsNull(workspaceId, targetRole).stream()
-                    .filter(Membership::isActive)
-                    .map(Membership::getUserId)
-                    .forEach(targetUserIds::add);
-        }
-        planRepository.findByWorkspaceIdAndSourceTemplateIdAndStatusAndDeletedAtIsNull(
-                workspaceId, templateId, PlanStatus.ACTIVE).stream()
-                .map(OnboardingPlan::getUserId)
+        // 워크스페이스의 모든 활성 멤버를 대상으로 한다 (role 무관)
+        membershipRepository.findByWorkspaceIdAndDeletedAtIsNull(workspaceId).stream()
+                .filter(Membership::isActive)
+                .map(Membership::getUserId)
                 .forEach(targetUserIds::add);
 
         return targetUserIds;
