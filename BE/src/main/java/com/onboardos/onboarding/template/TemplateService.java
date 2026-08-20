@@ -289,7 +289,6 @@ public class TemplateService {
                 .map(OnboardingPlan::getUserId)
                 .forEach(targetUserIds::add);
 
-        targetUserIds.remove(excludeUserId);
         return targetUserIds;
     }
 
