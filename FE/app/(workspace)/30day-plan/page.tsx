@@ -8,6 +8,7 @@ import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui
 import { useToast } from '@/components/ui/toast';
 import { useMe } from '@/components/require-workspace';
 import { getDisplayLabel } from '@/lib/display-labels';
+import { selectableTemplates } from '@/lib/templates';
 import {
   generateOnboardingPlan,
   getOnboardingPlan,
@@ -82,24 +83,6 @@ function templateNameOf(templateId: string, templates: TemplateResponse[]): stri
   return templates.find(t => t.id === templateId)?.name ?? '';
 }
 
-/**
- * 이 역할의 계획에 실제로 쓸 수 있는 템플릿만 남긴다.
- * 서버가 거부하는 조합을 고를 수 있게 두면 400 을 맞기 때문이다.
- *
- * - 역할 불일치: "대상 역할과 호환되지 않는 템플릿입니다" (400)
- * - documentId 가 없는 DOCUMENT 항목이 있는 옛 템플릿:
- *   "선택한 템플릿에 대상 사용자가 접근할 수 없는 문서가 있습니다" (400)
- *   자동 선택으로는 그 항목만 걸러져 통과하지만, 직접 고르면 거부된다.
- */
-function selectableTemplates(templates: TemplateResponse[], role: string | undefined) {
-  return templates.filter(t => {
-    if (t.targetRole && role && t.targetRole !== role) return false;
-    const hasUnlinkedDocument = (t.items ?? []).some(
-      i => i.type === 'DOCUMENT' && !i.documentId
-    );
-    return !hasUnlinkedDocument;
-  });
-}
 
 export default function ThirtyDayPlanPage() {
   const router = useRouter();
@@ -148,14 +131,17 @@ export default function ThirtyDayPlanPage() {
    * 템플릿 목록. 생성 모달의 선택지와, 계획의 sourceTemplateId 이름 표시에 쓴다.
    * 목록 조회는 OWNER/ADMIN/MANAGER 만 가능하므로 그 권한일 때만 부른다 (신입은 403).
    */
-  const loadTemplates = useCallback(async () => {
-    if (!canRegenerate) return;
+  const loadTemplates = useCallback(async (): Promise<TemplateResponse[]> => {
+    if (!canRegenerate) return [];
     try {
       const response = await getTemplates();
-      setTemplates(response.items ?? []);
+      const items = response.items ?? [];
+      setTemplates(items);
+      return items;
     } catch {
       // 템플릿을 못 불러와도 계획 조회·생성 자체는 가능하다 (서버가 자동으로 고른다)
       setTemplates([]);
+      return [];
     }
   }, [canRegenerate]);
 
@@ -215,15 +201,42 @@ export default function ThirtyDayPlanPage() {
   );
 
 
+  /**
+   * 생성/재생성 모달을 연다.
+   *
+   * 모달 state(selectedTemplateId/generationMode)는 이전에 열렸을 때 값이 아니라
+   * 매번 여기서 명확하게 다시 정한다 — 그러지 않으면 고른 템플릿을 삭제한 뒤 모달을
+   * 다시 열어도 이제는 존재하지 않는 templateId 가 그대로 남아 전송될 수 있다.
+   *
+   * 정책: 현재 계획에 연결된 템플릿(sourceTemplateId)이 아직도 고를 수 있는 상태면
+   * 그것을 기본 선택으로 보여준다(재생성 시 서버 기본 동작 "기존 템플릿 재사용"과 화면이
+   * 일치하도록). 아니라면(계획이 없거나, 템플릿이 삭제/역할 불일치 등으로 더 이상 못 고르면)
+   * "자동 선택"(빈 값)으로 시작한다.
+   */
   const openGenerationModal = async () => {
+    setGenerationMode('keep');
     setIsPlanGenerationModalOpen(true);
-    await loadTemplates();
+    const fresh = await loadTemplates();
+    const selectable = selectableTemplates(fresh, me?.currentWorkspace?.role);
+    const sourceTemplateId = plan?.sourceTemplateId;
+    setSelectedTemplateId(
+      sourceTemplateId && selectable.some(t => t.id === sourceTemplateId) ? sourceTemplateId : ''
+    );
   };
+
+  /**
+   * 방어선: 선택된 템플릿이 목록에서 사라지면(삭제 등) 존재하지 않는 id 로 취급한다.
+   * state 를 별도 effect 로 지우는 대신 렌더링 시점에 걸러서 쓴다 — 그러면 목록이 아직
+   * 늦게 도착한 순간에도(비동기 로딩 중) 화면과 실제로 전송될 값이 항상 일치한다.
+   */
+  const effectiveTemplateId = usableTemplates.some(t => t.id === selectedTemplateId)
+    ? selectedTemplateId
+    : '';
 
   const handleGeneratePlan = async () => {
     setIsGenerating(true);
     try {
-      const templateId = selectedTemplateId || undefined;
+      const templateId = effectiveTemplateId || undefined;
 
       if (plan?.planId) {
         // 재생성은 templateId 와 preserveCompleted 를 함께 받는다.
@@ -659,7 +672,7 @@ export default function ThirtyDayPlanPage() {
                 사용할 템플릿
               </label>
               <select
-                value={selectedTemplateId}
+                value={effectiveTemplateId}
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
                 disabled={isGenerating}
                 style={{ width: '100%', padding: '9px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}

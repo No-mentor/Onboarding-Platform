@@ -109,7 +109,7 @@ public class OnboardingPlanService {
      */
     @Transactional
     public PlanResponse generate(UserPrincipal principal, UUID workspaceId, GeneratePlanRequest request) {
-        workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
+        workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER);
         UUID targetUserId = request.userId() == null ? principal.getId() : request.userId();
         return generateForUser(workspaceId, targetUserId, request.force(), request.templateId());
     }
@@ -281,7 +281,7 @@ public class OnboardingPlanService {
     @Transactional
     public PlanResponse regenerate(UserPrincipal principal, UUID workspaceId, UUID planId,
                                    boolean keepCompleted, UUID templateId) {
-        workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
+        workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN, UserRole.MANAGER);
         OnboardingPlan existing = planRepository.findByIdAndWorkspaceIdAndDeletedAtIsNull(planId, workspaceId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "계획을 찾을 수 없습니다."));
 

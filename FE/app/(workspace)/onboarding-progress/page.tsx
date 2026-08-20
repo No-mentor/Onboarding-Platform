@@ -9,16 +9,26 @@ import { useToast } from '@/components/ui/toast';
 import { useMe } from '@/components/require-workspace';
 import { saveWorkspaceId } from '@/lib/storage';
 import { getDisplayLabel } from '@/lib/display-labels';
+import { selectableTemplates } from '@/lib/templates';
 import {
+  generateOnboardingPlan,
   getAdminProgress,
   getAdminProgressDetail,
   getOnboardingPlanById,
+  getTemplates,
   regenerateOnboardingPlan,
   type AdminProgressDetailResponse,
   type AdminProgressItemResponse,
   type PlanResponse,
+  type TemplateResponse,
 } from '@/lib/api';
 import styles from './onboarding-progress.module.css';
+
+/**
+ * 이 화면에 나오는 대상은 전부 NEW_HIRE 다 (서버 /admin/progress 가 NEW_HIRE 만 준다).
+ * 템플릿을 고를 때는 반드시 이 역할 기준으로 걸러야 한다 — 관리자 자신의 역할이 아니다.
+ */
+const TARGET_ROLE = 'NEW_HIRE';
 
 const PAGE_SIZE = 5;
 /** 서버가 한 번에 주는 최대치. 통계를 전체 기준으로 내기 위해 크게 받아 온다 */
@@ -59,6 +69,10 @@ export default function OnboardingProgressPage() {
   const [insights, setInsights] = useState<AdminProgressDetailResponse[]>([]);
   const [isInsightsLoading, setIsInsightsLoading] = useState(false);
 
+  /** 대상 신입(NEW_HIRE)에게 적용할 템플릿을 고르는 데 쓴다 */
+  const [templates, setTemplates] = useState<TemplateResponse[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+
   const load = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -75,11 +89,28 @@ export default function OnboardingProgressPage() {
     }
   }, []);
 
+  const loadTemplates = useCallback(async () => {
+    try {
+      const response = await getTemplates();
+      setTemplates(response.items ?? []);
+    } catch {
+      // 템플릿을 못 불러와도 재생성 자체는 가능하다 (서버가 기존 템플릿을 재사용한다)
+      setTemplates([]);
+    }
+  }, []);
+
   useEffect(() => {
     // 진입 시 1회 조회 (결과 도착 후 setState)
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
-  }, [load]);
+    void loadTemplates();
+  }, [load, loadTemplates]);
+
+  /** 이 신입에게 실제로 적용할 수 있는 템플릿만 (역할 = NEW_HIRE 기준, 관리자 자신의 역할이 아니다) */
+  const usableTemplates = useMemo(
+    () => selectableTemplates(templates, TARGET_ROLE),
+    [templates]
+  );
 
   const stats = useMemo(() => {
     const withPlan = newbies.filter(n => n.planId !== null);
@@ -132,17 +163,43 @@ export default function OnboardingProgressPage() {
     }
   };
 
-  /** 관리자가 신입의 30일 계획을 다시 만들어 준다 */
-  const handleRegenerate = async (newbie: AdminProgressItemResponse, keepCompleted: boolean) => {
-    if (!newbie.planId) return;
+  /**
+   * "진행도 조치" 모달을 연다. selectedTemplateId 를 항상 여기서 다시 정한다 — 그러지 않으면
+   * 이전에 다른 신입에게 고른 (또는 이제는 삭제된) templateId 가 그대로 남아 있을 수 있다.
+   */
+  const openActionModal = (newbie: AdminProgressItemResponse) => {
+    setSelectedNewbie(newbie);
+    setSelectedTemplateId('');
+    setIsProgressActionModalOpen(true);
+  };
+
+  /**
+   * 관리자가 신입에게 온보딩 계획을 적용한다.
+   * - 이미 계획이 있으면(planId 존재) 그 계획을 재생성한다 (완료 항목 유지 여부 선택 가능).
+   * - 계획이 아직 없으면 이 신입(userId)을 대상으로 새로 생성한다.
+   * 어느 쪽이든 관리자 자신의 계획이 아니라 반드시 이 신입의 계획만 바뀐다.
+   */
+  const handleApplyTemplate = async (
+    newbie: AdminProgressItemResponse,
+    keepCompleted: boolean
+  ) => {
+    const templateId = selectedTemplateId || undefined;
     setIsRegenerating(true);
     try {
-      await regenerateOnboardingPlan(newbie.planId, { preserveCompleted: keepCompleted });
-      showToast(`${newbie.name ?? '신입'}의 계획을 다시 생성했습니다.`, 'success');
+      if (newbie.planId) {
+        await regenerateOnboardingPlan(newbie.planId, { templateId, preserveCompleted: keepCompleted });
+        showToast(`${newbie.name ?? '신입'}의 계획을 다시 생성했습니다.`, 'success');
+      } else {
+        await generateOnboardingPlan({ templateId, userId: newbie.userId });
+        showToast(`${newbie.name ?? '신입'}의 계획을 생성했습니다.`, 'success');
+      }
       setIsProgressActionModalOpen(false);
       await load();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '계획 재생성에 실패했습니다.', 'error');
+      showToast(
+        err instanceof Error ? err.message : '계획 생성/재생성에 실패했습니다.',
+        'error'
+      );
     } finally {
       setIsRegenerating(false);
     }
@@ -407,7 +464,12 @@ export default function OnboardingProgressPage() {
           footer={
             <>
               <ModalSecondaryButton onClick={() => setIsProgressDetailModalOpen(false)}>닫기</ModalSecondaryButton>
-              <ModalPrimaryButton onClick={() => { setIsProgressDetailModalOpen(false); setIsProgressActionModalOpen(true); }}>
+              <ModalPrimaryButton
+                onClick={() => {
+                  setIsProgressDetailModalOpen(false);
+                  openActionModal(selectedNewbie);
+                }}
+              >
                 조치하기
               </ModalPrimaryButton>
             </>
@@ -592,21 +654,58 @@ export default function OnboardingProgressPage() {
           subtitle={`${selectedNewbie.name ?? '이름 없음'} · ${getDisplayLabel(selectedNewbie.status)}`}
           footer={<ModalSecondaryButton onClick={() => setIsProgressActionModalOpen(false)}>닫기</ModalSecondaryButton>}
         >
+          <div className={styles.formGroup} style={{ marginBottom: '14px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>
+              적용할 템플릿
+            </label>
+            <select
+              value={selectedTemplateId}
+              onChange={(e) => setSelectedTemplateId(e.target.value)}
+              disabled={isRegenerating}
+              style={{ width: '100%', padding: '9px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+            >
+              <option value="">
+                {selectedNewbie.planId ? '자동 선택 (기존 계획의 템플릿 재사용)' : '자동 선택 (역할 기본 템플릿 → AI 생성 → 기본 골격)'}
+              </option>
+              {usableTemplates.map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.name}{t.isDefault ? ' · 기본' : ''} · 항목 {t.itemCount}개
+                </option>
+              ))}
+            </select>
+            <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px', lineHeight: 1.6 }}>
+              템플릿을 새로 만들거나 수정해도 이미 만들어진 계획에는 자동으로 반영되지 않습니다.
+              여기서 생성/재생성을 눌러야 이 신입의 계획·체크리스트·오늘 할 일에 반영됩니다.
+            </p>
+          </div>
+
           <div className={styles.actionList}>
-            <button
-              className={styles.actionItem}
-              disabled={!selectedNewbie.planId || isRegenerating}
-              onClick={() => void handleRegenerate(selectedNewbie, true)}
-            >
-              {isRegenerating ? '재생성 중...' : '계획 재생성 (완료 항목 유지)'}
-            </button>
-            <button
-              className={styles.actionItem}
-              disabled={!selectedNewbie.planId || isRegenerating}
-              onClick={() => void handleRegenerate(selectedNewbie, false)}
-            >
-              계획 전체 재생성
-            </button>
+            {selectedNewbie.planId ? (
+              <>
+                <button
+                  className={styles.actionItem}
+                  disabled={isRegenerating}
+                  onClick={() => void handleApplyTemplate(selectedNewbie, true)}
+                >
+                  {isRegenerating ? '재생성 중...' : '계획 재생성 (완료 항목 유지)'}
+                </button>
+                <button
+                  className={styles.actionItem}
+                  disabled={isRegenerating}
+                  onClick={() => void handleApplyTemplate(selectedNewbie, false)}
+                >
+                  계획 전체 재생성
+                </button>
+              </>
+            ) : (
+              <button
+                className={styles.actionItem}
+                disabled={isRegenerating}
+                onClick={() => void handleApplyTemplate(selectedNewbie, false)}
+              >
+                {isRegenerating ? '생성 중...' : '이 템플릿으로 계획 생성'}
+              </button>
+            )}
             <button
               className={styles.actionItem}
               onClick={() => { setIsProgressActionModalOpen(false); void openDetail(selectedNewbie); }}
@@ -616,7 +715,7 @@ export default function OnboardingProgressPage() {
           </div>
           {!selectedNewbie.planId && (
             <p className={styles.emptyState}>
-              아직 30일 계획이 없어 재생성할 수 없습니다. 본인이 계획을 먼저 생성해야 합니다.
+              아직 30일 계획이 없습니다. 위 템플릿을 골라 관리자가 직접 만들어 줄 수 있습니다.
             </p>
           )}
         </Modal>

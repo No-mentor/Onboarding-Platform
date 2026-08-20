@@ -242,6 +242,12 @@ export interface GeneratePlanOptions {
   templateId?: string;
   /** 이미 활성 계획이 있어도 기존 것을 보관하고 새로 만든다 */
   force?: boolean;
+  /**
+   * 이 사용자의 계획을 만든다 (OWNER/ADMIN/MANAGER 전용). 비우면 로그인한 사용자 자신의
+   * 계획을 만든다. 관리자가 특정 인턴에게 계획을 만들어 줄 때 반드시 지정해야 한다 —
+   * 지정하지 않으면 관리자 자신의 계획이 만들어진다.
+   */
+  userId?: string;
 }
 
 /**
@@ -256,6 +262,7 @@ export async function generateOnboardingPlan(
 ): Promise<PlanResponse> {
   const body: Record<string, unknown> = { force: options.force ?? false };
   if (options.templateId) body.templateId = options.templateId;
+  if (options.userId) body.userId = options.userId;
 
   const response = await apiFetch(`${API_BASE}/onboarding-plans/generate`, {
     method: 'POST',

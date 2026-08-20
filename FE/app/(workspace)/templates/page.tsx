@@ -573,6 +573,21 @@ export default function TemplatesPage() {
     return templates.filter(t => t.name.toLowerCase().includes(q));
   }, [templates, keyword]);
 
+  /**
+   * "템플릿 생성" 모달은 항상 빈 상태로 시작해야 한다.
+   * 취소(또는 배경 클릭/ESC)로 닫았을 때는 폼을 비우지 않으므로, 다시 열 때 여기서
+   * 명확하게 초기화한다 — 그러지 않으면 이전에 입력하다 만 값이나 반쯤 만든 항목이
+   * 새로 만드는 템플릿에 섞여 들어갈 수 있다.
+   */
+  const openCreationModal = () => {
+    setNewName('');
+    setNewRole('NEW_HIRE');
+    setNewDescription('');
+    setNewItems([]);
+    setNewIsDefault(true);
+    setIsCreationModalOpen(true);
+  };
+
   /** 목록 응답으로 편집 화면을 구성하지 않는다. 항상 상세 API 를 다시 받아 그 items 로 채운다 */
   const openEditModal = async (template: TemplateResponse) => {
     setIsEditModalOpen(true);
@@ -705,7 +720,7 @@ export default function TemplatesPage() {
             <button className={styles.createBtn} onClick={() => void openGenerateModal()}>
               <Sparkles size={16} /> 문서로 AI 생성
             </button>
-            <button className={styles.createBtn} onClick={() => setIsCreationModalOpen(true)}><Plus size={16} /> 템플릿 생성</button>
+            <button className={styles.createBtn} onClick={openCreationModal}><Plus size={16} /> 템플릿 생성</button>
           </div>
         </header>
 
@@ -769,7 +784,7 @@ export default function TemplatesPage() {
               </div>
               {/* 헤더에 이미 생성 버튼이 있다. 목록이 비었을 때만 안내용으로 보여 준다 */}
               {!isLoading && !error && templates.length === 0 && (
-                <button className={styles.addMore} onClick={() => setIsCreationModalOpen(true)}>
+                <button className={styles.addMore} onClick={openCreationModal}>
                   <Plus size={16} /> 템플릿 생성
                 </button>
               )}
@@ -953,6 +968,10 @@ export default function TemplatesPage() {
             </>
           }
         >
+          <p style={{ fontSize: '12px', color: '#94a3b8', lineHeight: 1.7, marginTop: 0, marginBottom: '14px' }}>
+            여기서 저장해도 이미 만들어진 사용자 계획에는 자동으로 반영되지 않습니다.
+            30일 계획 화면(관리자) 또는 신입 진행 현황 화면에서 계획을 재생성해야 적용됩니다.
+          </p>
           <div className={styles.formGroup}>
             <label className={styles.label}>템플릿명</label>
             <input
