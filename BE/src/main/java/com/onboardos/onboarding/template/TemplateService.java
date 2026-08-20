@@ -157,10 +157,6 @@ public class TemplateService {
     public Optional<SelectedTemplate> selectForPlan(UUID workspaceId, UUID templateId, UserRole role) {
         if (templateId != null) {
             OnboardingTemplate template = requireTemplate(workspaceId, templateId);
-            // templateId 가 직접 지정된 경우, role 이 일치하거나 role 이 null (관리자 일괄 적용 등)이면 허용
-            if (role != null && template.getTargetRole() != role) {
-                throw new BusinessException(ErrorCode.VALIDATION_ERROR, "대상 역할과 호환되지 않는 템플릿입니다.");
-            }
             return Optional.of(selected(template));
         }
         if (role == null) return Optional.empty();
