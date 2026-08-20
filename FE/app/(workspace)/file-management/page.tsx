@@ -7,6 +7,7 @@ import { faFilePdf, faFileExcel, faFilePowerpoint } from '@fortawesome/free-soli
 import { useRouter } from 'next/navigation';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton, ModalDangerButton } from '@/components/ui/modal';
+import { Markdown } from '@/components/ui/markdown';
 import { useToast } from '@/components/ui/toast';
 import { useMe } from '@/components/require-workspace';
 import { saveWorkspaceId } from '@/lib/storage';
@@ -688,7 +689,7 @@ export default function FileManagementPage() {
                 <div className={styles.userMessage}>{question}</div>
                 <div className={styles.aiMessage}>
                   <div className={styles.aiIcon}><Sparkles size={18} /></div>
-                  <p>{answer}</p>
+                  <Markdown text={answer} />
                 </div>
                 {citations.length > 0 && (
                   <div className={styles.sources}>
