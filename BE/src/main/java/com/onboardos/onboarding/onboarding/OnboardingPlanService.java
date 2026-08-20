@@ -115,6 +115,17 @@ public class OnboardingPlanService {
 
     @Transactional
     public PlanResponse generateForUser(UUID workspaceId, UUID userId, boolean force, UUID templateId) {
+        return generateForUser(workspaceId, userId, force, templateId, templateId != null);
+    }
+
+    /**
+     * @param explicitTemplate 사용자가 이번 요청에서 직접 고른 템플릿인지.
+     *                         true 면 접근할 수 없는 문서가 섞여 있을 때 거부한다(요청이 잘못된 것이므로).
+     *                         false 면 (재생성이 기존 계획의 템플릿을 재사용하는 경우) 그 항목만 걸러내고 진행한다.
+     *                         구분하지 않으면, documentId 가 없는 옛 템플릿으로 만든 계획은 재생성이 항상 400 이 된다.
+     */
+    public PlanResponse generateForUser(UUID workspaceId, UUID userId, boolean force, UUID templateId,
+                                        boolean explicitTemplate) {
         Membership membership = membershipRepository.findByWorkspaceIdAndUserIdAndDeletedAtIsNull(workspaceId, userId)
                 .filter(Membership::isActive).orElse(null);
         if (membership == null && legacyTestMode) {
@@ -138,8 +149,13 @@ public class OnboardingPlanService {
                     planRepository.saveAndFlush(existing);
                 });
 
-        OnboardingPlan plan = OnboardingPlan.create(workspaceId, userId, LocalDate.now());
-        planRepository.save(plan);
+        // save() 가 돌려주는 인스턴스를 써야 한다.
+        // @Id 가 수동 할당이고 Persistable 을 구현하지 않아 Spring Data 가 isNew()=false 로 보고
+        // em.merge() 를 호출한다. 그래서 save() 의 반환값만 영속 상태이고, 인자로 넘긴 객체는
+        // detached 로 남는다. detached 객체에 recordGeneration() 을 호출하면
+        // generatedBy·sourceTemplateId·version 이 DB 에 반영되지 않는다.
+        OnboardingPlan plan = planRepository.save(
+                OnboardingPlan.create(workspaceId, userId, LocalDate.now()));
 
         Membership targetMembership = membership;
         List<DocumentEntity> readyDocs = documentRepository
@@ -157,7 +173,7 @@ public class OnboardingPlanService {
                 .filter(item -> item.getDocumentId() == null
                         ? !legacyTestMode : !accessibleDocumentIds.contains(item.getDocumentId()))
                 .toList();
-        if (templateId != null && !invalidDocumentItems.isEmpty()) {
+        if (explicitTemplate && !invalidDocumentItems.isEmpty()) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR,
                     "선택한 템플릿에 대상 사용자가 접근할 수 없는 문서가 있습니다.");
         }
@@ -264,7 +280,9 @@ public class OnboardingPlanService {
                 .map(StableItemKey::from).toList();
 
         UUID selectedTemplateId = templateId != null ? templateId : existing.getSourceTemplateId();
-        PlanResponse regenerated = generateForUser(workspaceId, existing.getUserId(), true, selectedTemplateId);
+        // body 로 templateId 를 받은 경우만 "명시 지정". 기존 계획의 템플릿을 재사용하는 경우는 아니다
+        PlanResponse regenerated = generateForUser(
+                workspaceId, existing.getUserId(), true, selectedTemplateId, templateId != null);
         OnboardingPlan generatedPlan = planRepository
                 .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(
                         workspaceId, existing.getUserId(), PlanStatus.ACTIVE)

@@ -40,10 +40,35 @@ function workspaceHeaders(extra?: Record<string, string>): Record<string, string
 
 const JSON_CONTENT = { 'Content-Type': 'application/json' } as const;
 
-/** 서버 에러 본문(ErrorResponse)에서 메시지를 꺼낸다 */
+/**
+ * 서버 에러 본문(ErrorResponse)에서 메시지를 꺼낸다.
+ *
+ * 상태 코드별로 사용자가 무엇을 해야 하는지 알 수 있게 문장을 고른다.
+ * 500 은 서버 메시지를 그대로 쓰지 않는다. 내부 예외 문구가 화면에 노출될 수 있어서다.
+ */
 async function errorMessage(response: Response, fallback: string): Promise<string> {
   const body = await response.json().catch(() => null);
-  return (body && (body.message || body.error)) || fallback;
+  const serverMessage = body && typeof body.message === 'string' ? body.message : null;
+
+  switch (response.status) {
+    case 400:
+      // 검증 실패는 어느 값이 잘못됐는지 서버 메시지가 알려 준다
+      return serverMessage ?? '입력한 값을 다시 확인해 주세요.';
+    case 403:
+      return serverMessage ?? '이 작업을 할 권한이 없습니다.';
+    case 404:
+      return serverMessage ?? '대상을 찾을 수 없습니다.';
+    case 409:
+      return serverMessage ?? '다른 변경과 충돌했습니다. 새로고침 후 다시 시도해 주세요.';
+    case 413:
+      return serverMessage ?? '파일이 너무 큽니다.';
+    default:
+      if (response.status >= 500) {
+        // 스택 트레이스나 원문 예외가 새지 않도록 서버 메시지를 쓰지 않는다
+        return '서버에서 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+      }
+      return serverMessage ?? fallback;
+  }
 }
 
 /**
@@ -165,11 +190,17 @@ export interface PlanItemResponse {
   description: string | null;
   status: ItemStatus;
   documentId: string | null;
+  /** 이 항목이 복사되어 온 템플릿 항목. 템플릿에서 만든 계획이 아니면 null */
+  sourceTemplateItemId: string | null;
   personName: string | null;
+  estimatedMinutes: number | null;
   completedAt: string | null;
 }
 
 /** GET /onboarding-plans/me (서버 PlanResponse 와 1:1) */
+/** 계획을 무엇으로 만들었는지 (서버 OnboardingPlan.generatedBy) */
+export type PlanGeneratedBy = 'TEMPLATE' | 'AI' | 'FALLBACK';
+
 export interface PlanResponse {
   /** 서버 필드명이 id 가 아니라 planId 다 */
   planId: string;
@@ -179,6 +210,10 @@ export interface PlanResponse {
   startDate: string;
   endDate: string;
   progressPercent: number;
+  /** TEMPLATE=템플릿 복사, AI=문서 기반 생성, FALLBACK=기본 골격 */
+  generatedBy: PlanGeneratedBy | null;
+  /** TEMPLATE 로 만든 경우 그 템플릿 id */
+  sourceTemplateId: string | null;
   itemCount: number;
   items: PlanItemResponse[] | null;
 }
@@ -231,16 +266,31 @@ export async function getOnboardingPlanById(planId: string): Promise<PlanRespons
   return response.json();
 }
 
-/** 계획 재생성 (Admin). keepCompleted=true 면 이미 완료한 항목은 유지한다 */
+export interface RegeneratePlanOptions {
+  /** 이 템플릿으로 다시 만든다. 비우면 서버가 기존 계획의 템플릿을 재사용한다 */
+  templateId?: string;
+  /** 이미 완료한 항목을 새 계획에서도 완료로 되살릴지 */
+  preserveCompleted: boolean;
+}
+
+/**
+ * 계획 재생성 (Admin).
+ * 서버 RegeneratePlanRequest 와 맞춰 body 로 보낸다.
+ * (쿼리 파라미터 keepCompleted 도 아직 받지만, body 값이 우선이다)
+ */
 export async function regenerateOnboardingPlan(
   planId: string,
-  keepCompleted: boolean = true
+  options: RegeneratePlanOptions
 ): Promise<PlanResponse> {
+  const body: Record<string, unknown> = { preserveCompleted: options.preserveCompleted };
+  if (options.templateId) body.templateId = options.templateId;
+
   const response = await apiFetch(
-    `${API_BASE}/onboarding-plans/${planId}/regenerate?keepCompleted=${keepCompleted}`,
+    `${API_BASE}/onboarding-plans/${planId}/regenerate`,
     {
       method: 'POST',
       headers: workspaceHeaders(JSON_CONTENT),
+      body: JSON.stringify(body),
     }
   );
 
@@ -858,9 +908,15 @@ export interface TemplateItemResponse {
   title: string;
   description: string | null;
   sortOrder: number;
+  /** DOCUMENT 항목이 가리키는 실제 문서. 그 외 유형은 null */
+  documentId: string | null;
+  estimatedMinutes: number | null;
 }
 
-/** GET /templates 항목 (서버 TemplateResponse 와 1:1) */
+/**
+ * GET /templates 항목 (서버 TemplateResponse 와 1:1).
+ * 목록도 items 와 집계를 함께 준다. 통계를 화면에서 다시 세지 말고 이 값을 쓴다.
+ */
 export interface TemplateResponse {
   id: string;
   name: string;
@@ -869,6 +925,12 @@ export interface TemplateResponse {
   description: string | null;
   isDefault: boolean;
   updatedAt: string | null;
+  itemCount: number;
+  documentCount: number;
+  personCount: number;
+  checklistCount: number;
+  practiceCount: number;
+  totalEstimatedMinutes: number;
   items: TemplateItemResponse[] | null;
 }
 
@@ -901,6 +963,9 @@ export interface TemplateItemPayload {
   title: string;
   description?: string;
   sortOrder?: number;
+  /** DOCUMENT 항목만 보낸다. 서버가 워크스페이스·READY·접근 권한을 검증한다 */
+  documentId?: string;
+  estimatedMinutes?: number;
 }
 
 export interface TemplatePayload {

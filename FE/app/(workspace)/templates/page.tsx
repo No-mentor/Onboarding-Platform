@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Edit2, Trash2, Search, LayoutTemplate, UsersRound, FileText, CircleCheck, Crown, Sparkles } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, LayoutTemplate, UsersRound, FileText, CircleCheck, Crown, Sparkles, ChevronUp, ChevronDown, Clock } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton, ModalDangerButton } from '@/components/ui/modal';
 import { useToast } from '@/components/ui/toast';
@@ -32,23 +32,75 @@ function formatUpdatedAt(value: string | null): string {
 }
 
 /**
- * 서버 템플릿에는 카테고리 개념이 없다.
- * 항목의 종류(PlanItemType)별 개수를 세어 보여 준다.
+ * 유형별 개수. 서버가 목록·상세 응답에 집계를 담아 주므로 그 값을 그대로 쓴다.
+ * (화면에서 다시 세면 서버 값과 어긋날 수 있다)
  */
-function categoriesOf(items: TemplateItemResponse[] | null): Array<{ name: string; itemCount: number }> {
-  const counts = new Map<string, number>();
-  for (const item of items ?? []) {
-    counts.set(item.type, (counts.get(item.type) ?? 0) + 1);
-  }
-  return [...counts.entries()].map(([type, itemCount]) => ({
-    name: getDisplayLabel(type),
-    itemCount,
-  }));
+function typeCountsOf(t: TemplateResponse): Array<{ name: string; itemCount: number }> {
+  return [
+    { name: getDisplayLabel('DOCUMENT'), itemCount: t.documentCount },
+    { name: getDisplayLabel('CHECKLIST'), itemCount: t.checklistCount },
+    { name: getDisplayLabel('PERSON'), itemCount: t.personCount },
+    { name: getDisplayLabel('PRACTICE'), itemCount: t.practiceCount },
+  ].filter(c => c.itemCount > 0);
 }
 
 /** 항목의 가장 큰 dayIndex. "권장 기간"이 아니라 마지막 항목이 며칠차인지다 */
 function durationOf(items: TemplateItemResponse[] | null): number {
   return (items ?? []).reduce((max, item) => Math.max(max, item.dayIndex), 0);
+}
+
+/** 분 단위를 "3시간 20분" 처럼 읽기 쉽게 */
+function formatMinutes(total: number): string {
+  if (!total) return '0분';
+  const hours = Math.floor(total / 60);
+  const minutes = total % 60;
+  if (hours === 0) return `${minutes}분`;
+  if (minutes === 0) return `${hours}시간`;
+  return `${hours}시간 ${minutes}분`;
+}
+
+/** 상세 응답의 items 를 편집기가 쓰는 payload 로 옮긴다 */
+function toPayloads(items: TemplateItemResponse[] | null): TemplateItemPayload[] {
+  return (items ?? [])
+    .slice()
+    .sort((a, b) => a.dayIndex - b.dayIndex || a.sortOrder - b.sortOrder)
+    .map(i => ({
+      dayIndex: i.dayIndex,
+      type: i.type,
+      title: i.title,
+      description: i.description ?? undefined,
+      sortOrder: i.sortOrder,
+      documentId: i.type === 'DOCUMENT' ? (i.documentId ?? undefined) : undefined,
+      estimatedMinutes: i.estimatedMinutes ?? undefined,
+    }));
+}
+
+/**
+ * 저장 직전 정리.
+ * - 제목이 빈 항목은 버린다
+ * - sortOrder 를 화면 순서대로 다시 매긴다
+ * - documentId 는 DOCUMENT 항목에만 남긴다 (서버가 비-DOCUMENT 의 documentId 를 거부한다)
+ */
+function toSavePayload(items: TemplateItemPayload[]): TemplateItemPayload[] {
+  return items
+    .filter(i => i.title.trim())
+    .map((item, index) => {
+      const payload: TemplateItemPayload = {
+        dayIndex: item.dayIndex,
+        type: item.type,
+        title: item.title.trim(),
+        sortOrder: index,
+      };
+      if (item.description?.trim()) payload.description = item.description.trim();
+      if (item.type === 'DOCUMENT' && item.documentId) payload.documentId = item.documentId;
+      if (typeof item.estimatedMinutes === 'number') payload.estimatedMinutes = item.estimatedMinutes;
+      return payload;
+    });
+}
+
+/** 서버는 documentId 만 주므로, 화면에 이름을 보여 주려면 문서 목록에서 찾아야 한다 */
+function documentTitleOf(documentId: string, documents: DocumentResponse[]): string {
+  return documents.find(d => d.id === documentId)?.title ?? '연결됨';
 }
 
 const ROLE_OPTIONS: WorkspaceRole[] = ['NEW_HIRE', 'MEMBER', 'MANAGER'];
@@ -64,17 +116,38 @@ function TemplateItemsEditor({
   items,
   maxDay,
   disabled,
+  documents,
   onChange,
 }: {
   items: TemplateItemPayload[];
   maxDay: number;
   disabled: boolean;
+  /** DOCUMENT 항목에서 고를 수 있는 READY 문서 */
+  documents: DocumentResponse[];
   onChange: (next: TemplateItemPayload[]) => void;
 }) {
+  /**
+   * 유형이 바뀌면 documentId 를 정리한다.
+   * 서버는 비-DOCUMENT 항목의 documentId 를 받지 않으므로 남겨 두면 검증에 걸린다.
+   */
   const patch = (index: number, part: Partial<TemplateItemPayload>) =>
-    onChange(items.map((item, i) => (i === index ? { ...item, ...part } : item)));
+    onChange(items.map((item, i) => {
+      if (i !== index) return item;
+      const next = { ...item, ...part };
+      if (next.type !== 'DOCUMENT') delete next.documentId;
+      return next;
+    }));
 
   const remove = (index: number) => onChange(items.filter((_, i) => i !== index));
+
+  /** 위/아래로 옮긴다. sortOrder 는 저장 직전에 배열 순서대로 다시 매긴다 */
+  const move = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= items.length) return;
+    const next = [...items];
+    [next[index], next[target]] = [next[target], next[index]];
+    onChange(next);
+  };
 
   const add = () =>
     onChange([
@@ -121,53 +194,115 @@ function TemplateItemsEditor({
             <div
               key={index}
               style={{
-                display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '10px 12px',
+                display: 'flex', flexDirection: 'column', gap: '6px', padding: '10px 12px',
                 borderTop: index === 0 ? 'none' : '1px solid #f1f5f9',
               }}
             >
-              <input
-                type="number"
-                min={1}
-                max={maxDay}
-                value={item.dayIndex}
-                onChange={(e) => patch(index, {
-                  dayIndex: Math.max(1, Math.min(maxDay, Number(e.target.value) || 1)),
-                })}
-                disabled={disabled}
-                title="일차"
-                style={{ width: '58px', padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-              />
-              <select
-                value={item.type}
-                onChange={(e) => patch(index, { type: e.target.value as TemplateItemPayload['type'] })}
-                disabled={disabled}
-                title="종류"
-                style={{ width: '112px', padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-              >
-                {ITEM_TYPES.map(t => (
-                  <option key={t} value={t}>{getDisplayLabel(t)}</option>
-                ))}
-              </select>
-              <input
-                value={item.title}
-                onChange={(e) => patch(index, { title: e.target.value })}
-                disabled={disabled}
-                placeholder="무엇을 하는지 (필수)"
-                title="제목"
-                style={{ flex: 1, padding: '7px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-              />
-              <button
-                type="button"
-                onClick={() => remove(index)}
-                disabled={disabled}
-                title="이 항목 제거"
-                style={{
-                  border: '1px solid #e2e8f0', background: '#ffffff', borderRadius: '6px',
-                  padding: '7px 8px', cursor: disabled ? 'not-allowed' : 'pointer', color: '#985050',
-                }}
-              >
-                <Trash2 size={14} />
-              </button>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  type="number"
+                  min={1}
+                  max={maxDay}
+                  value={item.dayIndex}
+                  onChange={(e) => patch(index, {
+                    dayIndex: Math.max(1, Math.min(maxDay, Number(e.target.value) || 1)),
+                  })}
+                  disabled={disabled}
+                  title="일차"
+                  style={{ width: '56px', padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                />
+                <select
+                  value={item.type}
+                  onChange={(e) => patch(index, { type: e.target.value as TemplateItemPayload['type'] })}
+                  disabled={disabled}
+                  title="종류"
+                  style={{ width: '108px', padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                >
+                  {ITEM_TYPES.map(t => (
+                    <option key={t} value={t}>{getDisplayLabel(t)}</option>
+                  ))}
+                </select>
+                <input
+                  value={item.title}
+                  onChange={(e) => patch(index, { title: e.target.value })}
+                  disabled={disabled}
+                  placeholder="무엇을 하는지 (필수)"
+                  title="제목"
+                  style={{ flex: 1, minWidth: '120px', padding: '7px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                />
+                <input
+                  type="number"
+                  min={0}
+                  value={item.estimatedMinutes ?? ''}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    patch(index, {
+                      estimatedMinutes: raw === '' ? undefined : Math.max(0, Number(raw) || 0),
+                    });
+                  }}
+                  disabled={disabled}
+                  placeholder="분"
+                  title="예상 소요 시간(분)"
+                  style={{ width: '64px', padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                />
+                <button
+                  type="button" onClick={() => move(index, -1)} disabled={disabled || index === 0}
+                  title="위로" aria-label="위로"
+                  style={{
+                    border: '1px solid #e2e8f0', background: '#ffffff', borderRadius: '6px',
+                    padding: '6px', cursor: disabled || index === 0 ? 'not-allowed' : 'pointer',
+                    opacity: index === 0 ? 0.4 : 1,
+                  }}
+                >
+                  <ChevronUp size={14} />
+                </button>
+                <button
+                  type="button" onClick={() => move(index, 1)} disabled={disabled || index === items.length - 1}
+                  title="아래로" aria-label="아래로"
+                  style={{
+                    border: '1px solid #e2e8f0', background: '#ffffff', borderRadius: '6px',
+                    padding: '6px', cursor: disabled || index === items.length - 1 ? 'not-allowed' : 'pointer',
+                    opacity: index === items.length - 1 ? 0.4 : 1,
+                  }}
+                >
+                  <ChevronDown size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => remove(index)}
+                  disabled={disabled}
+                  title="이 항목 제거"
+                  style={{
+                    border: '1px solid #e2e8f0', background: '#ffffff', borderRadius: '6px',
+                    padding: '6px', cursor: disabled ? 'not-allowed' : 'pointer', color: '#985050',
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+
+              {/* DOCUMENT 항목만 문서를 연결한다. 제목이 아니라 documentId 를 보낸다 */}
+              {item.type === 'DOCUMENT' && (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', paddingLeft: '2px' }}>
+                  <span style={{ fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap' }}>연결 문서</span>
+                  <select
+                    value={item.documentId ?? ''}
+                    onChange={(e) => patch(index, { documentId: e.target.value || undefined })}
+                    disabled={disabled}
+                    style={{ flex: 1, padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px' }}
+                  >
+                    <option value="">연결 안 함</option>
+                    {documents.map(doc => (
+                      <option key={doc.id} value={doc.id}>{doc.title}</option>
+                    ))}
+                  </select>
+                  {documents.length === 0 && (
+                    <span style={{ fontSize: '12px', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                      처리 완료된 문서 없음
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           ))
         )}
@@ -189,6 +324,12 @@ export default function TemplatesPage() {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  // 상세 API 로 받은 템플릿. 편집은 항상 이 값을 근거로 한다
+  const [detail, setDetail] = useState<TemplateResponse | null>(null);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+  // DOCUMENT 항목에서 고를 READY 문서 (편집기 공용)
+  const [readyDocuments, setReadyDocuments] = useState<DocumentResponse[]>([]);
 
   // 생성 폼
   const [newName, setNewName] = useState('');
@@ -283,26 +424,18 @@ export default function TemplatesPage() {
         // 기본으로 지정하지 않으면, 같은 역할에 이미 기본 템플릿이 있을 때
         // 서버가 그쪽을 먼저 골라서 방금 만든 템플릿이 계획에 반영되지 않는다
         isDefault: draftIsDefault,
-        items: draftItems.map((item, index) => ({ ...item, sortOrder: index })),
+        items: toSavePayload(draftItems),
       });
       showToast(`${created.name} 템플릿을 저장했습니다.`, 'success');
       setIsGenerateModalOpen(false);
       setDraft(null);
       await load();
-      setSelectedTemplateId(created.id);
+      await selectTemplate(created.id);
     } catch (err) {
       showToast(err instanceof Error ? err.message : '템플릿 저장에 실패했습니다.', 'error');
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const updateDraftItem = (index: number, patch: Partial<TemplateItemPayload>) => {
-    setDraftItems(prev => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
-  };
-
-  const removeDraftItem = (index: number) => {
-    setDraftItems(prev => prev.filter((_, i) => i !== index));
   };
 
   const toggleGenDoc = (documentId: string) => {
@@ -315,26 +448,15 @@ export default function TemplatesPage() {
     setIsLoading(true);
     setError(null);
     try {
+      // 목록 응답이 items 와 집계(itemCount·유형별 개수·totalEstimatedMinutes)를 함께 준다.
+      // 통계를 화면에서 다시 세지 않고 이 값을 그대로 쓴다.
       const response = await getTemplates();
       const list = response.items ?? [];
 
-      // 목록 API 는 items 를 비워서 준다(GET /templates). 항목 수·기간·카테고리·통계가
-      // 전부 0으로 보이던 원인이라, 상세를 함께 받아 채운다.
-      const detailed = await Promise.all(
-        list.map(async (t) => {
-          try {
-            return await getTemplateDetail(t.id);
-          } catch {
-            // 한 건이 실패해도 목록 전체를 잃지 않는다 (항목만 비어 보인다)
-            return t;
-          }
-        })
-      );
-
-      setTemplates(detailed);
+      setTemplates(list);
       // 목록이 바뀌어도 고른 템플릿이 남아 있으면 유지한다
       setSelectedTemplateId(prev =>
-        prev && detailed.some(t => t.id === prev) ? prev : (detailed[0]?.id ?? null)
+        prev && list.some(t => t.id === prev) ? prev : (list[0]?.id ?? null)
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : '템플릿 목록을 불러오지 못했습니다.');
@@ -344,26 +466,58 @@ export default function TemplatesPage() {
     }
   }, []);
 
+  /** DOCUMENT 항목 연결에 쓸 READY 문서. 편집기 세 곳이 공유한다 */
+  const loadReadyDocuments = useCallback(async () => {
+    try {
+      const response = await getDocuments({ page: 0, size: 100 });
+      setReadyDocuments((response.items ?? []).filter(d => d.status === "READY"));
+    } catch {
+      // 문서를 못 받아도 템플릿 편집 자체는 가능하다 (연결만 못 한다)
+      setReadyDocuments([]);
+    }
+  }, []);
+
   useEffect(() => {
     // 진입 시 1회 조회 (결과 도착 후 setState)
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
-  }, [load]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadReadyDocuments();
+  }, [load, loadReadyDocuments]);
 
+  /**
+   * 고른 템플릿은 상세 API 로 받은 것을 우선 쓴다.
+   * 목록도 items 를 주지만, 편집은 항상 상세를 근거로 해야 다른 사람이 방금 바꾼 항목까지 반영된다.
+   */
   const selectedTemplate = useMemo(
-    () => templates.find(t => t.id === selectedTemplateId) ?? null,
-    [templates, selectedTemplateId]
+    () => (detail && detail.id === selectedTemplateId
+      ? detail
+      : templates.find(t => t.id === selectedTemplateId) ?? null),
+    [detail, templates, selectedTemplateId]
   );
 
-  const stats = useMemo(() => {
-    const roles = new Set(templates.map(t => t.targetRole).filter(Boolean));
-    return {
-      total: templates.length,
-      roleCount: roles.size,
-      itemCount: templates.reduce((sum, t) => sum + (t.items?.length ?? 0), 0),
-      defaultCount: templates.filter(t => t.isDefault).length,
-    };
-  }, [templates]);
+  /** 템플릿을 고르면 상세를 불러온다 */
+  const selectTemplate = useCallback(async (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    setIsDetailLoading(true);
+    try {
+      setDetail(await getTemplateDetail(templateId));
+    } catch (err) {
+      // 상세를 못 받아도 목록 값으로 계속 보여 준다
+      setDetail(null);
+      showToast(err instanceof Error ? err.message : '템플릿 상세를 불러오지 못했습니다.', 'error');
+    } finally {
+      setIsDetailLoading(false);
+    }
+  }, [showToast]);
+
+  // 서버가 주는 itemCount / totalEstimatedMinutes 를 합산한다 (items 를 다시 세지 않는다)
+  const stats = useMemo(() => ({
+    total: templates.length,
+    itemCount: templates.reduce((sum, t) => sum + t.itemCount, 0),
+    totalMinutes: templates.reduce((sum, t) => sum + t.totalEstimatedMinutes, 0),
+    defaultCount: templates.filter(t => t.isDefault).length,
+  }), [templates]);
 
   const visibleTemplates = useMemo(() => {
     const q = keyword.trim().toLowerCase();
@@ -371,22 +525,30 @@ export default function TemplatesPage() {
     return templates.filter(t => t.name.toLowerCase().includes(q));
   }, [templates, keyword]);
 
-  const openEditModal = (template: TemplateResponse) => {
+  /** 목록 응답으로 편집 화면을 구성하지 않는다. 항상 상세 API 를 다시 받아 그 items 로 채운다 */
+  const openEditModal = async (template: TemplateResponse) => {
+    setIsEditModalOpen(true);
     setEditName(template.name);
     setEditRole((template.targetRole ?? 'NEW_HIRE') as WorkspaceRole);
     setEditDescription(template.description ?? '');
     setEditIsDefault(template.isDefault);
-    // 목록에서 온 객체는 items 가 비어 있을 수 있으므로 상세에서 채운 값을 쓴다
-    setEditItems(
-      (template.items ?? []).map(i => ({
-        dayIndex: i.dayIndex,
-        type: i.type,
-        title: i.title,
-        description: i.description ?? undefined,
-        sortOrder: i.sortOrder,
-      }))
-    );
-    setIsEditModalOpen(true);
+    setEditItems([]);
+
+    setIsDetailLoading(true);
+    try {
+      const fresh = await getTemplateDetail(template.id);
+      setDetail(fresh);
+      setEditName(fresh.name);
+      setEditRole((fresh.targetRole ?? 'NEW_HIRE') as WorkspaceRole);
+      setEditDescription(fresh.description ?? '');
+      setEditIsDefault(fresh.isDefault);
+      setEditItems(toPayloads(fresh.items));
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '템플릿 상세를 불러오지 못했습니다.', 'error');
+      setIsEditModalOpen(false);
+    } finally {
+      setIsDetailLoading(false);
+    }
   };
 
   const handleCreate = async () => {
@@ -394,7 +556,12 @@ export default function TemplatesPage() {
       showToast('템플릿 이름을 입력해 주세요.', 'error');
       return;
     }
-    const usable = newItems.filter(i => i.title.trim());
+    const payload = toSavePayload(newItems);
+    // 서버가 빈 items 를 거부한다(@NotEmpty). 400 을 받기 전에 화면에서 막는다
+    if (payload.length === 0) {
+      showToast('항목을 1개 이상 추가해 주세요. 항목이 없는 템플릿은 저장할 수 없습니다.', 'error');
+      return;
+    }
     setIsSaving(true);
     try {
       const created = await createTemplate({
@@ -402,20 +569,15 @@ export default function TemplatesPage() {
         targetRole: newRole,
         description: newDescription.trim() || undefined,
         isDefault: newIsDefault,
-        items: usable.map((item, index) => ({ ...item, title: item.title.trim(), sortOrder: index })),
+        items: payload,
       });
-      showToast(
-        usable.length === 0
-          ? '템플릿을 생성했습니다. 항목이 없어 계획에는 반영되지 않습니다.'
-          : `템플릿을 생성했습니다. (항목 ${usable.length}개)`,
-        usable.length === 0 ? 'error' : 'success'
-      );
+      showToast(`템플릿을 생성했습니다. (항목 ${payload.length}개)`, 'success');
       setIsCreationModalOpen(false);
       setNewName('');
       setNewDescription('');
       setNewItems([]);
       await load();
-      setSelectedTemplateId(created.id);
+      await selectTemplate(created.id);
     } catch (err) {
       showToast(err instanceof Error ? err.message : '템플릿 생성에 실패했습니다.', 'error');
     } finally {
@@ -429,9 +591,13 @@ export default function TemplatesPage() {
       showToast('템플릿 이름을 입력해 주세요.', 'error');
       return;
     }
+    const payload = toSavePayload(editItems);
+    if (payload.length === 0) {
+      showToast('항목을 1개 이상 남겨 주세요. 항목이 없으면 계획에 반영되지 않습니다.', 'error');
+      return;
+    }
     setIsSaving(true);
     try {
-      const usable = editItems.filter(i => i.title.trim());
       await updateTemplate(selectedTemplate.id, {
         name: editName.trim(),
         targetRole: editRole,
@@ -439,11 +605,12 @@ export default function TemplatesPage() {
         isDefault: editIsDefault,
         // 서버는 items 가 있으면 기존 항목을 지우고 새로 저장한다.
         // 편집기에서 불러온 값을 그대로 되돌려 보내야 기존 항목이 사라지지 않는다.
-        items: usable.map((item, index) => ({ ...item, title: item.title.trim(), sortOrder: index })),
+        items: payload,
       });
       showToast('변경 내용을 저장했습니다. 기존 계획은 재생성해야 반영됩니다.', 'success');
       setIsEditModalOpen(false);
       await load();
+      await selectTemplate(selectedTemplate.id);
     } catch (err) {
       showToast(err instanceof Error ? err.message : '템플릿 수정에 실패했습니다.', 'error');
     } finally {
@@ -467,7 +634,7 @@ export default function TemplatesPage() {
     }
   };
 
-  const selectedCategories = categoriesOf(selectedTemplate?.items ?? null);
+  const selectedCategories = selectedTemplate ? typeCountsOf(selectedTemplate) : [];
 
   return (
     <div className={styles.container}>
@@ -488,6 +655,7 @@ export default function TemplatesPage() {
           <div className={styles.statsWrapper}>
             <div className={styles.statCard}><LayoutTemplate size={22} /><div><span>전체 템플릿</span><strong>{stats.total}<small>개</small></strong><p>등록된 템플릿 수</p></div></div>
             <div className={styles.statCard}><FileText size={22} /><div><span>총 항목</span><strong>{stats.itemCount}<small>개</small></strong><p>모든 템플릿 항목 수</p></div></div>
+            <div className={styles.statCard}><Clock size={22} /><div><span>총 예상 시간</span><strong>{formatMinutes(stats.totalMinutes)}</strong><p>모든 템플릿 합계</p></div></div>
             <div className={styles.statCard}><CircleCheck size={22} /><div><span>기본</span><strong>{stats.defaultCount}<small>개</small></strong><p>기본으로 지정된 템플릿</p></div></div>
           </div>
 
@@ -521,7 +689,7 @@ export default function TemplatesPage() {
                     <div
                       key={t.id}
                       className={`${styles.template} ${selectedTemplateId === t.id ? styles.selectedTemplate : ''}`}
-                      onClick={() => setSelectedTemplateId(t.id)}
+                      onClick={() => void selectTemplate(t.id)}
                     >
                       <div className={`${styles.templateIcon} ${t.targetRole === 'MANAGER' ? styles.managerIcon : ''}`}>
                         {t.targetRole === 'MANAGER' ? <Crown size={20} /> : <UsersRound size={20} />}
@@ -534,7 +702,7 @@ export default function TemplatesPage() {
                             {t.isDefault ? '기본' : '일반'}
                           </span>
                         </div>
-                        <div className={styles.meta}>{t.items?.length ?? 0}개 항목</div>
+                        <div className={styles.meta}>{t.itemCount}개 항목 · {formatMinutes(t.totalEstimatedMinutes)}</div>
                         <div className={styles.date}>{formatUpdatedAt(t.updatedAt)}</div>
                       </div>
                     </div>
@@ -571,8 +739,8 @@ export default function TemplatesPage() {
                     {formatUpdatedAt(selectedTemplate.updatedAt)}
                   </p>
                   <div className={styles.stats2}>
-                    <div><div>{selectedTemplate.items?.length ?? 0}</div><div>총 항목</div></div>
-                    <div><div>{selectedCategories.length}</div><div>항목 종류</div></div>
+                    <div><div>{selectedTemplate.itemCount}</div><div>총 항목</div></div>
+                    <div><div>{formatMinutes(selectedTemplate.totalEstimatedMinutes)}</div><div>예상 시간</div></div>
                     <div><div>{durationOf(selectedTemplate.items)}일차</div><div>마지막 일차</div></div>
                     <div><div>{selectedTemplate.isDefault ? '기본' : '일반'}</div><div>지정 상태</div></div>
                   </div>
@@ -590,7 +758,7 @@ export default function TemplatesPage() {
                     )}
                   </div>
                   <div className={styles.actions}>
-                    <button onClick={() => openEditModal(selectedTemplate)}><Edit2 size={16} /> 편집</button>
+                    <button onClick={() => void openEditModal(selectedTemplate)}><Edit2 size={16} /> 편집</button>
                     <button className={styles.delete} onClick={() => setIsDeleteModalOpen(true)}><Trash2 size={16} /> 삭제</button>
                   </div>
                 </>
@@ -654,6 +822,7 @@ export default function TemplatesPage() {
               items={newItems}
               maxDay={30}
               disabled={isSaving}
+              documents={readyDocuments}
               onChange={setNewItems}
             />
           </div>
@@ -680,16 +849,34 @@ export default function TemplatesPage() {
         >
           <div className={styles.detail}><strong>역할:</strong> {selectedTemplate.targetRole ? getDisplayLabel(selectedTemplate.targetRole) : '역할 미지정'}</div>
           <div className={styles.detail}><strong>지정 상태:</strong> {selectedTemplate.isDefault ? '기본 템플릿' : '일반 템플릿'}</div>
-          <div className={styles.detail}><strong>항목 수:</strong> {selectedTemplate.items?.length ?? 0}</div>
-          <div className={styles.detail}><strong>권장 기간:</strong> {durationOf(selectedTemplate.items)}일</div>
+          <div className={styles.detail}><strong>항목 수:</strong> {selectedTemplate.itemCount}</div>
+          <div className={styles.detail}>
+            <strong>유형별:</strong>{' '}
+            {typeCountsOf(selectedTemplate).map(c => `${c.name} ${c.itemCount}`).join(' · ') || '없음'}
+          </div>
+          <div className={styles.detail}>
+            <strong>총 예상 시간:</strong> {formatMinutes(selectedTemplate.totalEstimatedMinutes)}
+          </div>
+          <div className={styles.detail}><strong>마지막 일차:</strong> {durationOf(selectedTemplate.items)}일차</div>
           <div className={styles.detail}><strong>설명:</strong> {selectedTemplate.description || '설명이 없습니다.'}</div>
+          {isDetailLoading && <div className={styles.detail}>항목을 불러오는 중...</div>}
           {(selectedTemplate.items ?? [])
             .slice()
             .sort((a, b) => a.dayIndex - b.dayIndex || a.sortOrder - b.sortOrder)
             .map(item => (
               <div key={item.id} className={styles.templateItem}>
-                <div>{item.dayIndex}일차 · {item.title}</div>
-                <span>{getDisplayLabel(item.type)}</span>
+                <div>
+                  {item.dayIndex}일차 · {item.title}
+                  {item.documentId && (
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>
+                      {' '}· 문서 {documentTitleOf(item.documentId, readyDocuments)}
+                    </span>
+                  )}
+                </div>
+                <span>
+                  {getDisplayLabel(item.type)}
+                  {item.estimatedMinutes != null && ` · ${item.estimatedMinutes}분`}
+                </span>
               </div>
             ))}
         </Modal>
@@ -743,6 +930,7 @@ export default function TemplatesPage() {
               items={editItems}
               maxDay={30}
               disabled={isSaving}
+              documents={readyDocuments}
               onChange={setEditItems}
             />
           </div>
@@ -906,59 +1094,13 @@ export default function TemplatesPage() {
                 />
               </label>
 
-              <div style={{ maxHeight: '340px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
-                {draftItems.map((item, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '10px 12px',
-                      borderTop: index === 0 ? 'none' : '1px solid #f1f5f9',
-                    }}
-                  >
-                    <input
-                      type="number"
-                      min={1}
-                      max={genPlanDays}
-                      value={item.dayIndex}
-                      onChange={(e) => updateDraftItem(index, {
-                        dayIndex: Math.max(1, Math.min(genPlanDays, Number(e.target.value) || 1)),
-                      })}
-                      disabled={isSaving}
-                      title="일차"
-                      style={{ width: '58px', padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                    />
-                    <select
-                      value={item.type}
-                      onChange={(e) => updateDraftItem(index, { type: e.target.value as TemplateItemPayload['type'] })}
-                      disabled={isSaving}
-                      title="종류"
-                      style={{ width: '112px', padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                    >
-                      {(['DOCUMENT', 'CHECKLIST', 'PERSON', 'PRACTICE'] as const).map(t => (
-                        <option key={t} value={t}>{getDisplayLabel(t)}</option>
-                      ))}
-                    </select>
-                    <input
-                      value={item.title}
-                      onChange={(e) => updateDraftItem(index, { title: e.target.value })}
-                      disabled={isSaving}
-                      title="제목"
-                      style={{ flex: 1, padding: '7px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                    />
-                    <button
-                      onClick={() => removeDraftItem(index)}
-                      disabled={isSaving}
-                      title="이 항목 제거"
-                      style={{
-                        border: '1px solid #e2e8f0', background: '#ffffff', borderRadius: '6px',
-                        padding: '7px 8px', cursor: 'pointer', color: '#985050',
-                      }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <TemplateItemsEditor
+                items={draftItems}
+                maxDay={genPlanDays}
+                disabled={isSaving}
+                documents={readyDocuments}
+                onChange={setDraftItems}
+              />
 
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px', color: '#475569', lineHeight: 1.6 }}>
                 <input

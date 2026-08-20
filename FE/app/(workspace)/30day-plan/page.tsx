@@ -70,6 +70,37 @@ function groupByDay(items: PlanItemResponse[]): PlanDay[] {
 /** 관리자만 계획 재생성을 할 수 있다 (서버 권한과 맞춘다) */
 const ADMIN_ROLES = new Set(['OWNER', 'ADMIN', 'MANAGER']);
 
+/** 서버 PlanResponse.generatedBy 를 화면 문구로 */
+const GENERATED_BY_LABEL: Record<string, string> = {
+  TEMPLATE: '템플릿 기반',
+  AI: 'AI 생성',
+  FALLBACK: '기본 골격',
+};
+
+/** sourceTemplateId 로 템플릿 이름을 찾는다. 목록을 아직 못 받았으면 빈 문자열 */
+function templateNameOf(templateId: string, templates: TemplateResponse[]): string {
+  return templates.find(t => t.id === templateId)?.name ?? '';
+}
+
+/**
+ * 이 역할의 계획에 실제로 쓸 수 있는 템플릿만 남긴다.
+ * 서버가 거부하는 조합을 고를 수 있게 두면 400 을 맞기 때문이다.
+ *
+ * - 역할 불일치: "대상 역할과 호환되지 않는 템플릿입니다" (400)
+ * - documentId 가 없는 DOCUMENT 항목이 있는 옛 템플릿:
+ *   "선택한 템플릿에 대상 사용자가 접근할 수 없는 문서가 있습니다" (400)
+ *   자동 선택으로는 그 항목만 걸러져 통과하지만, 직접 고르면 거부된다.
+ */
+function selectableTemplates(templates: TemplateResponse[], role: string | undefined) {
+  return templates.filter(t => {
+    if (t.targetRole && role && t.targetRole !== role) return false;
+    const hasUnlinkedDocument = (t.items ?? []).some(
+      i => i.type === 'DOCUMENT' && !i.documentId
+    );
+    return !hasUnlinkedDocument;
+  });
+}
+
 export default function ThirtyDayPlanPage() {
   const router = useRouter();
   const me = useMe();
@@ -113,11 +144,27 @@ export default function ThirtyDayPlanPage() {
     }
   }, []);
 
+  /**
+   * 템플릿 목록. 생성 모달의 선택지와, 계획의 sourceTemplateId 이름 표시에 쓴다.
+   * 목록 조회는 OWNER/ADMIN/MANAGER 만 가능하므로 그 권한일 때만 부른다 (신입은 403).
+   */
+  const loadTemplates = useCallback(async () => {
+    if (!canRegenerate) return;
+    try {
+      const response = await getTemplates();
+      setTemplates(response.items ?? []);
+    } catch {
+      // 템플릿을 못 불러와도 계획 조회·생성 자체는 가능하다 (서버가 자동으로 고른다)
+      setTemplates([]);
+    }
+  }, [canRegenerate]);
+
   useEffect(() => {
     // 진입 시 1회 조회 (결과 도착 후 setState)
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
-  }, [load]);
+    void loadTemplates();
+  }, [load, loadTemplates]);
 
   const days = useMemo(() => groupByDay(plan?.items ?? []), [plan]);
   const selectedDay = useMemo(
@@ -161,16 +208,16 @@ export default function ThirtyDayPlanPage() {
   const totalCount = allItems.length;
   const overallPercent = Math.round(Number(plan?.progressPercent ?? 0));
 
-  /** 생성 모달을 열 때 고를 수 있는 템플릿을 함께 불러온다 */
+  // 서버가 거부하는 조합을 고를 수 없게, 쓸 수 있는 템플릿만 드롭다운에 넣는다
+  const usableTemplates = useMemo(
+    () => selectableTemplates(templates, me?.currentWorkspace?.role),
+    [templates, me?.currentWorkspace?.role]
+  );
+
+
   const openGenerationModal = async () => {
     setIsPlanGenerationModalOpen(true);
-    try {
-      const response = await getTemplates();
-      setTemplates(response.items ?? []);
-    } catch {
-      // 템플릿을 못 불러와도 생성 자체는 가능하다 (서버가 자동으로 고른다)
-      setTemplates([]);
-    }
+    await loadTemplates();
   };
 
   const handleGeneratePlan = async () => {
@@ -178,17 +225,17 @@ export default function ThirtyDayPlanPage() {
     try {
       const templateId = selectedTemplateId || undefined;
 
-      // 템플릿을 직접 골랐다면 regenerate 를 쓸 수 없다.
-      // 서버 regenerate 는 templateId 를 받지 않아 매번 자동 선택으로 돌아가기 때문이다.
-      if (plan?.planId && generationMode === 'keep' && !templateId) {
-        await regenerateOnboardingPlan(plan.planId, true);
-        showToast('완료 항목을 유지하고 계획을 다시 생성했습니다.', 'success');
-      } else if (plan?.planId) {
-        await generateOnboardingPlan({ force: true, templateId });
+      if (plan?.planId) {
+        // 재생성은 templateId 와 preserveCompleted 를 함께 받는다.
+        // templateId 를 비우면 서버가 기존 계획의 템플릿을 재사용한다.
+        const result = await regenerateOnboardingPlan(plan.planId, {
+          templateId,
+          preserveCompleted: generationMode === 'keep',
+        });
         showToast(
-          templateId
-            ? '고른 템플릿으로 계획을 다시 만들었습니다. 완료 기록은 유지되지 않습니다.'
-            : '계획을 다시 생성했습니다.',
+          generationMode === 'keep'
+            ? `완료 항목을 유지하고 다시 만들었습니다. (v${result.version})`
+            : `계획을 새로 만들었습니다. (v${result.version})`,
           'success'
         );
       } else {
@@ -363,9 +410,25 @@ export default function ThirtyDayPlanPage() {
                           {day.items.map((item) => (
                             <div key={item.id} className={styles.itemRow}>
                               <span className={styles.itemMeta}>
-                                <span>{getDisplayLabel(item.type)} · {item.title}</span>
+                                <span>
+                                  {getDisplayLabel(item.type)} · {item.title}
+                                  {item.estimatedMinutes != null && ` · 약 ${item.estimatedMinutes}분`}
+                                </span>
                                 {item.description && <span>{item.description}</span>}
                                 {item.personName && <span>담당자: {item.personName}</span>}
+                                {item.documentId && (
+                                  <button
+                                    type="button"
+                                    onClick={() => router.push(`/document-detail?id=${item.documentId}`)}
+                                    style={{
+                                      alignSelf: 'flex-start', border: 'none', background: 'none',
+                                      padding: 0, color: '#0765FC', fontSize: '12.5px',
+                                      textDecoration: 'underline', cursor: 'pointer',
+                                    }}
+                                  >
+                                    연결 문서 열기
+                                  </button>
+                                )}
                               </span>
                               <button
                                 className={styles.itemToggle}
@@ -430,6 +493,14 @@ export default function ThirtyDayPlanPage() {
               <span className={styles.footerCheck}><Check size={15} /></span>
               <span>
                 전체 진행률: <strong>{overallPercent}%</strong> ({completedCount}/{totalCount} 완료)
+                {plan && (
+                  <>
+                    {' · '}v{plan.version}
+                    {plan.generatedBy && ` · ${GENERATED_BY_LABEL[plan.generatedBy]}`}
+                    {plan.sourceTemplateId && templateNameOf(plan.sourceTemplateId, templates) &&
+                      ` · ${templateNameOf(plan.sourceTemplateId, templates)}`}
+                  </>
+                )}
               </span>
             </div>
             <button className={styles.generateBtn} onClick={() => setIsPlanActionModalOpen(true)}>
@@ -593,19 +664,27 @@ export default function ThirtyDayPlanPage() {
                 disabled={isGenerating}
                 style={{ width: '100%', padding: '9px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
               >
-                <option value="">자동 선택 (내 역할용 → 기본 → 기본 골격)</option>
-                {templates.map(t => (
+                <option value="">자동 선택 (기본 템플릿 → AI 계획 → 기본 골격)</option>
+                {usableTemplates.map(t => (
                   <option key={t.id} value={t.id}>
                     {t.name}
                     {t.targetRole ? ` · ${getDisplayLabel(t.targetRole)}` : ''}
                     {t.isDefault ? ' · 기본' : ''}
+                    {` · 항목 ${t.itemCount}개`}
                   </option>
                 ))}
               </select>
-              {templates.length === 0 && (
+              {usableTemplates.length === 0 && (
                 <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px', lineHeight: 1.6 }}>
-                  등록된 템플릿이 없습니다. 템플릿 화면에서 문서로 AI 템플릿을 만들면
-                  문서 내용에 맞는 계획이 생성됩니다.
+                  {templates.length === 0
+                    ? '등록된 템플릿이 없습니다. 템플릿 화면에서 문서로 AI 템플릿을 만들면 문서 내용에 맞는 계획이 생성됩니다.'
+                    : '이 역할에 바로 쓸 수 있는 템플릿이 없습니다. 자동 선택으로 진행하거나, 템플릿 화면에서 이 역할용 템플릿을 만들어 주세요.'}
+                </p>
+              )}
+              {templates.length > usableTemplates.length && (
+                <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px', lineHeight: 1.6 }}>
+                  역할이 다르거나 문서 연결이 빠진 템플릿 {templates.length - usableTemplates.length}개는
+                  선택할 수 없어 목록에서 제외했습니다.
                 </p>
               )}
             </div>
@@ -619,12 +698,8 @@ export default function ThirtyDayPlanPage() {
                     value="keep"
                     checked={generationMode === 'keep'}
                     onChange={() => setGenerationMode('keep')}
-                    disabled={!!selectedTemplateId}
                   />
-                  <label style={{ opacity: selectedTemplateId ? 0.5 : 1 }}>
-                    완료한 항목은 유지하고 재생성
-                    {selectedTemplateId && ' (템플릿을 고르면 사용할 수 없습니다)'}
-                  </label>
+                  <label>완료한 항목은 유지하고 재생성</label>
                 </div>
                 <div className={styles.generationOption}>
                   <input
