@@ -93,11 +93,34 @@ public class TemplateService {
 
     @Transactional(readOnly = true)
     public List<OnboardingTemplateItem> loadItemsForPlan(UUID workspaceId, UUID templateId) {
+        return loadItemsForPlan(workspaceId, templateId, null);
+    }
+
+    /**
+     * 계획 생성에 쓸 템플릿 항목을 고른다. 우선순위는
+     * 명시된 템플릿 → 대상 역할용 템플릿 → 워크스페이스 기본 템플릿 → 없음(호출자가 기본 골격 사용).
+     *
+     * @param memberRole 계획을 받을 멤버의 역할. null 이면 역할 매칭을 건너뛴다
+     */
+    @Transactional(readOnly = true)
+    public List<OnboardingTemplateItem> loadItemsForPlan(UUID workspaceId, UUID templateId, UserRole memberRole) {
         if (templateId != null) {
             OnboardingTemplate t = templateRepository.findByIdAndWorkspaceIdAndDeletedAtIsNull(templateId, workspaceId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "템플릿이 없습니다."));
             return itemRepository.findByTemplateIdOrderByDayIndexAscSortOrderAsc(t.getId());
         }
+
+        if (memberRole != null) {
+            List<OnboardingTemplateItem> byRole = templateRepository
+                    .findFirstByWorkspaceIdAndTargetRoleAndDeletedAtIsNullOrderByIsDefaultDescCreatedAtDesc(
+                            workspaceId, memberRole)
+                    .map(t -> itemRepository.findByTemplateIdOrderByDayIndexAscSortOrderAsc(t.getId()))
+                    .orElse(List.of());
+            if (!byRole.isEmpty()) {
+                return byRole;
+            }
+        }
+
         return templateRepository.findFirstByWorkspaceIdAndIsDefaultTrueAndDeletedAtIsNull(workspaceId)
                 .map(t -> itemRepository.findByTemplateIdOrderByDayIndexAscSortOrderAsc(t.getId()))
                 .orElse(List.of());

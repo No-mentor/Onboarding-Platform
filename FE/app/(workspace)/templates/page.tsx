@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Edit2, Trash2, Search, MoreVertical, LayoutTemplate, UsersRound, FileText, CircleCheck, Crown } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, MoreVertical, LayoutTemplate, UsersRound, FileText, CircleCheck, Crown, Sparkles } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton, ModalDangerButton } from '@/components/ui/modal';
 import { useToast } from '@/components/ui/toast';
@@ -9,10 +9,15 @@ import { getDisplayLabel } from '@/lib/display-labels';
 import {
   createTemplate,
   deleteTemplate,
+  generateTemplate,
+  getDocuments,
   getMembers,
   getTemplates,
   updateTemplate,
+  type DocumentResponse,
+  type GeneratedTemplateResponse,
   type MemberResponse,
+  type TemplateItemPayload,
   type TemplateItemResponse,
   type TemplateResponse,
   type WorkspaceRole,
@@ -81,6 +86,105 @@ export default function TemplatesPage() {
   const [isMembersLoading, setIsMembersLoading] = useState(false);
 
   const [keyword, setKeyword] = useState('');
+
+  // === AI 템플릿 생성 ===
+  // 생성은 저장하지 않고 초안만 받는다. 검토·수정 후 저장 버튼을 눌러야 실제로 만들어진다.
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [genRole, setGenRole] = useState<WorkspaceRole>('NEW_HIRE');
+  const [genDepartment, setGenDepartment] = useState('');
+  const [genPlanDays, setGenPlanDays] = useState(30);
+  const [genDocuments, setGenDocuments] = useState<DocumentResponse[]>([]);
+  const [genSelectedDocIds, setGenSelectedDocIds] = useState<string[]>([]);
+  const [isDocsLoading, setIsDocsLoading] = useState(false);
+  /** 생성된 초안. null 이면 아직 조건 입력 단계 */
+  const [draft, setDraft] = useState<GeneratedTemplateResponse | null>(null);
+  const [draftName, setDraftName] = useState('');
+  const [draftItems, setDraftItems] = useState<TemplateItemPayload[]>([]);
+
+  const openGenerateModal = async () => {
+    setDraft(null);
+    setDraftItems([]);
+    setGenSelectedDocIds([]);
+    setIsGenerateModalOpen(true);
+
+    setIsDocsLoading(true);
+    try {
+      // READY 문서만 근거로 쓸 수 있다 (텍스트 추출이 끝난 것)
+      const response = await getDocuments({ page: 0, size: 100 });
+      setGenDocuments((response.items ?? []).filter(d => d.status === 'READY'));
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '문서 목록을 불러오지 못했습니다.', 'error');
+      setGenDocuments([]);
+    } finally {
+      setIsDocsLoading(false);
+    }
+  };
+
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    try {
+      const result = await generateTemplate({
+        targetRole: genRole,
+        department: genDepartment.trim() || undefined,
+        documentIds: genSelectedDocIds.length > 0 ? genSelectedDocIds : undefined,
+        planDays: genPlanDays,
+      });
+      setDraft(result);
+      setDraftName(result.name);
+      setDraftItems(result.items);
+      if (!result.aiGenerated) {
+        showToast(result.fallbackReason ?? 'AI를 사용할 수 없어 기본 골격을 만들었습니다.', 'error');
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'AI 템플릿 생성에 실패했습니다.', 'error');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!draftName.trim()) {
+      showToast('템플릿 이름을 입력해 주세요.', 'error');
+      return;
+    }
+    if (draftItems.length === 0) {
+      showToast('항목이 하나도 없습니다.', 'error');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const created = await createTemplate({
+        name: draftName.trim(),
+        targetRole: draft?.targetRole ?? genRole,
+        description: draft?.description ?? undefined,
+        items: draftItems.map((item, index) => ({ ...item, sortOrder: index })),
+      });
+      showToast(`${created.name} 템플릿을 저장했습니다.`, 'success');
+      setIsGenerateModalOpen(false);
+      setDraft(null);
+      await load();
+      setSelectedTemplateId(created.id);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '템플릿 저장에 실패했습니다.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const updateDraftItem = (index: number, patch: Partial<TemplateItemPayload>) => {
+    setDraftItems(prev => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  };
+
+  const removeDraftItem = (index: number) => {
+    setDraftItems(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const toggleGenDoc = (documentId: string) => {
+    setGenSelectedDocIds(prev =>
+      prev.includes(documentId) ? prev.filter(id => id !== documentId) : [...prev, documentId]
+    );
+  };
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -223,7 +327,12 @@ export default function TemplatesPage() {
       <main className={styles.main}>
         <header className={styles.header}>
           <div><h1>온보딩 템플릿</h1><p>역할별 30일 인수인계 구성을 템플릿으로 관리하세요.</p></div>
-          <button className={styles.createBtn} onClick={() => setIsCreationModalOpen(true)}><Plus size={16} /> 템플릿 생성</button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className={styles.createBtn} onClick={() => void openGenerateModal()}>
+              <Sparkles size={16} /> 문서로 AI 생성
+            </button>
+            <button className={styles.createBtn} onClick={() => setIsCreationModalOpen(true)}><Plus size={16} /> 템플릿 생성</button>
+          </div>
         </header>
 
         <div className={styles.content}>
@@ -547,6 +656,201 @@ export default function TemplatesPage() {
           }
         >
           <p>‘{selectedTemplate.name}’을(를) 삭제하시겠습니까?</p>
+        </Modal>
+      )}
+
+      {/* 8. 문서로 AI 템플릿 생성 — 초안을 검토·수정한 뒤 저장한다 */}
+      {isGenerateModalOpen && (
+        <Modal
+          open
+          onClose={() => setIsGenerateModalOpen(false)}
+          title="문서로 AI 템플릿 생성"
+          subtitle={draft ? '내용을 확인하고 수정한 뒤 저장하세요.' : '업로드된 문서를 근거로 온보딩 항목을 만듭니다.'}
+          size="lg"
+          closeOnBackdrop={!isGenerating && !isSaving}
+          footer={
+            draft ? (
+              <>
+                <ModalSecondaryButton onClick={() => setDraft(null)} disabled={isSaving}>
+                  조건 다시 설정
+                </ModalSecondaryButton>
+                <ModalPrimaryButton loading={isSaving} onClick={() => void handleSaveDraft()}>
+                  템플릿으로 저장 ({draftItems.length}개 항목)
+                </ModalPrimaryButton>
+              </>
+            ) : (
+              <>
+                <ModalSecondaryButton onClick={() => setIsGenerateModalOpen(false)} disabled={isGenerating}>
+                  취소
+                </ModalSecondaryButton>
+                <ModalPrimaryButton loading={isGenerating} onClick={() => void handleGenerate()}>
+                  생성하기
+                </ModalPrimaryButton>
+              </>
+            )
+          }
+        >
+          {!draft ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <label style={{ flex: '1 1 160px', fontSize: '13px', color: '#475569' }}>
+                  대상 역할
+                  <select
+                    value={genRole}
+                    onChange={(e) => setGenRole(e.target.value as WorkspaceRole)}
+                    disabled={isGenerating}
+                    style={{ width: '100%', marginTop: '6px', padding: '9px 10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                  >
+                    {ROLE_OPTIONS.map(role => (
+                      <option key={role} value={role}>{getDisplayLabel(role)}</option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ flex: '1 1 160px', fontSize: '13px', color: '#475569' }}>
+                  부서 (선택)
+                  <input
+                    value={genDepartment}
+                    onChange={(e) => setGenDepartment(e.target.value)}
+                    placeholder="예: 마케팅팀"
+                    disabled={isGenerating}
+                    style={{ width: '100%', marginTop: '6px', padding: '9px 10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                  />
+                </label>
+                <label style={{ flex: '0 0 110px', fontSize: '13px', color: '#475569' }}>
+                  기간(일)
+                  <input
+                    type="number"
+                    min={7}
+                    max={30}
+                    value={genPlanDays}
+                    onChange={(e) => setGenPlanDays(Math.max(7, Math.min(30, Number(e.target.value) || 30)))}
+                    disabled={isGenerating}
+                    style={{ width: '100%', marginTop: '6px', padding: '9px 10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                  />
+                </label>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '13px', color: '#475569', marginBottom: '8px' }}>
+                  근거 문서 {genSelectedDocIds.length > 0 ? `(${genSelectedDocIds.length}건 선택)` : '(선택 안 하면 전체 사용)'}
+                </div>
+                <div style={{ maxHeight: '190px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+                  {isDocsLoading ? (
+                    <div style={{ padding: '14px', fontSize: '13px', color: '#64748b' }}>문서를 불러오는 중...</div>
+                  ) : genDocuments.length === 0 ? (
+                    <div style={{ padding: '14px', fontSize: '13px', color: '#64748b' }}>
+                      처리 완료된 문서가 없습니다. 문서를 업로드하면 그 내용을 근거로 계획을 만듭니다.
+                    </div>
+                  ) : (
+                    genDocuments.map((doc, index) => (
+                      <label
+                        key={doc.id}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px',
+                          borderTop: index === 0 ? 'none' : '1px solid #f1f5f9', fontSize: '13px', cursor: 'pointer',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={genSelectedDocIds.includes(doc.id)}
+                          onChange={() => toggleGenDoc(doc.id)}
+                          disabled={isGenerating}
+                        />
+                        <span style={{ color: '#0f172a', wordBreak: 'break-all' }}>{doc.title}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <p style={{ fontSize: '12px', color: '#94a3b8', lineHeight: 1.7, margin: 0 }}>
+                생성에 10초 이상 걸릴 수 있습니다. 결과는 바로 저장되지 않으니, 확인하고 고친 뒤 저장하세요.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{
+                padding: '12px 14px', borderRadius: '10px', fontSize: '12.5px', lineHeight: 1.7,
+                backgroundColor: draft.aiGenerated ? '#eff6ff' : '#fffbeb',
+                border: `1px solid ${draft.aiGenerated ? '#dbeafe' : '#fde68a'}`,
+                color: draft.aiGenerated ? '#1e40af' : '#92400e',
+              }}>
+                {draft.aiGenerated
+                  ? <>문서 {draft.sourceDocuments.length}건을 근거로 {draft.model} 이(가) 만든 초안입니다. 사실과 다른 항목이 있을 수 있으니 확인해 주세요.</>
+                  : <>{draft.fallbackReason} 항목을 직접 수정해 사용하세요.</>}
+              </div>
+
+              <label style={{ fontSize: '13px', color: '#475569' }}>
+                템플릿 이름
+                <input
+                  value={draftName}
+                  onChange={(e) => setDraftName(e.target.value)}
+                  disabled={isSaving}
+                  style={{ width: '100%', marginTop: '6px', padding: '9px 10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                />
+              </label>
+
+              <div style={{ maxHeight: '340px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+                {draftItems.map((item, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '10px 12px',
+                      borderTop: index === 0 ? 'none' : '1px solid #f1f5f9',
+                    }}
+                  >
+                    <input
+                      type="number"
+                      min={1}
+                      max={genPlanDays}
+                      value={item.dayIndex}
+                      onChange={(e) => updateDraftItem(index, {
+                        dayIndex: Math.max(1, Math.min(genPlanDays, Number(e.target.value) || 1)),
+                      })}
+                      disabled={isSaving}
+                      title="일차"
+                      style={{ width: '58px', padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                    />
+                    <select
+                      value={item.type}
+                      onChange={(e) => updateDraftItem(index, { type: e.target.value as TemplateItemPayload['type'] })}
+                      disabled={isSaving}
+                      title="종류"
+                      style={{ width: '112px', padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                    >
+                      {(['DOCUMENT', 'CHECKLIST', 'PERSON', 'PRACTICE'] as const).map(t => (
+                        <option key={t} value={t}>{getDisplayLabel(t)}</option>
+                      ))}
+                    </select>
+                    <input
+                      value={item.title}
+                      onChange={(e) => updateDraftItem(index, { title: e.target.value })}
+                      disabled={isSaving}
+                      title="제목"
+                      style={{ flex: 1, padding: '7px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                    />
+                    <button
+                      onClick={() => removeDraftItem(index)}
+                      disabled={isSaving}
+                      title="이 항목 제거"
+                      style={{
+                        border: '1px solid #e2e8f0', background: '#ffffff', borderRadius: '6px',
+                        padding: '7px 8px', cursor: 'pointer', color: '#985050',
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {draft.sourceDocuments.length > 0 && (
+                <p style={{ fontSize: '12px', color: '#94a3b8', lineHeight: 1.7, margin: 0 }}>
+                  근거 문서: {draft.sourceDocuments.join(', ')}
+                </p>
+              )}
+            </div>
+          )}
         </Modal>
       )}
 

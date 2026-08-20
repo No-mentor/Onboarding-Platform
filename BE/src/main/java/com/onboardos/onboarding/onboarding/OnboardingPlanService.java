@@ -12,6 +12,8 @@ import com.onboardos.onboarding.domain.plan.OnboardingPlanItemRepository;
 import com.onboardos.onboarding.domain.plan.OnboardingPlanRepository;
 import com.onboardos.onboarding.domain.plan.PlanItemType;
 import com.onboardos.onboarding.domain.plan.PlanStatus;
+import com.onboardos.onboarding.domain.user.Membership;
+import com.onboardos.onboarding.domain.user.MembershipRepository;
 import com.onboardos.onboarding.domain.template.OnboardingTemplateItem;
 import com.onboardos.onboarding.domain.user.UserRole;
 import com.onboardos.onboarding.global.exception.BusinessException;
@@ -43,6 +45,7 @@ public class OnboardingPlanService {
     private final OnboardingPlanItemRepository planItemRepository;
     private final ChecklistItemRepository checklistItemRepository;
     private final DocumentRepository documentRepository;
+    private final MembershipRepository membershipRepository;
     private final WorkspaceAccessService workspaceAccessService;
     private final TemplateService templateService;
 
@@ -51,6 +54,7 @@ public class OnboardingPlanService {
             OnboardingPlanItemRepository planItemRepository,
             ChecklistItemRepository checklistItemRepository,
             DocumentRepository documentRepository,
+            MembershipRepository membershipRepository,
             WorkspaceAccessService workspaceAccessService,
             @Lazy TemplateService templateService
     ) {
@@ -58,6 +62,7 @@ public class OnboardingPlanService {
         this.planItemRepository = planItemRepository;
         this.checklistItemRepository = checklistItemRepository;
         this.documentRepository = documentRepository;
+        this.membershipRepository = membershipRepository;
         this.workspaceAccessService = workspaceAccessService;
         this.templateService = templateService;
     }
@@ -88,7 +93,10 @@ public class OnboardingPlanService {
                         throw new BusinessException(ErrorCode.CONFLICT, "이미 활성 온보딩 계획이 있습니다. force=true로 재생성하세요.");
                     }
                     existing.archive();
-                    planRepository.save(existing);
+                    // uq_active_plan 은 (workspace_id, user_id) WHERE status='ACTIVE' 부분 유니크 인덱스다.
+                    // 여기서 flush 하지 않으면 새 계획 INSERT 가 이 UPDATE 보다 먼저 나가 제약을 위반한다.
+                    // (재생성이 항상 500 으로 실패하던 원인)
+                    planRepository.saveAndFlush(existing);
                 });
 
         OnboardingPlan plan = OnboardingPlan.create(workspaceId, userId, LocalDate.now());
@@ -97,7 +105,12 @@ public class OnboardingPlanService {
         List<DocumentEntity> readyDocs = documentRepository
                 .findByWorkspaceIdAndStatusAndDeletedAtIsNull(workspaceId, DocumentStatus.READY);
 
-        List<OnboardingPlanItem> items = buildPlanItems(plan, readyDocs, templateId);
+        // 역할·부서에 맞는 템플릿을 골라야 하므로 멤버십을 함께 읽는다
+        Membership membership = membershipRepository
+                .findByWorkspaceIdAndUserIdAndDeletedAtIsNull(workspaceId, userId)
+                .orElse(null);
+
+        List<OnboardingPlanItem> items = buildPlanItems(plan, readyDocs, templateId, membership);
         planItemRepository.saveAll(items);
 
         // 기존 체크리스트 soft delete 후 새로 생성
@@ -236,9 +249,11 @@ public class OnboardingPlanService {
     }
 
     private List<OnboardingPlanItem> buildPlanItems(
-            OnboardingPlan plan, List<DocumentEntity> docs, UUID templateId
+            OnboardingPlan plan, List<DocumentEntity> docs, UUID templateId, Membership membership
     ) {
-        List<OnboardingTemplateItem> custom = templateService.loadItemsForPlan(plan.getWorkspaceId(), templateId);
+        UserRole memberRole = membership == null ? null : membership.getRole();
+        List<OnboardingTemplateItem> custom = templateService.loadItemsForPlan(
+                plan.getWorkspaceId(), templateId, memberRole);
         if (!custom.isEmpty()) {
             return buildFromTemplate(plan, custom, docs);
         }
@@ -256,44 +271,103 @@ public class OnboardingPlanService {
                     ti.getSortOrder(), null, null
             ));
         }
-        // READY 문서를 추가 학습 항목으로 보완
-        int day = 2;
-        for (DocumentEntity doc : docs) {
-            if (day > 10) break;
+        // 템플릿이 이미 다루지 않은 문서만 학습 항목으로 보완한다.
+        // (문서 기반으로 만든 템플릿은 문서를 이미 항목으로 담고 있어, 무조건 붙이면 중복된다)
+        List<DocumentEntity> uncovered = docs.stream()
+                .filter(doc -> templateItems.stream().noneMatch(ti -> mentionsDocument(ti.getTitle(), doc.getTitle())))
+                .toList();
+
+        int maxDay = templateItems.stream().mapToInt(OnboardingTemplateItem::getDayIndex).max().orElse(30);
+        for (int i = 0; i < uncovered.size(); i++) {
+            DocumentEntity doc = uncovered.get(i);
+            // 앞쪽에 몰아넣지 않고 기간에 분산한다. 개수 제한으로 조용히 버리지 않는다
+            int day = uncovered.size() == 1
+                    ? Math.min(3, maxDay)
+                    : 2 + (int) Math.round((double) (maxDay - 3) * i / (uncovered.size() - 1));
             items.add(OnboardingPlanItem.create(
-                    plan.getId(), plan.getWorkspaceId(), day, PlanItemType.DOCUMENT,
+                    plan.getId(), plan.getWorkspaceId(), Math.max(1, Math.min(day, maxDay)),
+                    PlanItemType.DOCUMENT,
                     "문서 읽기: " + doc.getTitle(), "회사 지식 문서 학습", 99, doc.getId(), null
             ));
-            day++;
         }
         return items;
+    }
+
+    /**
+     * 템플릿 항목이 이 문서를 이미 다루고 있는지 판단한다.
+     * 파일명 확장자와 구분자를 떼고, 문서명의 주요 토큰이 항목 제목에 들어 있으면 같은 문서로 본다.
+     * 정확한 연결은 아니지만, 목적은 중복 항목을 줄이는 것이다.
+     */
+    private static boolean mentionsDocument(String itemTitle, String documentTitle) {
+        if (itemTitle == null || documentTitle == null) {
+            return false;
+        }
+        String normalizedItem = normalizeForMatch(itemTitle);
+        String base = documentTitle.replaceAll("(?i)\\.(pdf|docx?|pptx?|xlsx?|txt|csv)$", "");
+        String normalizedDoc = normalizeForMatch(base);
+        if (normalizedDoc.isBlank()) {
+            return false;
+        }
+        if (normalizedItem.contains(normalizedDoc)) {
+            return true;
+        }
+        // 문서명을 토큰으로 쪼개, 의미 있는 토큰이 모두 제목에 들어 있으면 같은 문서로 본다
+        String[] tokens = base.split("[_\\-\\s\\[\\]()]+");
+        int meaningful = 0;
+        int matched = 0;
+        for (String token : tokens) {
+            String t = normalizeForMatch(token);
+            if (t.length() < 2) {
+                continue;
+            }
+            meaningful++;
+            if (normalizedItem.contains(t)) {
+                matched++;
+            }
+        }
+        return meaningful >= 2 && matched == meaningful;
+    }
+
+    private static String normalizeForMatch(String value) {
+        return value.replaceAll("[\\s_\\-\\[\\]()]", "").toLowerCase();
     }
 
     private List<OnboardingPlanItem> buildDefaultItems(OnboardingPlan plan, List<DocumentEntity> docs) {
         List<OnboardingPlanItem> items = new ArrayList<>();
         int sort = 0;
 
+        // 여기 항목들은 역할·부서를 모르는 상태에서 나가는 최후 폴백이다.
+        // 특정 직군(개발 등)을 전제하지 않고 어느 직군에나 성립하는 것만 둔다.
+        // 직군에 맞는 계획은 템플릿(문서 기반 AI 생성 포함)으로 만든다.
         items.add(OnboardingPlanItem.create(
                 plan.getId(), plan.getWorkspaceId(), 1, PlanItemType.CHECKLIST,
-                "계정 및 도구 접근 확인", "메일·슬랙·저장소 접근 가능 여부 확인", sort++, null, null
+                "계정 및 도구 접근 확인", "메일·메신저·업무 시스템 로그인 확인", sort++, null, null
         ));
         items.add(OnboardingPlanItem.create(
                 plan.getId(), plan.getWorkspaceId(), 1, PlanItemType.PERSON,
-                "Buddy 인사 미팅", "온보딩 버디와 첫 미팅", sort++, null, "Buddy"
+                "온보딩 담당자 첫 미팅", "담당자와 인사하고 첫 주 일정 확인", sort++, null, null
         ));
         items.add(OnboardingPlanItem.create(
-                plan.getId(), plan.getWorkspaceId(), 1, PlanItemType.PRACTICE,
-                "로컬 개발환경 세팅", "저장소 클론 및 실행 확인", sort++, null, null
+                plan.getId(), plan.getWorkspaceId(), 2, PlanItemType.CHECKLIST,
+                "팀 목표와 내 역할 파악", "담당 업무 범위와 기대치를 문서로 확인", sort++, null, null
         ));
 
-        int day = 2;
-        for (DocumentEntity doc : docs) {
-            if (day > 14) break;
-            items.add(OnboardingPlanItem.create(
-                    plan.getId(), plan.getWorkspaceId(), day, PlanItemType.DOCUMENT,
-                    "문서 읽기: " + doc.getTitle(), "회사 지식 문서 학습", 0, doc.getId(), null
-            ));
-            day++;
+        // 문서를 3~25일 구간에 고르게 분산한다.
+        // 이전에는 하루 1건씩 14일에서 끊어 15건 이상이면 조용히 버려졌다.
+        if (!docs.isEmpty()) {
+            final int firstDay = 3;
+            final int lastDay = 25;
+            int span = lastDay - firstDay;
+            for (int i = 0; i < docs.size(); i++) {
+                DocumentEntity doc = docs.get(i);
+                int day = docs.size() == 1
+                        ? firstDay
+                        : firstDay + (int) Math.round((double) span * i / (docs.size() - 1));
+                items.add(OnboardingPlanItem.create(
+                        plan.getId(), plan.getWorkspaceId(), day, PlanItemType.DOCUMENT,
+                        "문서 읽기: " + doc.getTitle(), "회사 지식 문서 학습", i, doc.getId(), null
+                ));
+            }
         }
 
         if (docs.isEmpty()) {
