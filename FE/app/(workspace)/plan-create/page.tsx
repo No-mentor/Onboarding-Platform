@@ -15,7 +15,7 @@ function PlanCreateContent() {
       const planId = searchParams.get('id');
       
       if (planId) {
-        await regenerateOnboardingPlan(planId);
+        await regenerateOnboardingPlan(planId, { preserveCompleted: true });
         showToast('계획이 재생성되었습니다', 'success');
       } else {
         await generateOnboardingPlan();

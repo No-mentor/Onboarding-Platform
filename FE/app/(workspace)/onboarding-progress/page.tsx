@@ -137,7 +137,7 @@ export default function OnboardingProgressPage() {
     if (!newbie.planId) return;
     setIsRegenerating(true);
     try {
-      await regenerateOnboardingPlan(newbie.planId, keepCompleted);
+      await regenerateOnboardingPlan(newbie.planId, { preserveCompleted: keepCompleted });
       showToast(`${newbie.name ?? '신입'}의 계획을 다시 생성했습니다.`, 'success');
       setIsProgressActionModalOpen(false);
       await load();

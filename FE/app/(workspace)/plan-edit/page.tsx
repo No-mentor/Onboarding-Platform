@@ -43,7 +43,7 @@ function PlanEditContent() {
     }
     try {
       setIsSaving(true);
-      await regenerateOnboardingPlan(planId, keepCompleted);
+      await regenerateOnboardingPlan(planId, { preserveCompleted: keepCompleted });
       showToast('계획을 다시 생성했습니다.', 'success');
       router.push('/30day-plan');
     } catch (err) {

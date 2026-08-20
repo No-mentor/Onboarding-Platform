@@ -51,6 +51,9 @@ class PlanFromTemplateTest {
 
     @BeforeEach
     void noExistingPlan() {
+        // 서비스는 save() 의 반환값을 쓴다 (@Id 수동 할당이라 Spring Data 가 merge 를 호출하고,
+        // 인자로 넘긴 객체는 detached 로 남기 때문). 목도 인자를 그대로 돌려줘야 한다.
+        when(plans.save(any(OnboardingPlan.class))).thenAnswer(call -> call.getArgument(0));
         when(plans.findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(
                 workspaceId, userId, PlanStatus.ACTIVE)).thenReturn(Optional.empty());
         when(checklists.findByWorkspaceIdAndUserIdAndDeletedAtIsNullOrderByDueDayAsc(any(), any())).thenReturn(List.of());
