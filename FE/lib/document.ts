@@ -1,42 +1,47 @@
-import { getAuthToken } from './storage';
-import { API_BASE } from './config';
-import type { DocumentResponse } from './api';
+/**
+ * 문서 API 의 예전 호출 형태(워크스페이스 ID 를 인자로 받는 방식) 호환 레이어.
+ *
+ * 구현은 lib/api.ts 하나만 쓴다. api.ts 는 워크스페이스를 localStorage 에서 읽으므로
+ * 여기서 받은 workspaceId 는 "현재 워크스페이스와 같은지" 확인하는 용도로만 쓴다.
+ */
+import {
+  deleteDocument as apiDeleteDocument,
+  getDocumentDetail,
+  getDocuments as apiGetDocuments,
+  getMyProgress,
+  reprocessDocument as apiReprocessDocument,
+  uploadDocument as apiUploadDocument,
+  type DocumentPageResponse,
+  type DocumentResponse,
+  type MyProgressResponse,
+} from './api';
+import { getWorkspaceId } from './storage';
 
 // 문서 타입은 lib/api.ts 를 단일 출처로 쓴다 (서버 스펙과 1:1)
-export type { DocumentResponse, DocumentStatus } from './api';
-import type { DocumentPageResponse } from './api';
+export type { DocumentResponse, DocumentStatus, DocumentPageResponse } from './api';
 
 /** @deprecated lib/api.ts 의 DocumentPageResponse 를 쓰세요 */
 export type DocumentListResponse = DocumentPageResponse;
 
+/**
+ * 넘겨받은 워크스페이스가 지금 선택된 워크스페이스와 다르면 막는다.
+ * (서버 요청 헤더는 localStorage 값으로 나가므로 조용히 다른 곳을 건드리면 안 된다)
+ */
+function assertCurrentWorkspace(workspaceId: string): void {
+  const current = getWorkspaceId();
+  if (!current) throw new Error('인증 정보 없음');
+  if (workspaceId && workspaceId !== current) {
+    throw new Error('현재 선택된 워크스페이스가 아닙니다. 워크스페이스를 먼저 전환해 주세요.');
+  }
+}
 
 export async function uploadDocument(
   workspaceId: string,
   file: File,
   title?: string
 ): Promise<DocumentResponse> {
-  const token = getAuthToken();
-  if (!token) throw new Error('인증 토큰이 없습니다');
-
-  const formData = new FormData();
-  formData.append('file', file);
-  if (title) formData.append('title', title);
-
-  const response = await fetch(`${API_BASE}/documents`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': workspaceId,
-    },
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || '파일 업로드 실패');
-  }
-
-  return response.json();
+  assertCurrentWorkspace(workspaceId);
+  return apiUploadDocument({ file, title });
 }
 
 export async function getDocuments(
@@ -45,108 +50,37 @@ export async function getDocuments(
   size: number = 20,
   status?: string
 ): Promise<DocumentListResponse> {
-  const token = getAuthToken();
-  if (!token) throw new Error('인증 토큰이 없습니다');
-
-  const params = new URLSearchParams({
-    page: page.toString(),
-    size: size.toString(),
+  assertCurrentWorkspace(workspaceId);
+  return apiGetDocuments({
+    page,
+    size,
+    status: status as DocumentResponse['status'] | undefined,
   });
-  if (status) params.append('status', status);
-
-  const response = await fetch(`${API_BASE}/documents?${params}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': workspaceId,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error('파일 목록 조회 실패');
-  }
-
-  return response.json();
-}
-
-export async function getProgressMe(workspaceId: string) {
-  const token = getAuthToken();
-  if (!token) throw new Error('인증 토큰이 없습니다');
-
-  const response = await fetch(`${API_BASE}/progress/me`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': workspaceId,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error('진행 현황 조회 실패');
-  }
-
-  return response.json();
 }
 
 export async function getDocument(
   workspaceId: string,
   documentId: string
 ): Promise<DocumentResponse> {
-  const token = getAuthToken();
-  if (!token) throw new Error('인증 토큰이 없습니다');
-
-  const response = await fetch(`${API_BASE}/documents/${documentId}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': workspaceId,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error('파일 조회 실패');
-  }
-
-  return response.json();
+  assertCurrentWorkspace(workspaceId);
+  return getDocumentDetail(documentId);
 }
 
 export async function reprocessDocument(
   workspaceId: string,
   documentId: string
 ): Promise<DocumentResponse> {
-  const token = getAuthToken();
-  if (!token) throw new Error('인증 토큰이 없습니다');
-
-  const response = await fetch(`${API_BASE}/documents/${documentId}/reprocess`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': workspaceId,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || '파일 재처리 실패');
-  }
-
-  return response.json();
+  assertCurrentWorkspace(workspaceId);
+  return apiReprocessDocument(documentId);
 }
 
-export async function deleteDocument(
-  workspaceId: string,
-  documentId: string
-): Promise<void> {
-  const token = getAuthToken();
-  if (!token) throw new Error('인증 토큰이 없습니다');
+export async function deleteDocument(workspaceId: string, documentId: string): Promise<void> {
+  assertCurrentWorkspace(workspaceId);
+  return apiDeleteDocument(documentId);
+}
 
-  const response = await fetch(`${API_BASE}/documents/${documentId}`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': workspaceId,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error('파일 삭제 실패');
-  }
+/** GET /progress/me */
+export async function getProgressMe(workspaceId: string): Promise<MyProgressResponse> {
+  assertCurrentWorkspace(workspaceId);
+  return getMyProgress();
 }

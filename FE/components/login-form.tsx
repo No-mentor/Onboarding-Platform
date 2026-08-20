@@ -8,7 +8,12 @@ import { saveAuthToken } from '@/lib/storage';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from './ui/modal';
 import { useToast } from './ui/toast';
 
-export function LoginForm() {
+interface LoginFormProps {
+  /** 회원가입 탭으로 옮겨 갈 때 (같은 화면의 탭이라 라우팅하지 않는다) */
+  onSwitchToSignup?: () => void;
+}
+
+export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const [email, setEmail] = useState('');
@@ -18,6 +23,8 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [showVerifyPrompt, setShowVerifyPrompt] = useState(false);
   const [isSendingCode, setIsSendingCode] = useState(false);
+  // 끄면 sessionStorage 에 저장해 탭을 닫을 때 로그아웃된다
+  const [rememberMe, setRememberMe] = useState(true);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,7 +50,9 @@ export function LoginForm() {
         response.accessToken,
         response.userId,
         response.email,
-        workspaces.length === 1 ? workspaces[0].id : undefined
+        response.name,
+        workspaces.length === 1 ? workspaces[0].id : undefined,
+        rememberMe
       );
 
       const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -58,7 +67,6 @@ export function LoginForm() {
         router.push('/workspace-selection');
       }
     } catch (error) {
-      console.log('[Login Error]', error);
       if (error instanceof AuthError) {
         if (error.isAuthError()) {
           setErrors({ form: '이메일 또는 비밀번호가 올바르지 않습니다.' });
@@ -180,13 +188,16 @@ export function LoginForm() {
 
         <div className="row">
           <label className="check">
-            <input type="checkbox" defaultChecked />
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              disabled={isLoading}
+            />
             <i className="mark" />
             <span>로그인 상태 유지</span>
           </label>
-          <button className="link" type="button">
-            비밀번호 찾기
-          </button>
+          <span className="hint">체크를 끄면 이 탭을 닫을 때 로그아웃됩니다.</span>
         </div>
 
         <button className="submit" type="submit" disabled={isLoading}>
@@ -194,7 +205,7 @@ export function LoginForm() {
         </button>
 
         <p className="foot">
-          아직 계정이 없으신가요? <button className="link" type="button" disabled={isLoading} onClick={() => router.push('/signup')}>회원가입</button>
+          아직 계정이 없으신가요? <button className="link" type="button" disabled={isLoading} onClick={onSwitchToSignup}>회원가입</button>
         </p>
       </form>
 

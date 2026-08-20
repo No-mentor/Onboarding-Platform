@@ -1,139 +1,148 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { FileText, FileSpreadsheet, Cloud, ArrowRight, ChevronRight, Upload, AlertCircle } from 'lucide-react';
+import { FileText, FileSpreadsheet, Cloud, ArrowRight, ChevronRight, AlertCircle } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import styles from './home-dashboard.module.css';
+import { useToast } from './ui/toast';
 import { getDisplayLabel } from '@/lib/display-labels';
-import { uploadDocument, getDocuments, getDocument, DocumentResponse } from '@/lib/document';
+import {
+  formatDateTime,
+  formatFileSize,
+  formatFileType,
+  getDashboard,
+  getDocumentDetail,
+  getDocuments,
+  uploadDocument,
+  type DashboardResponse,
+  type DocumentResponse,
+} from '@/lib/api';
 import { FileDetailModal } from './file-detail-modal';
-
-interface DashboardData {
-  progressPercent: number;
-  plan?: {
-    currentDay: number;
-    totalDays: number;
-  };
-  today?: {
-    done: number;
-    total: number;
-    items: Array<{ id: string; title: string; description: string; priority: string }>;
-  };
-  checklist?: {
-    done: number;
-    total: number;
-  };
-  recentFiles?: Array<{
-    id: string;
-    name: string;
-    type: string;
-    status: string;
-    date: string;
-  }>;
-  message?: string;
-}
+import styles from './home-dashboard.module.css';
 
 interface HomeDashboardProps {
-  data?: DashboardData;
+  /** 부모가 이미 받아 둔 대시보드가 있으면 그대로 쓴다 */
+  data?: DashboardResponse | null;
   isLoading?: boolean;
   error?: string | null;
-  workspaceId?: string;
 }
 
-export function HomeDashboard({ data, isLoading = false, error = null, workspaceId = '' }: HomeDashboardProps) {
-  const [priorityFilter, setPriorityFilter] = useState<string | null>(null);
+/** 화면의 3단 필터. 서버 priority 는 숫자라 구간으로 나눈다 */
+type PriorityBucket = 'HIGH' | 'MEDIUM' | 'LOW';
+
+function bucketOf(priority: number): PriorityBucket {
+  if (priority <= 1) return 'HIGH';
+  if (priority === 2) return 'MEDIUM';
+  return 'LOW';
+}
+
+const BUCKET_LABEL: Record<PriorityBucket, string> = {
+  HIGH: '긴급',
+  MEDIUM: '중요',
+  LOW: '일반',
+};
+
+export function HomeDashboard({ data, isLoading: isLoadingProp, error: errorProp }: HomeDashboardProps) {
+  const { showToast } = useToast();
+  const [priorityFilter, setPriorityFilter] = useState<PriorityBucket | null>(null);
+  const [dashboard, setDashboard] = useState<DashboardResponse | null>(data ?? null);
   const [files, setFiles] = useState<DocumentResponse[]>([]);
+  const [documentTotal, setDocumentTotal] = useState(0);
   const [uploadingFile, setUploadingFile] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<DocumentResponse | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [isLoading, setIsLoading] = useState(isLoadingProp ?? true);
+  const [error, setError] = useState<string | null>(errorProp ?? null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadFiles = useCallback(async () => {
+    const response = await getDocuments({ page: 0, size: 4 });
+    setFiles(response.items ?? []);
+    setDocumentTotal(response.totalElements ?? 0);
+  }, []);
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // 부모가 준 대시보드가 있으면 파일만 받아 온다
+      if (data) {
+        setDashboard(data);
+        await loadFiles();
+      } else {
+        const [dashboardData] = await Promise.all([getDashboard(), loadFiles()]);
+        setDashboard(dashboardData);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '데이터를 불러오지 못했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [data, loadFiles]);
+
+  useEffect(() => {
+    // 진입 시 1회 조회 (결과 도착 후 setState)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    handleFileUpload(file);
+    void handleFileUpload(file);
   };
 
   const handleFileUpload = async (file: File) => {
-    if (!workspaceId) {
-      setUploadError('워크스페이스 식별 정보가 없습니다');
-      return;
-    }
-
     setUploadingFile(file.name);
     setUploadError(null);
     try {
-      await uploadDocument(workspaceId, file);
+      await uploadDocument({ file });
       await loadFiles();
       if (fileInputRef.current) fileInputRef.current.value = '';
-    } catch (error) {
-      setUploadError(error instanceof Error ? error.message : '파일 업로드 실패');
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : '파일 업로드 실패');
     } finally {
       setUploadingFile(null);
-    }
-  };
-
-  const loadFiles = async () => {
-    if (!workspaceId) return;
-    try {
-      const response = await getDocuments(workspaceId, 0, 4);
-      setFiles(response.content || []);
-    } catch (error) {
-      console.error('파일 조회 실패:', error);
     }
   };
 
   const handleFileClick = async (file: DocumentResponse) => {
     setIsLoadingDetail(true);
     try {
-      const detail = await getDocument(workspaceId, file.id);
+      const detail = await getDocumentDetail(file.id);
       setSelectedFile(detail);
       setIsModalOpen(true);
-    } catch (error) {
-      console.error('파일 상세 조회 실패:', error);
-      alert('파일 정보를 불러올 수 없습니다.');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '파일 정보를 불러올 수 없습니다.', 'error');
     } finally {
       setIsLoadingDetail(false);
     }
   };
 
-  // 기본값 데이터
-  const defaultData = {
-    progressPercent: 32,
-    plan: { currentDay: 6, totalDays: 30 },
-    todayTasks: [
-      { id: '1', title: '행사 운영 매뉴얼(PDF) 읽기', action: '읽기', priority: 'HIGH' as const },
-      { id: '2', title: '거래처별 연락망 확인하기', action: '확인', priority: 'MEDIUM' as const },
-      { id: '3', title: '예산안 검토 및 가이드 숙지하기', action: '검토', priority: 'LOW' as const },
-    ],
-    stats: [
-      { label: '전체 문서', value: '45' },
-      { label: '완료', value: '14' },
-      { label: '진행 중', value: '18' },
-      { label: '대기 중', value: '13' },
-    ],
-  };
-
-  // API 데이터가 있으면 사용, 없으면 기본값
-  const dashboardData = data || { progressPercent: defaultData.progressPercent };
-  const todayTasks = data?.today?.items?.map((item) => ({
+  const todayTasks = (dashboard?.today.items ?? []).map((item) => ({
     id: item.id,
     title: item.title,
-    action: '보기',
-    priority: (item.priority || 'LOW') as 'HIGH' | 'MEDIUM' | 'LOW',
-  })) || defaultData.todayTasks;
+    action: item.source ? '열기' : '보기',
+    priority: bucketOf(item.priority),
+  }));
 
   const filteredTodayTasks = priorityFilter
-    ? todayTasks.filter(task => task.priority === priorityFilter)
+    ? todayTasks.filter((task) => task.priority === priorityFilter)
     : todayTasks;
 
+  const progressPercent = Math.round(Number(dashboard?.progressPercent ?? 0));
+  const plan = dashboard?.plan ?? null;
+
   const stats = [
-    { label: '전체 문서', value: data?.checklist?.total?.toString() || '45' },
-    { label: '완료', value: data?.checklist?.done?.toString() || '14' },
-    { label: '진행 중', value: ((data?.checklist?.total || 0) - (data?.checklist?.done || 0)).toString() },
-    { label: '대기 중', value: ((data?.checklist?.total || 0) - (data?.checklist?.done || 0) - 5).toString() },
+    { label: '전체 문서', value: String(documentTotal) },
+    { label: '준비 완료', value: String(files.filter((f) => f.status === 'READY').length) },
+    {
+      label: '처리 중',
+      value: String(files.filter((f) => f.status === 'PROCESSING' || f.status === 'PENDING').length),
+    },
+    { label: '체크리스트', value: `${dashboard?.checklist.done ?? 0}/${dashboard?.checklist.total ?? 0}` },
   ];
 
   if (isLoading) {
@@ -149,7 +158,7 @@ export function HomeDashboard({ data, isLoading = false, error = null, workspace
       <div className={styles.container}>
         <div className={styles.errorState}>
           <p>{error}</p>
-          <button onClick={() => window.location.reload()}>다시 시도</button>
+          <button onClick={() => void load()}>다시 시도</button>
         </div>
       </div>
     );
@@ -164,36 +173,46 @@ export function HomeDashboard({ data, isLoading = false, error = null, workspace
             <div className={styles.cardHeader}>
               <h3 className={styles.cardTitle}>오늘 할 일 ({filteredTodayTasks.length})</h3>
               <div className={styles.filterGroup}>
-                {['HIGH', 'MEDIUM', 'LOW'].map((priority) => (
+                {(['HIGH', 'MEDIUM', 'LOW'] as PriorityBucket[]).map((priority) => (
                   <button
                     key={priority}
                     className={`${styles.filterBtn} ${priorityFilter === priority ? styles.active : ''}`}
                     onClick={() => setPriorityFilter(priorityFilter === priority ? null : priority)}
                   >
-                    {priority === 'HIGH' ? '긴급' : priority === 'MEDIUM' ? '중요' : '일반'}
+                    {BUCKET_LABEL[priority]}
                   </button>
                 ))}
               </div>
             </div>
 
             <div className={styles.tasksList}>
-              {filteredTodayTasks.map((task) => (
-                <div key={task.id} className={`${styles.taskItem} ${styles[task.priority.toLowerCase()]}`}>
-                  <input type="checkbox" className={styles.checkbox} />
+              {filteredTodayTasks.length === 0 ? (
+                <div className={styles.taskItem}>
                   <div className={styles.taskContent}>
-                    <span className={styles.taskTitle}>{task.title}</span>
-                    <span className={`${styles.priorityBadge} ${styles[`priority-${task.priority.toLowerCase()}`]}`}>
-                      {task.priority === 'HIGH' ? '긴급' : task.priority === 'MEDIUM' ? '중요' : '일반'}
+                    <span className={styles.taskTitle}>
+                      {dashboard?.message || '오늘 할 일이 없습니다.'}
                     </span>
                   </div>
-                  <button className={styles.taskAction}>{task.action}</button>
                 </div>
-              ))}
+              ) : (
+                filteredTodayTasks.map((task) => (
+                  <div key={task.id} className={`${styles.taskItem} ${styles[task.priority.toLowerCase()]}`}>
+                    <input type="checkbox" className={styles.checkbox} readOnly />
+                    <div className={styles.taskContent}>
+                      <span className={styles.taskTitle}>{task.title}</span>
+                      <span className={`${styles.priorityBadge} ${styles[`priority-${task.priority.toLowerCase()}`]}`}>
+                        {BUCKET_LABEL[task.priority]}
+                      </span>
+                    </div>
+                    <Link href="/daily-tasks" className={styles.taskAction}>{task.action}</Link>
+                  </div>
+                ))
+              )}
             </div>
 
-            <button className={styles.seeAllTasks}>
+            <Link href="/daily-tasks" className={styles.seeAllTasks}>
               할 일 더 보기 <ChevronRight size={16} />
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -203,10 +222,10 @@ export function HomeDashboard({ data, isLoading = false, error = null, workspace
             <div className={styles.cardHeader}>
               <div>
                 <h3 className={styles.cardTitle}>인수인계 진행률</h3>
-                {(data?.plan || defaultData.plan) && (
+                {plan?.planId && (
                   <div className={styles.dayIndicator}>
                     <span className={styles.dayNumber}>
-                      Day {(data?.plan || defaultData.plan).currentDay}/{(data?.plan || defaultData.plan).totalDays}
+                      Day {plan.currentDay}/{plan.totalDays}
                     </span>
                   </div>
                 )}
@@ -222,8 +241,8 @@ export function HomeDashboard({ data, isLoading = false, error = null, workspace
                   <PieChart>
                     <Pie
                       data={[
-                        { value: dashboardData.progressPercent, name: '완료' },
-                        { value: 100 - dashboardData.progressPercent, name: '남음' },
+                        { value: progressPercent, name: '완료' },
+                        { value: 100 - progressPercent, name: '남음' },
                       ]}
                       cx="50%"
                       cy="50%"
@@ -238,12 +257,12 @@ export function HomeDashboard({ data, isLoading = false, error = null, workspace
                     </Pie>
                   </PieChart>
                 </ResponsiveContainer>
-                <div className={styles.progressValueOverlay}>{Math.round(dashboardData.progressPercent)}%</div>
+                <div className={styles.progressValueOverlay}>{progressPercent}%</div>
               </div>
 
               <div className={styles.statsGrid}>
-                {stats.map((stat, idx) => (
-                  <div key={idx} className={styles.stat}>
+                {stats.map((stat) => (
+                  <div key={stat.label} className={styles.stat}>
                     <div className={styles.statValue}>{stat.value}</div>
                     <div className={styles.statLabel}>{stat.label}</div>
                   </div>
@@ -258,42 +277,45 @@ export function HomeDashboard({ data, isLoading = false, error = null, workspace
       <div className={styles.filesSection}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>최근 분석 파일</h2>
-          <Link href="/documents" className={styles.seeAllLink}>
+          <Link href="/file-management" className={styles.seeAllLink}>
             전체 파일 보기
           </Link>
         </div>
 
         <div className={styles.filesGrid}>
-          {(data?.recentFiles || files).slice(0, 3).map((file) => (
-            <button
-              key={file.id}
-              className={styles.fileCard}
-              onClick={() => handleFileClick(file)}
-              disabled={isLoadingDetail}
-              type="button"
-            >
-              <div className={styles.fileIcon}>
-                {file.type === 'PDF' ? (
-                  <FileText size={32} strokeWidth={1.5} />
-                ) : (
-                  <FileSpreadsheet size={32} strokeWidth={1.5} />
-                )}
-              </div>
-              <h4 className={styles.fileName}>{file.name}</h4>
-              <div className={styles.fileMeta}>
-                <span className={styles.fileType}>{getDisplayLabel(file.type)}</span>
-                <span className={`${styles.fileStatus} ${styles[`status-${file.status?.toLowerCase()}`]}`}>
-                  {file.status === 'READY' ? '준비됨' : file.status === 'PROCESSING' ? '분석중' : '대기중'}
-                </span>
-              </div>
-              <p className={styles.fileDate}>{file.uploadedAt || file.date}</p>
-              <div className={styles.fileDivider} />
-              <div className={styles.fileFooter}>
-                <span className={styles.userInfo}>{file.uploadedBy || '사용자'}</span>
-                <span className={styles.fileLink}>상세 보기 <ArrowRight size={14} /></span>
-              </div>
-            </button>
-          ))}
+          {files.slice(0, 3).map((file) => {
+            const type = formatFileType(file.mimeType, file.title);
+            return (
+              <button
+                key={file.id}
+                className={styles.fileCard}
+                onClick={() => void handleFileClick(file)}
+                disabled={isLoadingDetail}
+                type="button"
+              >
+                <div className={styles.fileIcon}>
+                  {type === 'PDF' ? (
+                    <FileText size={32} strokeWidth={1.5} />
+                  ) : (
+                    <FileSpreadsheet size={32} strokeWidth={1.5} />
+                  )}
+                </div>
+                <h4 className={styles.fileName}>{file.title}</h4>
+                <div className={styles.fileMeta}>
+                  <span className={styles.fileType}>{getDisplayLabel(type)}</span>
+                  <span className={`${styles.fileStatus} ${styles[`status-${file.status.toLowerCase()}`]}`}>
+                    {getDisplayLabel(file.status)}
+                  </span>
+                </div>
+                <p className={styles.fileDate}>{formatDateTime(file.updatedAt ?? file.createdAt)}</p>
+                <div className={styles.fileDivider} />
+                <div className={styles.fileFooter}>
+                  <span className={styles.userInfo}>{formatFileSize(file.sizeBytes)}</span>
+                  <span className={styles.fileLink}>상세 보기 <ArrowRight size={14} /></span>
+                </div>
+              </button>
+            );
+          })}
           <div className={styles.fileCard}>
             <div className={styles.uploadArea}>
               <input
@@ -329,12 +351,11 @@ export function HomeDashboard({ data, isLoading = false, error = null, workspace
       <FileDetailModal
         file={selectedFile}
         isOpen={isModalOpen}
-        workspaceId={workspaceId}
         onClose={() => {
           setIsModalOpen(false);
           setSelectedFile(null);
         }}
-        onRefresh={loadFiles}
+        onRefresh={() => void loadFiles()}
       />
     </div>
   );

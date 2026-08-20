@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronRight, ChevronDown, Bell, HelpCircle, Building2, Settings, Check } from 'lucide-react';
@@ -9,68 +9,145 @@ import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton } from '@/components/ui/modal';
 import { DailyTasksModal } from '@/components/dashboard/modals/daily-tasks-modal';
 import { AllFilesModal } from '@/components/dashboard/modals/all-files-modal';
-import { NotificationsPanel } from '@/components/dashboard/panels/notifications-panel';
-import { getUserName } from '@/lib/storage';
+import { NotificationsPanel, useNotifications } from '@/components/dashboard/panels/notifications-panel';
+import { RequireWorkspace, useMe } from '@/components/require-workspace';
+import { WorkspaceEmptyState } from '@/components/workspace-empty-state';
+import { useToast } from '@/components/ui/toast';
+import { saveWorkspaceId } from '@/lib/storage';
 import { getDisplayLabel } from '@/lib/display-labels';
+import {
+  citationTitle,
+  formatDateTime,
+  formatFileSize,
+  formatFileType,
+  getDashboard,
+  getDocuments,
+  sendChatMessage,
+  type DashboardRecommendation,
+  type DashboardResponse,
+  type DocumentResponse,
+} from '@/lib/api';
 import styles from './dashboard.module.css';
 
-const MOCK_TODAY_TASKS = [
-  { id: 'mock-task-1', type: 'DOCUMENT', title: '[목업] 행사운영가이드.pdf 읽기', status: 'PENDING', priority: 1, source: '[목업] 행사운영가이드.pdf', planItemId: 'mock-plan-1', documentId: 'mock-doc-1', personName: '김세원' },
-  { id: 'mock-task-2', type: 'CHECKLIST', title: '거래처 연락망 확인하기', status: 'IN_PROGRESS', priority: 2, source: '[목업] 거래처_연락망.xlsx', planItemId: 'mock-plan-2', documentId: 'mock-doc-2', personName: '김세원' },
-  { id: 'mock-task-3', type: 'PRACTICE', title: '예산안 샘플 업데이트', status: 'PENDING', priority: 3, source: '[목업] 행사_예산안_v7.xlsx', planItemId: 'mock-plan-3', documentId: 'mock-doc-3', personName: '김세원' },
-];
-
-const MOCK_RECENT_FILES = [
-  { id: 'mock-file-1', name: '[목업] 행사운영가이드.pdf', size: '5.8MB', format: 'PDF', status: 'READY', type: 'pdf', updatedAt: '2026.08.16 18:21', relatedTask: '행사 운영 절차 확인' },
-  { id: 'mock-file-2', name: '[목업] 행사_예산안_v7.xlsx', size: '2.4MB', format: 'XLSX', status: 'READY', type: 'excel', updatedAt: '2026.08.16 18:18', relatedTask: '예산안 샘플 업데이트' },
-  { id: 'mock-file-3', name: '[목업] 거래처_연락망.xlsx', size: '1.6MB', format: 'XLSX', status: 'READY', type: 'excel', updatedAt: '2026.08.16 18:13', relatedTask: '거래처 연락망 확인하기' },
-];
-
-export default function DashboardPage() {
+function DashboardContent() {
   const router = useRouter();
+  const me = useMe();
+  const { showToast } = useToast();
+  const { unreadCount } = useNotifications();
+
+  const userName = me?.name ?? '사용자';
+  const workspaces = me?.workspaces ?? [];
+  const currentWorkspace = me?.currentWorkspace ?? null;
+
   const [showDailyTasksModal, setShowDailyTasksModal] = useState(false);
-  const [userName, setUserName] = useState<string>('김세원');
-  const [quickQuestion, setQuickQuestion] = useState<string>('');
   const [showAllFilesModal, setShowAllFilesModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
-  const [selectedWorkspace, setSelectedWorkspace] = useState('마케팅팀 인수인계');
 
-  // Additional modal states
   const [isOnboardingProgressModalOpen, setIsOnboardingProgressModalOpen] = useState(false);
   const [isFileSummaryModalOpen, setIsFileSummaryModalOpen] = useState(false);
   const [isTaskDetailsModalOpen, setIsTaskDetailsModalOpen] = useState(false);
   const [isAIInquiryModalOpen, setIsAIInquiryModalOpen] = useState(false);
-  const [isBudgetInquiryModalOpen, setIsBudgetInquiryModalOpen] = useState(false);
   const [isOnboardingSummaryModalOpen, setIsOnboardingSummaryModalOpen] = useState(false);
-  const [isRecentFilesModalOpen, setIsRecentFilesModalOpen] = useState(false);
 
-  const [selectedFile, setSelectedFile] = useState<typeof recentFiles[0] | null>(null);
-  const [selectedTask, setSelectedTask] = useState<typeof todayTasks[0] | null>(null);
+  const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+  const [recentFiles, setRecentFiles] = useState<DocumentResponse[]>([]);
+  const [selectedFile, setSelectedFile] = useState<DocumentResponse | null>(null);
+  const [selectedTask, setSelectedTask] = useState<DashboardRecommendation | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [todayTasks] = useState(MOCK_TODAY_TASKS);
-  const [recentFiles] = useState(MOCK_RECENT_FILES);
+  // AI 질문
+  const [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState<string | null>(null);
+  const [citations, setCitations] = useState<string[]>([]);
+  const [isAsking, setIsAsking] = useState(false);
+  const [askError, setAskError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const name = getUserName();
-    if (name) {
-      setUserName(name);
+  const todayTasks = dashboard?.today.items ?? [];
+  const plan = dashboard?.plan ?? null;
+  const progressPercent = Math.round(Number(dashboard?.progressPercent ?? 0));
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // 대시보드 집계와 최근 파일은 서로 다른 API 라 함께 받아 온다
+      const [dashboardData, documents] = await Promise.all([
+        getDashboard(),
+        getDocuments({ page: 0, size: 4 }),
+      ]);
+      setDashboard(dashboardData);
+      setRecentFiles(documents.items ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '데이터를 불러오지 못했습니다.');
+      setDashboard(null);
+      setRecentFiles([]);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
-  const getFileIcon = (type: string) => {
-    switch (type) {
-      case 'pdf':
-        return <AiOutlineFilePdf className={styles.fileTypeIcon} style={{ color: '#D1495A' }} />;
-      case 'excel':
-        return <AiOutlineFileExcel className={styles.fileTypeIcon} style={{ color: '#207245' }} />;
-      default:
-        return <AiOutlineFile className={styles.fileTypeIcon} />;
+  useEffect(() => {
+    // 진입 시 1회 조회 (결과 도착 후 setState)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
+
+  const handleAsk = async (prefilled?: string) => {
+    const text = (prefilled ?? question).trim();
+    if (!text) {
+      setAskError('질문을 입력해 주세요.');
+      return;
+    }
+
+    setIsAsking(true);
+    setAskError(null);
+    try {
+      const result = await sendChatMessage(text);
+      setAnswer(result.answer);
+      setCitations((result.citations ?? []).map(citationTitle));
+      if (result.permissionDeniedDocumentIds?.length) {
+        showToast('일부 문서는 권한이 없어 답변에 사용되지 않았습니다.', 'error');
+      }
+    } catch (err) {
+      setAskError(err instanceof Error ? err.message : '질문 전송에 실패했습니다.');
+    } finally {
+      setIsAsking(false);
     }
   };
 
-  const getTaskFileIcon = (source: string) => {
-    const fileName = source.toLowerCase();
+  /** 파일/빠른질문 어느 쪽에서 열든 같은 상태로 시작한다 */
+  const openAskModal = (prefill = '') => {
+    setQuestion(prefill);
+    setAnswer(null);
+    setCitations([]);
+    setAskError(null);
+    setIsAIInquiryModalOpen(true);
+  };
+
+  const handleSwitchWorkspace = (workspaceId: string) => {
+    setShowWorkspaceMenu(false);
+    if (workspaceId === currentWorkspace?.id) return;
+    saveWorkspaceId(workspaceId);
+    // /auth/me 부터 다시 받아야 하므로 라우팅이 아니라 새로 불러온다
+    window.location.reload();
+  };
+
+  const getFileIcon = (mimeType?: string | null, title?: string) => {
+    const type = formatFileType(mimeType, title);
+    if (type === 'PDF') {
+      return <AiOutlineFilePdf className={styles.fileTypeIcon} style={{ color: '#D1495A' }} />;
+    }
+    if (type === 'XLSX' || type === 'XLS' || type === 'CSV') {
+      return <AiOutlineFileExcel className={styles.fileTypeIcon} style={{ color: '#207245' }} />;
+    }
+    return <AiOutlineFile className={styles.fileTypeIcon} />;
+  };
+
+  /** 오늘 할 일의 출처 파일 이름으로 아이콘을 고른다 */
+  const getTaskFileIcon = (source: string | null) => {
+    const fileName = (source ?? '').toLowerCase();
     if (fileName.endsWith('.pdf')) {
       return <AiOutlineFilePdf aria-hidden="true" />;
     }
@@ -98,7 +175,7 @@ export default function DashboardPage() {
                 aria-haspopup="menu"
               >
                 <Building2 size={17} />
-                {selectedWorkspace}
+                {currentWorkspace?.name ?? '업무 공간'}
                 <ChevronDown size={16} className={showWorkspaceMenu ? styles.chevronOpen : ''} />
               </button>
               {showWorkspaceMenu && (
@@ -106,21 +183,22 @@ export default function DashboardPage() {
                   <button className={styles.workspaceBackdrop} aria-label="워크스페이스 메뉴 닫기" onClick={() => setShowWorkspaceMenu(false)} />
                   <div className={styles.workspaceDropdown} role="menu">
                     <div className={styles.workspaceDropdownTitle}>워크스페이스 전환</div>
-                    {['마케팅팀 인수인계', '운영팀 인수인계', '디자인팀 인수인계'].map((workspace) => (
-                      <button
-                        key={workspace}
-                        className={`${styles.workspaceOption} ${selectedWorkspace === workspace ? styles.workspaceOptionActive : ''}`}
-                        onClick={() => {
-                          setSelectedWorkspace(workspace);
-                          setShowWorkspaceMenu(false);
-                        }}
-                        role="menuitem"
-                      >
-                        <Building2 size={17} />
-                        <span>{workspace}</span>
-                        {selectedWorkspace === workspace && <Check size={17} className={styles.workspaceCheck} />}
-                      </button>
-                    ))}
+                    {workspaces.length === 0 ? (
+                      <div className={styles.placeholder}>참여 중인 업무 공간이 없습니다.</div>
+                    ) : (
+                      workspaces.map((workspace) => (
+                        <button
+                          key={workspace.id}
+                          className={`${styles.workspaceOption} ${workspace.id === currentWorkspace?.id ? styles.workspaceOptionActive : ''}`}
+                          onClick={() => handleSwitchWorkspace(workspace.id)}
+                          role="menuitem"
+                        >
+                          <Building2 size={17} />
+                          <span>{workspace.name}</span>
+                          {workspace.id === currentWorkspace?.id && <Check size={17} className={styles.workspaceCheck} />}
+                        </button>
+                      ))
+                    )}
                     <div className={styles.workspaceDropdownDivider} />
                     <Link href="/workspace-settings" className={styles.workspaceManage} onClick={() => setShowWorkspaceMenu(false)}>
                       <Settings size={17} />
@@ -132,13 +210,20 @@ export default function DashboardPage() {
             </div>
             <button className={styles.notifBtn} onClick={() => setShowNotifications(!showNotifications)}>
               <Bell size={20} />
-              <span className={styles.badge}>7</span>
+              {unreadCount > 0 && <span className={styles.badge}>{unreadCount}</span>}
             </button>
-            <button className={styles.helpBtn}>
+            <Link href="/settings" className={styles.helpBtn} aria-label="설정">
               <HelpCircle size={18} />
-            </button>
+            </Link>
           </div>
         </header>
+
+        {error && (
+          <div className={styles.errorBanner}>
+            <span>{error}</span>
+            <button type="button" onClick={() => void load()}>다시 시도</button>
+          </div>
+        )}
 
         {/* Content Grid */}
         <div className={styles.contentGrid}>
@@ -148,19 +233,47 @@ export default function DashboardPage() {
             <section className={styles.card}>
               <div className={styles.cardHeader}>
                 <h2 className={styles.cardTitle}>오늘 할 일</h2>
-                <span className={styles.count}>3개</span>
+                <span className={styles.count}>
+                  {isLoading ? '—' : `${dashboard?.today.done ?? 0}/${dashboard?.today.total ?? 0}개`}
+                </span>
               </div>
               <div className={styles.tasksList}>
-                {todayTasks.map((task) => (
-                  <div key={task.id} className={styles.taskItem}>
-                    <span className={`${styles.taskType} ${task.source.toLowerCase().endsWith('.pdf') ? styles.taskTypePdf : styles.taskTypeExcel}`}>
-                      <span className={styles.taskFileIcon}>{getTaskFileIcon(task.source)}</span>
-                      <span>{getDisplayLabel(task.type)}</span>
-                    </span>
-                    <span className={styles.taskTitle}>{task.title}</span>
-                    <span className={styles.taskTime}>{task.source}</span>
+                {isLoading ? (
+                  <div className={styles.placeholder}>불러오는 중...</div>
+                ) : todayTasks.length === 0 ? (
+                  <div className={styles.placeholder}>
+                    {dashboard?.message || '오늘 할 일이 없습니다.'}
                   </div>
-                ))}
+                ) : (
+                  todayTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className={styles.taskItem}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        setSelectedTask(task);
+                        setIsTaskDetailsModalOpen(true);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setSelectedTask(task);
+                          setIsTaskDetailsModalOpen(true);
+                        }
+                      }}
+                    >
+                      <span className={`${styles.taskType} ${(task.source ?? '').toLowerCase().endsWith('.pdf') ? styles.taskTypePdf : styles.taskTypeExcel}`}>
+                        <span className={styles.taskFileIcon}>{getTaskFileIcon(task.source)}</span>
+                        <span>{getDisplayLabel(task.type)}</span>
+                      </span>
+                      <span className={styles.taskTitle}>{task.title}</span>
+                      <span className={styles.taskTime}>
+                        {task.source ?? (task.personName ? `담당 ${task.personName}` : getDisplayLabel(task.status))}
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
               <button className={styles.viewAllBtn} onClick={() => setShowDailyTasksModal(true)}>
                 오늘 할 일 전체 보기
@@ -177,43 +290,53 @@ export default function DashboardPage() {
                 </button>
               </div>
               <div className={styles.filesGrid}>
-                {recentFiles.map((file) => (
-                  <div
-                    key={file.id}
-                    className={styles.fileCard}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => {
-                      setSelectedFile(file);
-                      setIsFileSummaryModalOpen(true);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
+                {isLoading ? (
+                  <div className={styles.placeholder}>불러오는 중...</div>
+                ) : recentFiles.length === 0 ? (
+                  <div className={styles.placeholder}>
+                    아직 업로드된 파일이 없습니다. 파일을 올리면 AI가 내용을 학습합니다.
+                  </div>
+                ) : (
+                  recentFiles.map((file) => (
+                    <div
+                      key={file.id}
+                      className={styles.fileCard}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
                         setSelectedFile(file);
                         setIsFileSummaryModalOpen(true);
-                      }
-                    }}
-                  >
-                    <div className={styles.fileIcon}>{getFileIcon(file.type)}</div>
-                    <div className={styles.fileDetails}>
-                      <div className={styles.fileName}>{file.name}</div>
-                      <div className={styles.fileSize}>{file.format} · {file.size}</div>
-                      <span className={styles.fileStatus}>{getDisplayLabel(file.status)}</span>
-                    </div>
-                    <button
-                      className={styles.aiBtn}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setSelectedFile(file);
-                        setIsAIInquiryModalOpen(true);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setSelectedFile(file);
+                          setIsFileSummaryModalOpen(true);
+                        }
                       }}
                     >
-                      AI에게 질문
-                      <ChevronRight size={14} />
-                    </button>
-                  </div>
-                ))}
+                      <div className={styles.fileIcon}>{getFileIcon(file.mimeType, file.title)}</div>
+                      <div className={styles.fileDetails}>
+                        <div className={styles.fileName}>{file.title}</div>
+                        <div className={styles.fileSize}>
+                          {formatFileType(file.mimeType, file.title)} · {formatFileSize(file.sizeBytes)}
+                        </div>
+                        <span className={styles.fileStatus}>{getDisplayLabel(file.status)}</span>
+                      </div>
+                      <button
+                        className={styles.aiBtn}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedFile(file);
+                          openAskModal(`${file.title} 문서에 대해 알려줘`);
+                        }}
+                      >
+                        AI에게 질문
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </section>
           </div>
@@ -224,24 +347,30 @@ export default function DashboardPage() {
             <section className={styles.card}>
               <div className={styles.progressHeader}>
                 <h2 className={styles.cardTitle}>인수인계 진행</h2>
-                <span className={styles.bottleneck}>병목 2건</span>
+                {plan?.planId && (
+                  <span className={styles.bottleneck}>
+                    {plan.currentDay}일차 / {plan.totalDays}일
+                  </span>
+                )}
               </div>
-              <div className={styles.progressNumber}>32%</div>
+              <div className={styles.progressNumber}>{isLoading ? '—' : `${progressPercent}%`}</div>
               <div className={styles.progressBar}>
-                <div className={styles.progressFill}></div>
+                <div className={styles.progressFill} style={{ width: `${progressPercent}%` }}></div>
               </div>
               <div className={styles.progressStats}>
                 <div className={styles.stat}>
-                  <span className={styles.statLabel}>완료</span>
-                  <span className={styles.statValue}>14</span>
+                  <span className={styles.statLabel}>오늘 완료</span>
+                  <span className={styles.statValue}>{dashboard?.today.done ?? 0}</span>
                 </div>
                 <div className={styles.stat}>
-                  <span className={styles.statLabel}>진행</span>
-                  <span className={styles.statValue}>18</span>
+                  <span className={styles.statLabel}>오늘 할 일</span>
+                  <span className={styles.statValue}>{dashboard?.today.total ?? 0}</span>
                 </div>
                 <div className={styles.stat}>
-                  <span className={styles.statLabel}>대기</span>
-                  <span className={styles.statValue}>13</span>
+                  <span className={styles.statLabel}>체크리스트</span>
+                  <span className={styles.statValue}>
+                    {dashboard?.checklist.done ?? 0}/{dashboard?.checklist.total ?? 0}
+                  </span>
                 </div>
               </div>
             </section>
@@ -256,22 +385,20 @@ export default function DashboardPage() {
                 type="text"
                 placeholder='"이 예산은 언제 사용해?"'
                 className={styles.aiInput}
-                value={quickQuestion}
-                onChange={(e) => setQuickQuestion(e.target.value)}
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && quickQuestion.trim()) {
-                    router.push(`/ai-chat?q=${encodeURIComponent(quickQuestion.trim())}`);
+                  if (e.key === 'Enter' && question.trim()) {
+                    openAskModal(question);
+                    void handleAsk(question);
                   }
                 }}
               />
               <button
                 className={styles.aiSubmitBtn}
                 onClick={() => {
-                  if (quickQuestion.trim()) {
-                    router.push(`/ai-chat?q=${encodeURIComponent(quickQuestion.trim())}`);
-                  } else {
-                    router.push('/ai-chat');
-                  }
+                  openAskModal(question);
+                  if (question.trim()) void handleAsk(question);
                 }}
               >
                 AI에게 질문하기
@@ -307,24 +434,28 @@ export default function DashboardPage() {
 
       {/* Modals */}
       {showDailyTasksModal && (
-        <DailyTasksModal onClose={() => setShowDailyTasksModal(false)} />
+        <DailyTasksModal
+          onClose={() => setShowDailyTasksModal(false)}
+          tasks={todayTasks}
+          onCompleted={load}
+          onShowDetail={(task) => {
+            setSelectedTask(task);
+            setIsTaskDetailsModalOpen(true);
+          }}
+        />
       )}
       {showAllFilesModal && (
         <AllFilesModal
           onClose={() => setShowAllFilesModal(false)}
           onSelectFile={(file) => {
-            setSelectedFile({
-              id: `all-file-${file.id}`,
-              name: file.name,
-              size: file.size,
-              format: file.type,
-              status: file.status,
-              type: file.type === 'PDF' ? 'pdf' : file.type === 'XLSX' ? 'excel' : 'file',
-              updatedAt: file.date,
-              relatedTask: '온보딩 참고 자료 확인',
-            });
+            setSelectedFile(file);
             setShowAllFilesModal(false);
             setIsFileSummaryModalOpen(true);
+          }}
+          onAskAboutFile={(file) => {
+            setSelectedFile(file);
+            setShowAllFilesModal(false);
+            openAskModal(`${file.title} 문서에 대해 알려줘`);
           }}
         />
       )}
@@ -349,11 +480,13 @@ export default function DashboardPage() {
         }
       >
         <div className={styles.modalProgress}>
-          <div className={styles.modalProgressValue}>32%</div>
+          <div className={styles.modalProgressValue}>{progressPercent}%</div>
           <div className={styles.modalProgressStats}>
-            <div className={styles.modalStatItem}>완료 14개</div>
-            <div className={styles.modalStatItem}>진행 18개</div>
-            <div className={styles.modalStatItem}>대기 13개</div>
+            <div className={styles.modalStatItem}>오늘 할 일 {dashboard?.today.done ?? 0}/{dashboard?.today.total ?? 0}개</div>
+            <div className={styles.modalStatItem}>체크리스트 {dashboard?.checklist.done ?? 0}/{dashboard?.checklist.total ?? 0}개</div>
+            {plan?.planId && (
+              <div className={styles.modalStatItem}>{plan.currentDay}일차 / 전체 {plan.totalDays}일</div>
+            )}
           </div>
         </div>
       </Modal>
@@ -366,7 +499,12 @@ export default function DashboardPage() {
         footer={
           <>
             <ModalSecondaryButton onClick={() => setIsFileSummaryModalOpen(false)}>닫기</ModalSecondaryButton>
-            <ModalPrimaryButton onClick={() => { setIsFileSummaryModalOpen(false); router.push(`/ai-chat?q=${encodeURIComponent(selectedFile?.name + ' 문서 내용 요약해줘')}`); }}>
+            <ModalPrimaryButton
+              onClick={() => {
+                setIsFileSummaryModalOpen(false);
+                openAskModal(`${selectedFile?.title} 문서 내용 요약해줘`);
+              }}
+            >
               AI에게 질문하기
             </ModalPrimaryButton>
           </>
@@ -375,30 +513,47 @@ export default function DashboardPage() {
         {selectedFile && (
           <div className={styles.modalInfoCard}>
             <div className={styles.fileDetailHeading}>
-              <span className={`${styles.fileDetailIcon} ${selectedFile.type === 'pdf' ? styles.fileDetailPdf : styles.fileDetailExcel}`}>{getFileIcon(selectedFile.type)}</span>
+              <span className={`${styles.fileDetailIcon} ${formatFileType(selectedFile.mimeType, selectedFile.title) === 'PDF' ? styles.fileDetailPdf : styles.fileDetailExcel}`}>
+                {getFileIcon(selectedFile.mimeType, selectedFile.title)}
+              </span>
               <div>
-                <div className={styles.modalInfoTitle}>{selectedFile.name}</div>
+                <div className={styles.modalInfoTitle}>{selectedFile.title}</div>
                 <span className={styles.fileDetailStatus}>{getDisplayLabel(selectedFile.status)}</span>
               </div>
             </div>
             <div className={styles.modalInfoRow}>
               <span>파일 유형</span>
-              <span>{selectedFile.format} 파일</span>
+              <span>{formatFileType(selectedFile.mimeType, selectedFile.title)}</span>
             </div>
             <div className={styles.modalInfoRow}>
               <span>크기</span>
-              <span>{selectedFile.size}</span>
+              <span>{formatFileSize(selectedFile.sizeBytes)}</span>
             </div>
             <div className={styles.modalInfoRow}>
               <span>최근 수정일</span>
-              <span>{selectedFile.updatedAt}</span>
+              <span>{formatDateTime(selectedFile.updatedAt ?? selectedFile.createdAt)}</span>
             </div>
-            <div className={styles.modalInfoRow}>
-              <span>관련 업무</span>
-              <span>{selectedFile.relatedTask}</span>
-            </div>
+            {selectedFile.chunkCount !== null && selectedFile.chunkCount !== undefined && (
+              <div className={styles.modalInfoRow}>
+                <span>학습 조각</span>
+                <span>{selectedFile.chunkCount}개</span>
+              </div>
+            )}
+            {selectedFile.errorMessage && (
+              <div className={styles.modalInfoRow}>
+                <span>오류</span>
+                <span>{selectedFile.errorMessage}</span>
+              </div>
+            )}
             <div className={styles.fileDetailActions}>
-              <button onClick={() => { setIsFileSummaryModalOpen(false); router.push(`/ai-chat?q=${encodeURIComponent(selectedFile.name + ' 문서 요약해줘')}`); }}>AI 요약</button>
+              <button
+                onClick={() => {
+                  setIsFileSummaryModalOpen(false);
+                  openAskModal(`${selectedFile.title} 문서 요약해줘`);
+                }}
+              >
+                AI 요약
+              </button>
               <button onClick={() => { setIsFileSummaryModalOpen(false); router.push('/file-management'); }}>파일 관리로 이동</button>
             </div>
           </div>
@@ -432,57 +587,65 @@ export default function DashboardPage() {
               <span>상태</span>
               <span>{getDisplayLabel(selectedTask.status)}</span>
             </div>
+            {selectedTask.source && (
+              <div className={styles.modalInfoRow}>
+                <span>출처</span>
+                <span>{selectedTask.source}</span>
+              </div>
+            )}
+            {selectedTask.personName && (
+              <div className={styles.modalInfoRow}>
+                <span>담당</span>
+                <span>{selectedTask.personName}</span>
+              </div>
+            )}
           </div>
         )}
       </Modal>
 
-      {/* 인공지능 질문 */}
+      {/* AI 질문 */}
       <Modal
         open={isAIInquiryModalOpen}
         onClose={() => setIsAIInquiryModalOpen(false)}
         title="AI에게 질문"
         subtitle="업무 파일을 바탕으로 답변합니다."
+        closeOnBackdrop={!isAsking}
         footer={
           <>
-            <ModalSecondaryButton onClick={() => setIsAIInquiryModalOpen(false)}>
-              취소
+            <ModalSecondaryButton onClick={() => setIsAIInquiryModalOpen(false)} disabled={isAsking}>
+              닫기
             </ModalSecondaryButton>
-            <ModalPrimaryButton onClick={() => { setIsAIInquiryModalOpen(false); router.push('/ai-chat'); }}>
-              질문하러 가기
+            <ModalPrimaryButton onClick={() => void handleAsk()} loading={isAsking}>
+              질문하기
             </ModalPrimaryButton>
           </>
         }
       >
-        <p style={{ fontSize: '13.5px', color: '#475569', margin: 0 }}>
-          업무 지식 베이스를 바탕으로 AI 어시스턴트와 대화를 시작합니다.
-        </p>
-      </Modal>
+        <input
+          type="text"
+          placeholder="질문을 입력하세요"
+          className={styles.modalInput}
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !isAsking) void handleAsk();
+          }}
+          disabled={isAsking}
+        />
 
-      {/* 예산 조회 */}
-      <Modal
-        open={isBudgetInquiryModalOpen}
-        onClose={() => setIsBudgetInquiryModalOpen(false)}
-        title="예산 조회"
-        footer={
-          <ModalSecondaryButton onClick={() => setIsBudgetInquiryModalOpen(false)}>
-            닫기
-          </ModalSecondaryButton>
-        }
-      >
-        <div className={styles.modalInfoCard}>
-          <div className={styles.modalInfoRow}>
-            <span>배정 예산</span>
-            <span>$5,000</span>
+        {askError && <p className={styles.askError}>{askError}</p>}
+
+        {isAsking && <p className={styles.askStatus}>답변을 만드는 중입니다...</p>}
+
+        {answer && !isAsking && (
+          <div className={styles.answerBox}>
+            <div className={styles.answerLabel}>답변</div>
+            <p className={styles.answerText}>{answer}</p>
+            {citations.length > 0 && (
+              <p className={styles.citations}>참고 문서: {citations.join(', ')}</p>
+            )}
           </div>
-          <div className={styles.modalInfoRow}>
-            <span>사용액</span>
-            <span>$1,200</span>
-          </div>
-          <div className={styles.modalInfoRow}>
-            <span>잔액</span>
-            <span>$3,800</span>
-          </div>
-        </div>
+        )}
       </Modal>
 
       {/* 인수인계 요약 */}
@@ -498,36 +661,53 @@ export default function DashboardPage() {
       >
         <div className={styles.modalSection}>
           <h4>진행 현황</h4>
-          <p>32% 완료 · 45개 업무 중 14개 완료</p>
+          <p>
+            {progressPercent}% 완료 · 오늘 할 일 {dashboard?.today.total ?? 0}개 중{' '}
+            {dashboard?.today.done ?? 0}개 완료
+          </p>
         </div>
         <div className={styles.modalSection}>
-          <h4>병목 항목</h4>
-          <p>2건의 지연 항목이 있습니다.</p>
+          <h4>체크리스트</h4>
+          <p>
+            {dashboard?.checklist.total ?? 0}개 중 {dashboard?.checklist.done ?? 0}개 완료
+          </p>
         </div>
-      </Modal>
-
-      {/* 최근 파일 */}
-      <Modal
-        open={isRecentFilesModalOpen}
-        onClose={() => setIsRecentFilesModalOpen(false)}
-        title="최근 파일"
-        footer={
-          <ModalSecondaryButton onClick={() => setIsRecentFilesModalOpen(false)}>
-            닫기
-          </ModalSecondaryButton>
-        }
-      >
-        <div className={styles.modalList}>
-          {recentFiles.map((file) => (
-            <div key={file.id} className={styles.modalListItem}>
-              <span>{file.name}</span>
-              <span className={styles.modalListMeta}>
-                {file.format} · {file.size}
-              </span>
-            </div>
-          ))}
+        {dashboard?.message && (
+          <div className={styles.modalSection}>
+            <h4>안내</h4>
+            <p>{dashboard.message}</p>
+          </div>
+        )}
+        <div className={styles.modalSection}>
+          <h4>최근 업무 파일</h4>
+          <div className={styles.modalList}>
+            {recentFiles.length === 0 ? (
+              <div className={styles.modalListItem}>
+                <span>아직 업로드된 파일이 없습니다.</span>
+              </div>
+            ) : (
+              recentFiles.map((file) => (
+                <div key={file.id} className={styles.modalListItem}>
+                  <span>{file.title}</span>
+                  <span className={styles.modalListMeta}>
+                    {formatFileType(file.mimeType, file.title)} · {formatFileSize(file.sizeBytes)} ·{' '}
+                    {getDisplayLabel(file.status)}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </Modal>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  // 워크스페이스가 없어도 튕겨내지 않고 빈 상태 화면을 보여준다
+  return (
+    <RequireWorkspace emptyState={<WorkspaceEmptyState />}>
+      <DashboardContent />
+    </RequireWorkspace>
   );
 }
