@@ -12,6 +12,7 @@ import {
   generateTemplate,
   getDocuments,
   getMembers,
+  getTemplateDetail,
   getTemplates,
   updateTemplate,
   type DocumentResponse,
@@ -54,6 +55,129 @@ function durationOf(items: TemplateItemResponse[] | null): number {
 
 const ROLE_OPTIONS: WorkspaceRole[] = ['NEW_HIRE', 'MEMBER', 'MANAGER'];
 
+const ITEM_TYPES = ['DOCUMENT', 'CHECKLIST', 'PERSON', 'PRACTICE'] as const;
+
+/**
+ * 템플릿 항목 편집기.
+ * 항목 없이 저장된 템플릿은 계획에 아무 영향을 주지 않으므로,
+ * 생성·편집·AI 초안 세 곳에서 같은 편집기를 쓴다.
+ */
+function TemplateItemsEditor({
+  items,
+  maxDay,
+  disabled,
+  onChange,
+}: {
+  items: TemplateItemPayload[];
+  maxDay: number;
+  disabled: boolean;
+  onChange: (next: TemplateItemPayload[]) => void;
+}) {
+  const patch = (index: number, part: Partial<TemplateItemPayload>) =>
+    onChange(items.map((item, i) => (i === index ? { ...item, ...part } : item)));
+
+  const remove = (index: number) => onChange(items.filter((_, i) => i !== index));
+
+  const add = () =>
+    onChange([
+      ...items,
+      {
+        dayIndex: items.length === 0 ? 1 : Math.min(maxDay, items[items.length - 1].dayIndex + 1),
+        type: 'CHECKLIST',
+        title: '',
+        description: '',
+      },
+    ]);
+
+  return (
+    <div>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        fontSize: '13px', color: '#475569', marginBottom: '8px',
+      }}>
+        <span>계획 항목 {items.length > 0 && `(${items.length}개)`}</span>
+        <button
+          type="button"
+          onClick={add}
+          disabled={disabled}
+          style={{
+            border: '1px solid #cbd5e1', background: '#ffffff', borderRadius: '6px',
+            padding: '5px 10px', fontSize: '12.5px', cursor: disabled ? 'not-allowed' : 'pointer',
+          }}
+        >
+          <Plus size={13} /> 항목 추가
+        </button>
+      </div>
+
+      <div style={{
+        maxHeight: '300px', overflowY: 'auto',
+        border: '1px solid #e2e8f0', borderRadius: '10px',
+      }}>
+        {items.length === 0 ? (
+          <div style={{ padding: '16px', fontSize: '13px', color: '#985050', lineHeight: 1.7 }}>
+            항목이 없습니다. <strong>항목이 없는 템플릿은 계획에 반영되지 않습니다.</strong><br />
+            직접 추가하거나, 문서로 AI 생성을 이용해 주세요.
+          </div>
+        ) : (
+          items.map((item, index) => (
+            <div
+              key={index}
+              style={{
+                display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '10px 12px',
+                borderTop: index === 0 ? 'none' : '1px solid #f1f5f9',
+              }}
+            >
+              <input
+                type="number"
+                min={1}
+                max={maxDay}
+                value={item.dayIndex}
+                onChange={(e) => patch(index, {
+                  dayIndex: Math.max(1, Math.min(maxDay, Number(e.target.value) || 1)),
+                })}
+                disabled={disabled}
+                title="일차"
+                style={{ width: '58px', padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+              />
+              <select
+                value={item.type}
+                onChange={(e) => patch(index, { type: e.target.value as TemplateItemPayload['type'] })}
+                disabled={disabled}
+                title="종류"
+                style={{ width: '112px', padding: '7px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+              >
+                {ITEM_TYPES.map(t => (
+                  <option key={t} value={t}>{getDisplayLabel(t)}</option>
+                ))}
+              </select>
+              <input
+                value={item.title}
+                onChange={(e) => patch(index, { title: e.target.value })}
+                disabled={disabled}
+                placeholder="무엇을 하는지 (필수)"
+                title="제목"
+                style={{ flex: 1, padding: '7px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+              />
+              <button
+                type="button"
+                onClick={() => remove(index)}
+                disabled={disabled}
+                title="이 항목 제거"
+                style={{
+                  border: '1px solid #e2e8f0', background: '#ffffff', borderRadius: '6px',
+                  padding: '7px 8px', cursor: disabled ? 'not-allowed' : 'pointer', color: '#985050',
+                }}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function TemplatesPage() {
   const { showToast } = useToast();
 
@@ -75,11 +199,16 @@ export default function TemplatesPage() {
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState<WorkspaceRole>('NEW_HIRE');
   const [newDescription, setNewDescription] = useState('');
+  // 항목 없이 저장하면 계획에 반영되지 않으므로 생성 폼에서도 항목을 받는다
+  const [newItems, setNewItems] = useState<TemplateItemPayload[]>([]);
+  const [newIsDefault, setNewIsDefault] = useState(true);
 
   // 편집 폼
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState<WorkspaceRole>('NEW_HIRE');
   const [editDescription, setEditDescription] = useState('');
+  const [editItems, setEditItems] = useState<TemplateItemPayload[]>([]);
+  const [editIsDefault, setEditIsDefault] = useState(false);
 
   // 템플릿 대상 역할의 멤버
   const [members, setMembers] = useState<MemberResponse[]>([]);
@@ -101,6 +230,7 @@ export default function TemplatesPage() {
   const [draft, setDraft] = useState<GeneratedTemplateResponse | null>(null);
   const [draftName, setDraftName] = useState('');
   const [draftItems, setDraftItems] = useState<TemplateItemPayload[]>([]);
+  const [draftIsDefault, setDraftIsDefault] = useState(true);
 
   const openGenerateModal = async () => {
     setDraft(null);
@@ -158,6 +288,9 @@ export default function TemplatesPage() {
         name: draftName.trim(),
         targetRole: draft?.targetRole ?? genRole,
         description: draft?.description ?? undefined,
+        // 기본으로 지정하지 않으면, 같은 역할에 이미 기본 템플릿이 있을 때
+        // 서버가 그쪽을 먼저 골라서 방금 만든 템플릿이 계획에 반영되지 않는다
+        isDefault: draftIsDefault,
         items: draftItems.map((item, index) => ({ ...item, sortOrder: index })),
       });
       showToast(`${created.name} 템플릿을 저장했습니다.`, 'success');
@@ -192,10 +325,24 @@ export default function TemplatesPage() {
     try {
       const response = await getTemplates();
       const list = response.items ?? [];
-      setTemplates(list);
+
+      // 목록 API 는 items 를 비워서 준다(GET /templates). 항목 수·기간·카테고리·통계가
+      // 전부 0으로 보이던 원인이라, 상세를 함께 받아 채운다.
+      const detailed = await Promise.all(
+        list.map(async (t) => {
+          try {
+            return await getTemplateDetail(t.id);
+          } catch {
+            // 한 건이 실패해도 목록 전체를 잃지 않는다 (항목만 비어 보인다)
+            return t;
+          }
+        })
+      );
+
+      setTemplates(detailed);
       // 목록이 바뀌어도 고른 템플릿이 남아 있으면 유지한다
       setSelectedTemplateId(prev =>
-        prev && list.some(t => t.id === prev) ? prev : (list[0]?.id ?? null)
+        prev && detailed.some(t => t.id === prev) ? prev : (detailed[0]?.id ?? null)
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : '템플릿 목록을 불러오지 못했습니다.');
@@ -236,6 +383,17 @@ export default function TemplatesPage() {
     setEditName(template.name);
     setEditRole((template.targetRole ?? 'NEW_HIRE') as WorkspaceRole);
     setEditDescription(template.description ?? '');
+    setEditIsDefault(template.isDefault);
+    // 목록에서 온 객체는 items 가 비어 있을 수 있으므로 상세에서 채운 값을 쓴다
+    setEditItems(
+      (template.items ?? []).map(i => ({
+        dayIndex: i.dayIndex,
+        type: i.type,
+        title: i.title,
+        description: i.description ?? undefined,
+        sortOrder: i.sortOrder,
+      }))
+    );
     setIsEditModalOpen(true);
   };
 
@@ -259,17 +417,26 @@ export default function TemplatesPage() {
       showToast('템플릿 이름을 입력해 주세요.', 'error');
       return;
     }
+    const usable = newItems.filter(i => i.title.trim());
     setIsSaving(true);
     try {
       const created = await createTemplate({
         name: newName.trim(),
         targetRole: newRole,
         description: newDescription.trim() || undefined,
+        isDefault: newIsDefault,
+        items: usable.map((item, index) => ({ ...item, title: item.title.trim(), sortOrder: index })),
       });
-      showToast('템플릿을 생성했습니다.', 'success');
+      showToast(
+        usable.length === 0
+          ? '템플릿을 생성했습니다. 항목이 없어 계획에는 반영되지 않습니다.'
+          : `템플릿을 생성했습니다. (항목 ${usable.length}개)`,
+        usable.length === 0 ? 'error' : 'success'
+      );
       setIsCreationModalOpen(false);
       setNewName('');
       setNewDescription('');
+      setNewItems([]);
       await load();
       setSelectedTemplateId(created.id);
     } catch (err) {
@@ -287,12 +454,17 @@ export default function TemplatesPage() {
     }
     setIsSaving(true);
     try {
+      const usable = editItems.filter(i => i.title.trim());
       await updateTemplate(selectedTemplate.id, {
         name: editName.trim(),
         targetRole: editRole,
         description: editDescription.trim() || undefined,
+        isDefault: editIsDefault,
+        // 서버는 items 가 있으면 기존 항목을 지우고 새로 저장한다.
+        // 편집기에서 불러온 값을 그대로 되돌려 보내야 기존 항목이 사라지지 않는다.
+        items: usable.map((item, index) => ({ ...item, title: item.title.trim(), sortOrder: index })),
       });
-      showToast('변경 내용을 저장했습니다.', 'success');
+      showToast('변경 내용을 저장했습니다. 기존 계획은 재생성해야 반영됩니다.', 'success');
       setIsEditModalOpen(false);
       await load();
     } catch (err) {
@@ -499,6 +671,23 @@ export default function TemplatesPage() {
               onChange={(e) => setNewDescription(e.target.value)}
             />
           </div>
+          <div className={styles.formGroup}>
+            <TemplateItemsEditor
+              items={newItems}
+              maxDay={30}
+              disabled={isSaving}
+              onChange={setNewItems}
+            />
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#475569' }}>
+            <input
+              type="checkbox"
+              checked={newIsDefault}
+              onChange={(e) => setNewIsDefault(e.target.checked)}
+              disabled={isSaving}
+            />
+            이 역할의 기본 템플릿으로 지정 (같은 역할에 기본 템플릿이 이미 있으면 그쪽이 먼저 적용됩니다)
+          </label>
         </Modal>
       )}
 
@@ -600,20 +789,23 @@ export default function TemplatesPage() {
               onChange={(e) => setEditDescription(e.target.value)}
             />
           </div>
-          <h4>포함된 항목</h4>
-          {(selectedTemplate.items ?? []).length === 0 ? (
-            <div className={styles.categoryItem}><span>등록된 항목이 없습니다.</span></div>
-          ) : (
-            (selectedTemplate.items ?? [])
-              .slice()
-              .sort((a, b) => a.dayIndex - b.dayIndex || a.sortOrder - b.sortOrder)
-              .map((item, index) => (
-                <div key={item.id} className={styles.categoryItem}>
-                  <span>{index + 1}. {item.dayIndex}일차 · {item.title}</span>
-                  <span className={styles.count}>{getDisplayLabel(item.type)}</span>
-                </div>
-              ))
-          )}
+          <div className={styles.formGroup}>
+            <TemplateItemsEditor
+              items={editItems}
+              maxDay={30}
+              disabled={isSaving}
+              onChange={setEditItems}
+            />
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#475569' }}>
+            <input
+              type="checkbox"
+              checked={editIsDefault}
+              onChange={(e) => setEditIsDefault(e.target.checked)}
+              disabled={isSaving}
+            />
+            이 역할의 기본 템플릿으로 지정
+          </label>
         </Modal>
       )}
 
@@ -843,6 +1035,23 @@ export default function TemplatesPage() {
                   </div>
                 ))}
               </div>
+
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px', color: '#475569', lineHeight: 1.6 }}>
+                <input
+                  type="checkbox"
+                  checked={draftIsDefault}
+                  onChange={(e) => setDraftIsDefault(e.target.checked)}
+                  disabled={isSaving}
+                  style={{ marginTop: '3px' }}
+                />
+                <span>
+                  이 역할의 기본 템플릿으로 지정<br />
+                  <span style={{ color: '#94a3b8', fontSize: '12px' }}>
+                    끄면, 같은 역할에 이미 기본 템플릿이 있을 경우 그쪽이 먼저 적용되어
+                    방금 만든 템플릿이 계획에 반영되지 않습니다.
+                  </span>
+                </span>
+              </label>
 
               {draft.sourceDocuments.length > 0 && (
                 <p style={{ fontSize: '12px', color: '#94a3b8', lineHeight: 1.7, margin: 0 }}>

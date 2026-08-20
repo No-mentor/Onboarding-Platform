@@ -11,11 +11,13 @@ import { getDisplayLabel } from '@/lib/display-labels';
 import {
   generateOnboardingPlan,
   getOnboardingPlan,
+  getTemplates,
   regenerateOnboardingPlan,
   updatePlanItemStatus,
   type ItemStatus,
   type PlanItemResponse,
   type PlanResponse,
+  type TemplateResponse,
 } from '@/lib/api';
 import styles from './30day-plan.module.css';
 
@@ -89,6 +91,9 @@ export default function ThirtyDayPlanPage() {
   const [isTaskBreakdownModalOpen, setIsTaskBreakdownModalOpen] = useState(false);
   /** 생성 모달의 선택지: 새로 만들기 / 완료 항목을 지키며 다시 만들기 */
   const [generationMode, setGenerationMode] = useState<'new' | 'keep'>('keep');
+  // 서버는 templateId 를 받지만 화면에서 고를 방법이 없었다. 직접 선택할 수 있게 한다
+  const [templates, setTemplates] = useState<TemplateResponse[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
 
   const canRegenerate = ADMIN_ROLES.has(me?.currentWorkspace?.role ?? '');
@@ -156,15 +161,38 @@ export default function ThirtyDayPlanPage() {
   const totalCount = allItems.length;
   const overallPercent = Math.round(Number(plan?.progressPercent ?? 0));
 
+  /** 생성 모달을 열 때 고를 수 있는 템플릿을 함께 불러온다 */
+  const openGenerationModal = async () => {
+    setIsPlanGenerationModalOpen(true);
+    try {
+      const response = await getTemplates();
+      setTemplates(response.items ?? []);
+    } catch {
+      // 템플릿을 못 불러와도 생성 자체는 가능하다 (서버가 자동으로 고른다)
+      setTemplates([]);
+    }
+  };
+
   const handleGeneratePlan = async () => {
     setIsGenerating(true);
     try {
-      // 이미 계획이 있으면 고른 방식으로 다시 만든다
-      if (plan?.planId) {
-        await regenerateOnboardingPlan(plan.planId, generationMode === 'keep');
-        showToast('계획을 다시 생성했습니다.', 'success');
+      const templateId = selectedTemplateId || undefined;
+
+      // 템플릿을 직접 골랐다면 regenerate 를 쓸 수 없다.
+      // 서버 regenerate 는 templateId 를 받지 않아 매번 자동 선택으로 돌아가기 때문이다.
+      if (plan?.planId && generationMode === 'keep' && !templateId) {
+        await regenerateOnboardingPlan(plan.planId, true);
+        showToast('완료 항목을 유지하고 계획을 다시 생성했습니다.', 'success');
+      } else if (plan?.planId) {
+        await generateOnboardingPlan({ force: true, templateId });
+        showToast(
+          templateId
+            ? '고른 템플릿으로 계획을 다시 만들었습니다. 완료 기록은 유지되지 않습니다.'
+            : '계획을 다시 생성했습니다.',
+          'success'
+        );
       } else {
-        await generateOnboardingPlan();
+        await generateOnboardingPlan({ templateId });
         showToast('30일 인수인계 계획을 생성했습니다.', 'success');
       }
       setIsPlanGenerationModalOpen(false);
@@ -271,11 +299,11 @@ export default function ThirtyDayPlanPage() {
             </div>
             <div className={styles.tabActions}>
               {canRegenerate && (
-                <button className={styles.refreshBtn} onClick={() => setIsPlanGenerationModalOpen(true)}>
+                <button className={styles.refreshBtn} onClick={() => void openGenerationModal()}>
                   계획 재생성
                 </button>
               )}
-              <button className={styles.createBtn} onClick={() => setIsPlanGenerationModalOpen(true)}>
+              <button className={styles.createBtn} onClick={() => void openGenerationModal()}>
                 <Plus size={16} /> 계획 생성
               </button>
             </div>
@@ -555,6 +583,33 @@ export default function ThirtyDayPlanPage() {
             <p style={{ fontSize: '14px', color: '#374151', lineHeight: '1.6' }}>
               사내 지식 베이스(문서)와 역할 정의를 기반으로 AI가 30일 맞춤형 인수인계 로드맵을 자동으로 생성합니다.
             </p>
+            <div style={{ marginTop: '14px' }}>
+              <label style={{ display: 'block', fontSize: '13px', color: '#475569', marginBottom: '6px' }}>
+                사용할 템플릿
+              </label>
+              <select
+                value={selectedTemplateId}
+                onChange={(e) => setSelectedTemplateId(e.target.value)}
+                disabled={isGenerating}
+                style={{ width: '100%', padding: '9px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+              >
+                <option value="">자동 선택 (내 역할용 → 기본 → 기본 골격)</option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                    {t.targetRole ? ` · ${getDisplayLabel(t.targetRole)}` : ''}
+                    {t.isDefault ? ' · 기본' : ''}
+                  </option>
+                ))}
+              </select>
+              {templates.length === 0 && (
+                <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px', lineHeight: 1.6 }}>
+                  등록된 템플릿이 없습니다. 템플릿 화면에서 문서로 AI 템플릿을 만들면
+                  문서 내용에 맞는 계획이 생성됩니다.
+                </p>
+              )}
+            </div>
+
             {plan?.planId && (
               <>
                 <div className={styles.generationOption}>
@@ -564,8 +619,12 @@ export default function ThirtyDayPlanPage() {
                     value="keep"
                     checked={generationMode === 'keep'}
                     onChange={() => setGenerationMode('keep')}
+                    disabled={!!selectedTemplateId}
                   />
-                  <label>완료한 항목은 유지하고 재생성</label>
+                  <label style={{ opacity: selectedTemplateId ? 0.5 : 1 }}>
+                    완료한 항목은 유지하고 재생성
+                    {selectedTemplateId && ' (템플릿을 고르면 사용할 수 없습니다)'}
+                  </label>
                 </div>
                 <div className={styles.generationOption}>
                   <input

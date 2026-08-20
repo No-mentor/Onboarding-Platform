@@ -192,11 +192,30 @@ export async function getOnboardingPlan(includeItems: boolean = true): Promise<P
   return response.json();
 }
 
-export async function generateOnboardingPlan(): Promise<PlanResponse> {
+export interface GeneratePlanOptions {
+  /** 이 템플릿으로 만든다. 비우면 서버가 역할용 → 기본 → 기본 골격 순으로 고른다 */
+  templateId?: string;
+  /** 이미 활성 계획이 있어도 기존 것을 보관하고 새로 만든다 */
+  force?: boolean;
+}
+
+/**
+ * 계획 생성.
+ *
+ * 템플릿을 골라 다시 만들려면 force=true 로 이 함수를 쓴다.
+ * regenerateOnboardingPlan 은 완료 항목을 유지하지만 서버가 templateId 를 받지 않아
+ * 템플릿을 지정할 수 없다.
+ */
+export async function generateOnboardingPlan(
+  options: GeneratePlanOptions = {}
+): Promise<PlanResponse> {
+  const body: Record<string, unknown> = { force: options.force ?? false };
+  if (options.templateId) body.templateId = options.templateId;
+
   const response = await apiFetch(`${API_BASE}/onboarding-plans/generate`, {
     method: 'POST',
     headers: workspaceHeaders(JSON_CONTENT),
-    body: JSON.stringify({ force: false }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) throw new Error(await errorMessage(response, '계획 생성 실패'));
