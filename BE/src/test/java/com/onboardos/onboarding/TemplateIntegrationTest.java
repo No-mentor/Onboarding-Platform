@@ -2,6 +2,7 @@ package com.onboardos.onboarding;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -79,7 +80,7 @@ class TemplateIntegrationTest {
                 .andReturn();
         String workspaceId = objectMapper.readTree(ws.getResponse().getContentAsString()).get("id").asText();
 
-        mockMvc.perform(post("/api/v1/templates")
+        MvcResult created = mockMvc.perform(post("/api/v1/templates")
                         .header("Authorization", "Bearer " + token)
                         .header("X-Workspace-Id", workspaceId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -90,18 +91,78 @@ class TemplateIntegrationTest {
                                   "isDefault":true,
                                   "items":[
                                     {"dayIndex":1,"type":"CHECKLIST","title":"계정 발급 확인","sortOrder":0},
-                                    {"dayIndex":2,"type":"DOCUMENT","title":"아키텍처 문서 읽기","sortOrder":0}
+                                    {"dayIndex":2,"type":"PRACTICE","title":"아키텍처 문서 읽기","sortOrder":0}
                                   ]
                                 }
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("Backend NEW_HIRE"))
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.itemCount").value(2))
+                .andReturn();
+        String templateId = objectMapper.readTree(created.getResponse().getContentAsString()).get("id").asText();
+
+        mockMvc.perform(get("/api/v1/templates/{id}", templateId)
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Workspace-Id", workspaceId))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(2));
+
+        mockMvc.perform(post("/api/v1/templates")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Workspace-Id", workspaceId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Invalid document","targetRole":"NEW_HIRE","items":[
+                                  {"dayIndex":1,"type":"DOCUMENT","title":"Missing document id"}
+                                ]}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        mockMvc.perform(patch("/api/v1/templates/{id}", templateId)
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Workspace-Id", workspaceId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"items":[
+                                  {"dayIndex":3,"type":"PRACTICE","title":"Updated practice","sortOrder":2},
+                                  {"dayIndex":1,"type":"CHECKLIST","title":"Updated checklist","sortOrder":0},
+                                  {"dayIndex":2,"type":"PERSON","title":"Meet manager","sortOrder":1}
+                                ]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itemCount").value(3))
+                .andExpect(jsonPath("$.items[0].title").value("Updated checklist"));
+
+        mockMvc.perform(patch("/api/v1/templates/{id}", templateId)
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Workspace-Id", workspaceId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"items":[
+                                  {"dayIndex":3,"type":"PRACTICE","title":"Updated practice","sortOrder":0},
+                                  {"dayIndex":1,"type":"CHECKLIST","title":"Updated checklist","sortOrder":1}
+                                ]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itemCount").value(2));
+
+        mockMvc.perform(patch("/api/v1/templates/{id}", templateId)
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Workspace-Id", workspaceId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\":[]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
         mockMvc.perform(get("/api/v1/templates")
                         .header("Authorization", "Bearer " + token)
                         .header("X-Workspace-Id", workspaceId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items.length()").value(1));
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].itemCount").value(2))
+                .andExpect(jsonPath("$.items[0].practiceCount").value(1))
+                .andExpect(jsonPath("$.items[0].checklistCount").value(1));
     }
 }

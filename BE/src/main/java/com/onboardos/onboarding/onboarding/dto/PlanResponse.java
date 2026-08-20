@@ -14,6 +14,8 @@ public record PlanResponse(
         LocalDate startDate,
         LocalDate endDate,
         BigDecimal progressPercent,
+        String generatedBy,
+        UUID sourceTemplateId,
         int itemCount,
         List<PlanItemResponse> items
 ) {

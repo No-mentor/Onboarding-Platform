@@ -8,6 +8,7 @@ import com.onboardos.onboarding.onboarding.dto.GeneratePlanRequest;
 import com.onboardos.onboarding.onboarding.dto.PlanItemResponse;
 import com.onboardos.onboarding.onboarding.dto.PlanResponse;
 import com.onboardos.onboarding.onboarding.dto.RecommendationResponse;
+import com.onboardos.onboarding.onboarding.dto.RegeneratePlanRequest;
 import com.onboardos.onboarding.onboarding.dto.StatusUpdateRequest;
 import com.onboardos.onboarding.onboarding.dto.TodayRecommendationsResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -76,9 +77,13 @@ public class OnboardingController {
     public PlanResponse regenerate(
             @RequestHeader("X-Workspace-Id") UUID workspaceId,
             @PathVariable UUID planId,
-            @RequestParam(defaultValue = "true") boolean keepCompleted
+            @RequestParam(defaultValue = "true") boolean keepCompleted,
+            @RequestBody(required = false) RegeneratePlanRequest request
     ) {
-        return planService.regenerate(SecurityUtils.currentUser(), workspaceId, planId, keepCompleted);
+        boolean preserve = request != null && request.preserveCompleted() != null
+                ? request.preserveCompleted() : keepCompleted;
+        return planService.regenerate(SecurityUtils.currentUser(), workspaceId, planId, preserve,
+                request == null ? null : request.templateId());
     }
 
     @Operation(summary = "계획 항목 상태 변경")

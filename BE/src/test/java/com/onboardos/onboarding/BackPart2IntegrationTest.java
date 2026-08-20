@@ -55,7 +55,7 @@ class BackPart2IntegrationTest {
                         .content("""
                                 {
                                   "name":"BP2 Default Template",
-                                  "targetRole":"NEW_HIRE",
+                                  "targetRole":"OWNER",
                                   "isDefault":true,
                                   "items":[
                                     {"dayIndex":1,"type":"CHECKLIST","title":"계정 확인","sortOrder":0},

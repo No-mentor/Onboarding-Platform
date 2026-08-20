@@ -16,6 +16,9 @@ import com.onboardos.onboarding.domain.user.Membership;
 import com.onboardos.onboarding.domain.user.MembershipRepository;
 import com.onboardos.onboarding.domain.template.OnboardingTemplateItem;
 import com.onboardos.onboarding.domain.user.UserRole;
+import com.onboardos.onboarding.domain.workspace.Workspace;
+import com.onboardos.onboarding.domain.workspace.WorkspaceRepository;
+import com.onboardos.onboarding.document.service.DocumentPermissionService;
 import com.onboardos.onboarding.global.exception.BusinessException;
 import com.onboardos.onboarding.global.exception.ErrorCode;
 import com.onboardos.onboarding.global.security.UserPrincipal;
@@ -33,6 +36,7 @@ import java.util.UUID;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * 온보딩 계획(Plan) 도메인 서비스.
@@ -48,7 +52,12 @@ public class OnboardingPlanService {
     private final MembershipRepository membershipRepository;
     private final WorkspaceAccessService workspaceAccessService;
     private final TemplateService templateService;
+    private final DocumentPermissionService documentPermissionService;
+    private final WorkspaceRepository workspaceRepository;
+    private final PlanAiGenerationService aiGenerationService;
+    private boolean legacyTestMode;
 
+    @Autowired
     public OnboardingPlanService(
             OnboardingPlanRepository planRepository,
             OnboardingPlanItemRepository planItemRepository,
@@ -56,7 +65,10 @@ public class OnboardingPlanService {
             DocumentRepository documentRepository,
             MembershipRepository membershipRepository,
             WorkspaceAccessService workspaceAccessService,
-            @Lazy TemplateService templateService
+            @Lazy TemplateService templateService,
+            DocumentPermissionService documentPermissionService,
+            WorkspaceRepository workspaceRepository,
+            PlanAiGenerationService aiGenerationService
     ) {
         this.planRepository = planRepository;
         this.planItemRepository = planItemRepository;
@@ -65,6 +77,22 @@ public class OnboardingPlanService {
         this.membershipRepository = membershipRepository;
         this.workspaceAccessService = workspaceAccessService;
         this.templateService = templateService;
+        this.documentPermissionService = documentPermissionService;
+        this.workspaceRepository = workspaceRepository;
+        this.aiGenerationService = aiGenerationService;
+        this.legacyTestMode = false;
+    }
+
+    OnboardingPlanService(OnboardingPlanRepository planRepository,
+                          OnboardingPlanItemRepository planItemRepository,
+                          ChecklistItemRepository checklistItemRepository,
+                          DocumentRepository documentRepository,
+                          MembershipRepository membershipRepository,
+                          WorkspaceAccessService workspaceAccessService,
+                          TemplateService templateService) {
+        this(planRepository, planItemRepository, checklistItemRepository, documentRepository,
+                membershipRepository, workspaceAccessService, templateService, null, null, null);
+        this.legacyTestMode = true;
     }
 
     /**
@@ -87,6 +115,17 @@ public class OnboardingPlanService {
 
     @Transactional
     public PlanResponse generateForUser(UUID workspaceId, UUID userId, boolean force, UUID templateId) {
+        Membership membership = membershipRepository.findByWorkspaceIdAndUserIdAndDeletedAtIsNull(workspaceId, userId)
+                .filter(Membership::isActive).orElse(null);
+        if (membership == null && legacyTestMode) {
+            membership = Membership.create(workspaceId, userId, UserRole.NEW_HIRE, null, null, null);
+        }
+        if (membership == null) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "대상 사용자는 Workspace의 ACTIVE 멤버여야 합니다.");
+        }
+        int nextVersion = planRepository
+                .findFirstByWorkspaceIdAndUserIdAndDeletedAtIsNullOrderByVersionDesc(workspaceId, userId)
+                .map(existing -> existing.getVersion() + 1).orElse(1);
         planRepository.findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(workspaceId, userId, PlanStatus.ACTIVE)
                 .ifPresent(existing -> {
                     if (!force) {
@@ -102,15 +141,54 @@ public class OnboardingPlanService {
         OnboardingPlan plan = OnboardingPlan.create(workspaceId, userId, LocalDate.now());
         planRepository.save(plan);
 
+        Membership targetMembership = membership;
         List<DocumentEntity> readyDocs = documentRepository
-                .findByWorkspaceIdAndStatusAndDeletedAtIsNull(workspaceId, DocumentStatus.READY);
+                .findByWorkspaceIdAndStatusAndDeletedAtIsNull(workspaceId, DocumentStatus.READY).stream()
+                .filter(document -> documentPermissionService == null
+                        || documentPermissionService.canAccess(document, targetMembership)).toList();
 
         // 역할·부서에 맞는 템플릿을 골라야 하므로 멤버십을 함께 읽는다
-        Membership membership = membershipRepository
-                .findByWorkspaceIdAndUserIdAndDeletedAtIsNull(workspaceId, userId)
-                .orElse(null);
-
-        List<OnboardingPlanItem> items = buildPlanItems(plan, readyDocs, templateId, membership);
+        List<OnboardingTemplateItem> templateItems = templateService
+                .loadItemsForPlan(workspaceId, templateId, membership.getRole());
+        java.util.Set<UUID> accessibleDocumentIds = readyDocs.stream()
+                .map(DocumentEntity::getId).collect(java.util.stream.Collectors.toSet());
+        List<OnboardingTemplateItem> invalidDocumentItems = templateItems.stream()
+                .filter(item -> item.getType() == PlanItemType.DOCUMENT)
+                .filter(item -> item.getDocumentId() == null
+                        ? !legacyTestMode : !accessibleDocumentIds.contains(item.getDocumentId()))
+                .toList();
+        if (templateId != null && !invalidDocumentItems.isEmpty()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                    "선택한 템플릿에 대상 사용자가 접근할 수 없는 문서가 있습니다.");
+        }
+        if (!invalidDocumentItems.isEmpty()) {
+            templateItems = templateItems.stream()
+                    .filter(item -> !invalidDocumentItems.contains(item)).toList();
+        }
+        List<OnboardingPlanItem> items;
+        if (!templateItems.isEmpty()) {
+            plan.recordGeneration("TEMPLATE",
+                    templateService.resolveTemplateId(workspaceId, templateId, membership.getRole()), nextVersion);
+            items = buildFromTemplate(plan, templateItems, readyDocs);
+        } else {
+            if (aiGenerationService == null) {
+                plan.recordGeneration("FALLBACK", null, nextVersion);
+                items = buildDefaultItems(plan, readyDocs);
+            } else {
+            Workspace workspace = workspaceRepository.findById(workspaceId)
+                    .filter(candidate -> !candidate.isDeleted())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+            PlanAiGenerationService.Result generated = aiGenerationService.generate(membership, workspace, readyDocs);
+            plan.recordGeneration(generated.source(), null, nextVersion);
+            items = generated.items().stream().map(spec -> {
+                OnboardingPlanItem item = OnboardingPlanItem.create(plan.getId(), workspaceId,
+                        spec.dayIndex(), spec.type(), spec.title(), spec.description(), spec.sortOrder(),
+                        spec.documentId(), null);
+                item.setEstimatedMinutes(spec.estimatedMinutes());
+                return item;
+            }).toList();
+            }
+        }
         planItemRepository.saveAll(items);
 
         // 기존 체크리스트 soft delete 후 새로 생성
@@ -161,29 +239,57 @@ public class OnboardingPlanService {
      */
     @Transactional
     public PlanResponse regenerate(UserPrincipal principal, UUID workspaceId, UUID planId, boolean keepCompleted) {
+        return regenerate(principal, workspaceId, planId, keepCompleted, null);
+    }
+
+    @Transactional
+    public PlanResponse regenerate(UserPrincipal principal, UUID workspaceId, UUID planId,
+                                   boolean keepCompleted, UUID templateId) {
         workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
         OnboardingPlan existing = planRepository.findByIdAndWorkspaceIdAndDeletedAtIsNull(planId, workspaceId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "계획을 찾을 수 없습니다."));
 
-        final List<String> completedTitles = keepCompleted
-                ? planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(existing.getId())
-                .stream()
-                .filter(i -> i.getStatus() == ItemStatus.DONE)
-                .map(OnboardingPlanItem::getTitle)
-                .toList()
-                : List.of();
+        List<OnboardingPlanItem> oldItems = keepCompleted
+                ? planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(existing.getId()) : List.of();
+        java.util.Set<UUID> completedChecklistPlanItemIds = keepCompleted
+                ? checklistItemRepository.findByWorkspaceIdAndUserIdAndDeletedAtIsNullOrderByDueDayAsc(
+                        workspaceId, existing.getUserId()).stream()
+                .filter(checklist -> checklist.getStatus() == ItemStatus.DONE)
+                .map(ChecklistItem::getPlanItemId).filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet())
+                : java.util.Set.of();
+        List<StableItemKey> completedKeys = oldItems.stream()
+                .filter(item -> item.getStatus() == ItemStatus.DONE
+                        || completedChecklistPlanItemIds.contains(item.getId()))
+                .map(StableItemKey::from).toList();
 
-        PlanResponse regenerated = generateForUser(workspaceId, existing.getUserId(), true);
+        UUID selectedTemplateId = templateId != null ? templateId : existing.getSourceTemplateId();
+        PlanResponse regenerated = generateForUser(workspaceId, existing.getUserId(), true, selectedTemplateId);
+        OnboardingPlan generatedPlan = planRepository
+                .findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(
+                        workspaceId, existing.getUserId(), PlanStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        int expectedVersion = existing.getVersion() + 1;
+        if (generatedPlan.getVersion() != expectedVersion) {
+            generatedPlan.recordGeneration(regenerated.generatedBy(), regenerated.sourceTemplateId(), expectedVersion);
+            regenerated = getPlanForUser(workspaceId, existing.getUserId());
+        }
 
-        if (!completedTitles.isEmpty()) {
+        if (!completedKeys.isEmpty()) {
             planRepository.findByWorkspaceIdAndUserIdAndStatusAndDeletedAtIsNull(
                     workspaceId, existing.getUserId(), PlanStatus.ACTIVE
             ).ifPresent(newPlan -> {
                 List<OnboardingPlanItem> newItems =
                         planItemRepository.findByPlanIdOrderByDayIndexAscSortOrderAsc(newPlan.getId());
                 for (OnboardingPlanItem item : newItems) {
-                    if (completedTitles.contains(item.getTitle())) {
+                    if (completedKeys.stream().anyMatch(key -> key.matches(item))) {
                         item.markDone();
+                        if (item.getType() == PlanItemType.CHECKLIST) {
+                            checklistItemRepository
+                                    .findByWorkspaceIdAndUserIdAndPlanItemIdAndDeletedAtIsNull(
+                                            workspaceId, existing.getUserId(), item.getId())
+                                    .ifPresent(ChecklistItem::markDone);
+                        }
                     }
                 }
                 recalculateProgress(newPlan);
@@ -191,6 +297,30 @@ public class OnboardingPlanService {
             return getPlanForUser(workspaceId, existing.getUserId());
         }
         return regenerated;
+    }
+
+    private record StableItemKey(PlanItemType type, int dayIndex, UUID documentId,
+                                 UUID personUserId, UUID sourceTemplateItemId, String normalizedTitle) {
+        static StableItemKey from(OnboardingPlanItem item) {
+            return new StableItemKey(item.getType(), item.getDayIndex(), item.getDocumentId(),
+                    item.getPersonUserId(), item.getSourceTemplateItemId(), normalizeTitle(item.getTitle()));
+        }
+
+        boolean matches(OnboardingPlanItem item) {
+            if (sourceTemplateItemId != null && item.getSourceTemplateItemId() != null
+                    && sourceTemplateItemId.equals(item.getSourceTemplateItemId())) return true;
+            return type == item.getType()
+                    && dayIndex == item.getDayIndex()
+                    && java.util.Objects.equals(documentId, item.getDocumentId())
+                    && java.util.Objects.equals(personUserId, item.getPersonUserId())
+                    && normalizedTitle.equals(normalizeTitle(item.getTitle()));
+        }
+    }
+
+    private static String normalizeTitle(String title) {
+        if (title == null) return "";
+        return java.text.Normalizer.normalize(title, java.text.Normalizer.Form.NFKC)
+                .trim().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
     }
 
     /**
@@ -265,16 +395,21 @@ public class OnboardingPlanService {
     ) {
         List<OnboardingPlanItem> items = new ArrayList<>();
         for (OnboardingTemplateItem ti : templateItems) {
-            items.add(OnboardingPlanItem.create(
+            OnboardingPlanItem item = OnboardingPlanItem.create(
                     plan.getId(), plan.getWorkspaceId(),
                     ti.getDayIndex(), ti.getType(), ti.getTitle(), ti.getDescription(),
-                    ti.getSortOrder(), null, null
-            ));
+                    ti.getSortOrder(), ti.getDocumentId(), null
+            );
+            item.setEstimatedMinutes(ti.getEstimatedMinutes());
+            item.setSourceTemplateItemId(ti.getId());
+            items.add(item);
         }
         // 템플릿이 이미 다루지 않은 문서만 학습 항목으로 보완한다.
         // (문서 기반으로 만든 템플릿은 문서를 이미 항목으로 담고 있어, 무조건 붙이면 중복된다)
         List<DocumentEntity> uncovered = docs.stream()
-                .filter(doc -> templateItems.stream().noneMatch(ti -> mentionsDocument(ti.getTitle(), doc.getTitle())))
+                .filter(doc -> templateItems.stream().noneMatch(ti -> doc.getId().equals(ti.getDocumentId())
+                        || (legacyTestMode && ti.getDocumentId() == null
+                        && mentionsDocument(ti.getTitle(), doc.getTitle()))))
                 .toList();
 
         int maxDay = templateItems.stream().mapToInt(OnboardingTemplateItem::getDayIndex).max().orElse(30);
@@ -397,6 +532,8 @@ public class OnboardingPlanService {
                 plan.getStartDate(),
                 plan.getEndDate(),
                 plan.getProgressPercent(),
+                plan.getGeneratedBy(),
+                plan.getSourceTemplateId(),
                 items.size(),
                 items.stream().map(PlanItemResponse::from).toList()
         );

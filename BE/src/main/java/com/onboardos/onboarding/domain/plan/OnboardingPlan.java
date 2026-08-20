@@ -51,6 +51,9 @@ public class OnboardingPlan extends BaseTimeEntity {
     @Column(name = "generated_by", nullable = false, length = 20)
     private String generatedBy = "TEMPLATE";
 
+    @Column(name = "source_template_id")
+    private UUID sourceTemplateId;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false, columnDefinition = "jsonb")
     private String meta = "{}";
@@ -71,6 +74,12 @@ public class OnboardingPlan extends BaseTimeEntity {
         p.generatedBy = "TEMPLATE";
         p.meta = "{}";
         return p;
+    }
+
+    public void recordGeneration(String generatedBy, UUID sourceTemplateId, int version) {
+        this.generatedBy = generatedBy;
+        this.sourceTemplateId = sourceTemplateId;
+        this.version = version;
     }
 
     public void archive() {

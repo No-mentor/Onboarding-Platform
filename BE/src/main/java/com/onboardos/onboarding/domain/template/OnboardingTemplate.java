@@ -76,4 +76,8 @@ public class OnboardingTemplate extends BaseTimeEntity {
     public void softDelete() {
         this.deletedAt = Instant.now();
     }
+
+    public void clearDefault() {
+        this.isDefault = false;
+    }
 }

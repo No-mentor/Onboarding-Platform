@@ -10,11 +10,14 @@ public record TemplateItemResponse(
         PlanItemType type,
         String title,
         String description,
-        int sortOrder
+        int sortOrder,
+        UUID documentId,
+        Integer estimatedMinutes
 ) {
     public static TemplateItemResponse from(OnboardingTemplateItem i) {
         return new TemplateItemResponse(
-                i.getId(), i.getDayIndex(), i.getType(), i.getTitle(), i.getDescription(), i.getSortOrder()
+                i.getId(), i.getDayIndex(), i.getType(), i.getTitle(), i.getDescription(), i.getSortOrder(),
+                i.getDocumentId(), i.getEstimatedMinutes()
         );
     }
 }
