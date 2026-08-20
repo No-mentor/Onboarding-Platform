@@ -331,6 +331,7 @@ export async function updatePlanItemStatus(itemId: string, status: PlanItemStatu
 export interface ChecklistItemResponse {
   id: string;
   title: string;
+  description: string | null;
   status: ChecklistStatus;
   /** 며칠차까지 끝내야 하는지 */
   dueDay: number | null;

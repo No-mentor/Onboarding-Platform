@@ -67,6 +67,26 @@ public class ChecklistItem extends BaseTimeEntity {
         return c;
     }
 
+    public static ChecklistItem create(
+            UUID workspaceId,
+            UUID userId,
+            UUID planItemId,
+            String title,
+            String description,
+            Integer dueDay
+    ) {
+        ChecklistItem c = new ChecklistItem();
+        c.id = UUID.randomUUID();
+        c.workspaceId = workspaceId;
+        c.userId = userId;
+        c.planItemId = planItemId;
+        c.title = title;
+        c.description = description;
+        c.dueDay = dueDay;
+        c.status = ItemStatus.PENDING;
+        return c;
+    }
+
     public void markDone() {
         this.status = ItemStatus.DONE;
         this.completedAt = Instant.now();

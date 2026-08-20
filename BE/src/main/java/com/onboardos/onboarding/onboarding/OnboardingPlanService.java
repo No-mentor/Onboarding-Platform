@@ -152,17 +152,9 @@ public class OnboardingPlanService {
                         throw new BusinessException(ErrorCode.CONFLICT, "이미 활성 온보딩 계획이 있습니다. force=true로 재생성하세요.");
                     }
                     existing.archive();
-                    // uq_active_plan 은 (workspace_id, user_id) WHERE status='ACTIVE' 부분 유니크 인덱스다.
-                    // 여기서 flush 하지 않으면 새 계획 INSERT 가 이 UPDATE 보다 먼저 나가 제약을 위반한다.
-                    // (재생성이 항상 500 으로 실패하던 원인)
                     planRepository.saveAndFlush(existing);
                 });
 
-        // save() 가 돌려주는 인스턴스를 써야 한다.
-        // @Id 가 수동 할당이고 Persistable 을 구현하지 않아 Spring Data 가 isNew()=false 로 보고
-        // em.merge() 를 호출한다. 그래서 save() 의 반환값만 영속 상태이고, 인자로 넘긴 객체는
-        // detached 로 남는다. detached 객체에 recordGeneration() 을 호출하면
-        // generatedBy·sourceTemplateId·version 이 DB 에 반영되지 않는다.
         OnboardingPlan plan = planRepository.save(
                 OnboardingPlan.create(workspaceId, userId, clock.today()));
 
@@ -172,7 +164,6 @@ public class OnboardingPlanService {
                 .filter(document -> documentPermissionService == null
                         || documentPermissionService.canAccess(document, targetMembership)).toList();
 
-        // 역할·부서에 맞는 템플릿을 골라야 하므로 멤버십을 함께 읽는다
         List<OnboardingTemplateItem> templateItems = templateService
                 .loadItemsForPlan(workspaceId, templateId, membership.getRole());
         java.util.Set<UUID> accessibleDocumentIds = readyDocs.stream()
@@ -200,36 +191,28 @@ public class OnboardingPlanService {
                 plan.recordGeneration("FALLBACK", null, nextVersion);
                 items = buildDefaultItems(plan, readyDocs);
             } else {
-            Workspace workspace = workspaceRepository.findById(workspaceId)
-                    .filter(candidate -> !candidate.isDeleted())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-            PlanAiGenerationService.Result generated = aiGenerationService.generate(membership, workspace, readyDocs);
-            plan.recordGeneration(generated.source(), null, nextVersion);
-            items = generated.items().stream().map(spec -> {
-                OnboardingPlanItem item = OnboardingPlanItem.create(plan.getId(), workspaceId,
-                        spec.dayIndex(), spec.type(), spec.title(), spec.description(), spec.sortOrder(),
-                        spec.documentId(), null);
-                item.setEstimatedMinutes(spec.estimatedMinutes());
-                return item;
-            }).toList();
+                Workspace workspace = workspaceRepository.findById(workspaceId)
+                        .filter(candidate -> !candidate.isDeleted())
+                        .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+                PlanAiGenerationService.Result generated = aiGenerationService.generate(membership, workspace, readyDocs);
+                plan.recordGeneration(generated.source(), null, nextVersion);
+                items = generated.items().stream().map(spec -> {
+                    OnboardingPlanItem item = OnboardingPlanItem.create(plan.getId(), workspaceId,
+                            spec.dayIndex(), spec.type(), spec.title(), spec.description(), spec.sortOrder(),
+                            spec.documentId(), null);
+                    item.setEstimatedMinutes(spec.estimatedMinutes());
+                    return item;
+                }).toList();
             }
         }
         planItemRepository.saveAll(items);
 
-        // 기존 체크리스트 soft delete 후 새로 생성
         softDeleteExistingChecklists(workspaceId, userId);
         List<ChecklistItem> checklists = items.stream()
-                .filter(i -> i.getType() == PlanItemType.CHECKLIST)
-                .map(i -> ChecklistItem.create(workspaceId, userId, i.getId(), i.getTitle(), i.getDayIndex()))
+                .map(i -> ChecklistItem.create(workspaceId, userId, i.getId(), i.getTitle(), i.getDescription(), i.getDayIndex()))
                 .toList();
         checklistItemRepository.saveAll(checklists);
 
-        // 이 계획이 새로 활성화됐으니, "오늘"의 추천은 이 계획과 일치해야 한다.
-        // 예전 계획(이제는 archived)을 기준으로 만들어졌던 오늘의 추천은 완료/건너뜀 이력까지
-        // 포함해 전부 지운다 — 다른 날짜의 이력은 건드리지 않는다. 완료 여부의 소스 오브 트루스는
-        // PlanItem/ChecklistItem 상태이고(재생성 시 keepCompleted 로 이미 새 항목에 옮겨진다),
-        // "오늘의 추천"은 그때그때 다시 만들 수 있는 파생 데이터이기 때문이다.
-        // 다음 GET /recommendations/today 호출이 새 계획의 Day 1 항목 기준으로 다시 만든다.
         if (recommendationRepository != null) {
             recommendationRepository.deleteByWorkspaceIdAndUserIdAndRecommendDate(
                     workspaceId, userId, plan.getStartDate());

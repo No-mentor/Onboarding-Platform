@@ -8,11 +8,12 @@ import java.util.UUID;
 public record ChecklistResponse(
         UUID id,
         String title,
+        String description,
         ItemStatus status,
         Integer dueDay,
         Instant completedAt
 ) {
     public static ChecklistResponse from(ChecklistItem c) {
-        return new ChecklistResponse(c.getId(), c.getTitle(), c.getStatus(), c.getDueDay(), c.getCompletedAt());
+        return new ChecklistResponse(c.getId(), c.getTitle(), c.getDescription(), c.getStatus(), c.getDueDay(), c.getCompletedAt());
     }
 }

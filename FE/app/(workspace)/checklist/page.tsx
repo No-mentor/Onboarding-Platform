@@ -218,6 +218,7 @@ export default function ChecklistPage() {
                     </div>
                     <div className={styles.itemContent}>
                       <div className={styles.itemTitle}>{item.title}</div>
+                      {item.description && <div className={styles.itemDesc}>{item.description}</div>}
                     </div>
                     <div className={styles.itemDay}>
                       {item.dueDay !== null && item.dueDay !== undefined ? `${item.dueDay}일차` : '기한 없음'}
@@ -284,6 +285,9 @@ export default function ChecklistPage() {
         >
           <div className={styles.taskCard}>
             <h3 className={styles.taskTitle}>{selectedItem.title}</h3>
+            {selectedItem.description && (
+              <p className={styles.taskDescription}>{selectedItem.description}</p>
+            )}
             <div className={styles.taskMeta}>
               <span className={styles.tagBadge}>
                 {selectedItem.dueDay !== null && selectedItem.dueDay !== undefined ? `${selectedItem.dueDay}일차` : '기한 없음'}

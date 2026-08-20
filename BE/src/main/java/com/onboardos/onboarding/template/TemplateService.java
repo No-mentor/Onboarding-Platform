@@ -230,7 +230,6 @@ public class TemplateService {
     }
 
     private void clearExistingDefault(UUID workspaceId, UserRole role, UUID exceptId) {
-        templateRepository.findByWorkspaceIdAndTargetRoleAndDeletedAtIsNull(workspaceId, role);
         templateRepository.clearDefaultsExcept(workspaceId, role, exceptId);
     }
 
