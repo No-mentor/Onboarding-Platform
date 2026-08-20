@@ -14,7 +14,9 @@ public record PlanItemResponse(
         String description,
         ItemStatus status,
         UUID documentId,
+        UUID sourceTemplateItemId,
         String personName,
+        Integer estimatedMinutes,
         Instant completedAt
 ) {
     public static PlanItemResponse from(OnboardingPlanItem i) {
@@ -26,7 +28,9 @@ public record PlanItemResponse(
                 i.getDescription(),
                 i.getStatus(),
                 i.getDocumentId(),
+                i.getSourceTemplateItemId(),
                 i.getPersonName(),
+                i.getEstimatedMinutes(),
                 i.getCompletedAt()
         );
     }

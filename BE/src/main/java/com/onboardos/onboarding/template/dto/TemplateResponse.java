@@ -13,6 +13,12 @@ public record TemplateResponse(
         String description,
         boolean isDefault,
         Instant updatedAt,
+        int itemCount,
+        long documentCount,
+        long personCount,
+        long checklistCount,
+        long practiceCount,
+        int totalEstimatedMinutes,
         List<TemplateItemResponse> items
 ) {
     public static TemplateResponse of(OnboardingTemplate t, List<TemplateItemResponse> items) {
@@ -23,6 +29,13 @@ public record TemplateResponse(
                 t.getDescription(),
                 t.isDefault(),
                 t.getUpdatedAt(),
+                items.size(),
+                items.stream().filter(i -> i.type() == com.onboardos.onboarding.domain.plan.PlanItemType.DOCUMENT).count(),
+                items.stream().filter(i -> i.type() == com.onboardos.onboarding.domain.plan.PlanItemType.PERSON).count(),
+                items.stream().filter(i -> i.type() == com.onboardos.onboarding.domain.plan.PlanItemType.CHECKLIST).count(),
+                items.stream().filter(i -> i.type() == com.onboardos.onboarding.domain.plan.PlanItemType.PRACTICE).count(),
+                items.stream().map(TemplateItemResponse::estimatedMinutes).filter(java.util.Objects::nonNull)
+                        .mapToInt(Integer::intValue).sum(),
                 items
         );
     }

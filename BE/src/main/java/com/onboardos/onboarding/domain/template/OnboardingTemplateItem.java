@@ -41,6 +41,12 @@ public class OnboardingTemplateItem {
     @Column(name = "sort_order", nullable = false)
     private int sortOrder = 0;
 
+    @Column(name = "document_id")
+    private UUID documentId;
+
+    @Column(name = "estimated_minutes")
+    private Integer estimatedMinutes;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false, columnDefinition = "jsonb")
     private String metadata = "{}";
@@ -51,7 +57,9 @@ public class OnboardingTemplateItem {
             PlanItemType type,
             String title,
             String description,
-            int sortOrder
+            int sortOrder,
+            UUID documentId,
+            Integer estimatedMinutes
     ) {
         OnboardingTemplateItem i = new OnboardingTemplateItem();
         i.id = UUID.randomUUID();
@@ -61,7 +69,15 @@ public class OnboardingTemplateItem {
         i.title = title;
         i.description = description;
         i.sortOrder = sortOrder;
+        i.documentId = documentId;
+        i.estimatedMinutes = estimatedMinutes;
         i.metadata = "{}";
         return i;
+    }
+
+    public static OnboardingTemplateItem create(
+            UUID templateId, int dayIndex, PlanItemType type, String title, String description, int sortOrder
+    ) {
+        return create(templateId, dayIndex, type, title, description, sortOrder, null, null);
     }
 }

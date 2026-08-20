@@ -134,4 +134,27 @@ public class LlmService {
     public String modelName() {
         return aiProperties.getChatModel();
     }
+
+    public String generateOnboardingPlanJson(UserRole role, String department, String title,
+                                             String careerLevel, String workspaceName,
+                                             List<String> documentCatalog) {
+        if (!isEnabled()) return null;
+        String system = """
+                You create a personalized 30-day employee onboarding plan. Return JSON only:
+                {"items":[{"dayIndex":1,"type":"CHECKLIST","title":"...","description":"...",
+                "estimatedMinutes":30,"documentId":null}]}
+                Rules: dayIndex 1..30; type DOCUMENT, PERSON, CHECKLIST, or PRACTICE; non-empty title;
+                estimatedMinutes 0..1440; at most 60 unique items. DOCUMENT must use exactly one documentId
+                from the supplied catalog. Use only catalog metadata, never invent a document id.
+                """;
+        String user = "workspace=" + safe(workspaceName) + "\nrole=" + role
+                + "\ndepartment=" + safe(department) + "\ntitle=" + safe(title)
+                + "\ncareerLevel=" + safe(careerLevel) + "\naccessible READY document catalog:\n"
+                + String.join("\n", documentCatalog);
+        return chatClient.generate(system, user);
+    }
+
+    private static String safe(String value) {
+        return value == null ? "unspecified" : value.replaceAll("[\\r\\n]", " ").trim();
+    }
 }

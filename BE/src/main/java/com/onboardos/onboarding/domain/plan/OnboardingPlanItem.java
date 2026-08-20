@@ -52,6 +52,9 @@ public class OnboardingPlanItem extends BaseTimeEntity {
     @Column(name = "document_id")
     private UUID documentId;
 
+    @Column(name = "source_template_item_id")
+    private UUID sourceTemplateItemId;
+
     @Column(name = "person_name")
     private String personName;
 
@@ -93,6 +96,14 @@ public class OnboardingPlanItem extends BaseTimeEntity {
         item.status = ItemStatus.PENDING;
         item.metadata = "{}";
         return item;
+    }
+
+    public void setEstimatedMinutes(Integer estimatedMinutes) {
+        this.estimatedMinutes = estimatedMinutes;
+    }
+
+    public void setSourceTemplateItemId(UUID sourceTemplateItemId) {
+        this.sourceTemplateItemId = sourceTemplateItemId;
     }
 
     public void markDone() {
