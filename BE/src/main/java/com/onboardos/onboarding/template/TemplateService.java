@@ -5,17 +5,26 @@ import com.onboardos.onboarding.domain.document.DocumentEntity;
 import com.onboardos.onboarding.domain.document.DocumentRepository;
 import com.onboardos.onboarding.domain.document.DocumentStatus;
 import com.onboardos.onboarding.domain.document.DocumentVisibility;
+import com.onboardos.onboarding.domain.plan.OnboardingPlan;
+import com.onboardos.onboarding.domain.plan.OnboardingPlanRepository;
 import com.onboardos.onboarding.domain.plan.PlanItemType;
+import com.onboardos.onboarding.domain.plan.PlanStatus;
 import com.onboardos.onboarding.domain.template.OnboardingTemplate;
 import com.onboardos.onboarding.domain.template.OnboardingTemplateItem;
 import com.onboardos.onboarding.domain.template.OnboardingTemplateItemRepository;
 import com.onboardos.onboarding.domain.template.OnboardingTemplateRepository;
 import com.onboardos.onboarding.domain.user.Membership;
+import com.onboardos.onboarding.domain.user.User;
+import com.onboardos.onboarding.domain.user.UserRepository;
 import com.onboardos.onboarding.domain.user.UserRole;
 import com.onboardos.onboarding.global.exception.BusinessException;
 import com.onboardos.onboarding.global.exception.ErrorCode;
 import com.onboardos.onboarding.global.security.UserPrincipal;
 import com.onboardos.onboarding.global.workspace.WorkspaceAccessService;
+import com.onboardos.onboarding.onboarding.OnboardingPlanService;
+import com.onboardos.onboarding.template.dto.AffectedUsersResponse;
+import com.onboardos.onboarding.template.dto.ApplyTemplateRequest;
+import com.onboardos.onboarding.template.dto.ApplyTemplateResponse;
 import com.onboardos.onboarding.template.dto.CreateTemplateRequest;
 import com.onboardos.onboarding.template.dto.TemplateItemRequest;
 import com.onboardos.onboarding.template.dto.TemplateItemResponse;
@@ -26,17 +35,45 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@RequiredArgsConstructor
 public class TemplateService {
+
+    private static final Logger log = LoggerFactory.getLogger(TemplateService.class);
+
     private final OnboardingTemplateRepository templateRepository;
     private final OnboardingTemplateItemRepository itemRepository;
     private final WorkspaceAccessService workspaceAccessService;
     private final DocumentRepository documentRepository;
     private final DocumentPermissionService documentPermissionService;
+    private final OnboardingPlanRepository planRepository;
+    private final OnboardingPlanService onboardingPlanService;
+    private final UserRepository userRepository;
+
+    public TemplateService(
+            OnboardingTemplateRepository templateRepository,
+            OnboardingTemplateItemRepository itemRepository,
+            WorkspaceAccessService workspaceAccessService,
+            DocumentRepository documentRepository,
+            DocumentPermissionService documentPermissionService,
+            OnboardingPlanRepository planRepository,
+            @Lazy OnboardingPlanService onboardingPlanService,
+            UserRepository userRepository
+    ) {
+        this.templateRepository = templateRepository;
+        this.itemRepository = itemRepository;
+        this.workspaceAccessService = workspaceAccessService;
+        this.documentRepository = documentRepository;
+        this.documentPermissionService = documentPermissionService;
+        this.planRepository = planRepository;
+        this.onboardingPlanService = onboardingPlanService;
+        this.userRepository = userRepository;
+    }
 
     public record SelectedTemplate(UUID templateId, List<OnboardingTemplateItem> items) {}
 
@@ -187,6 +224,72 @@ public class TemplateService {
     private void clearExistingDefault(UUID workspaceId, UserRole role, UUID exceptId) {
         templateRepository.findByWorkspaceIdAndTargetRoleAndDeletedAtIsNull(workspaceId, role);
         templateRepository.clearDefaultsExcept(workspaceId, role, exceptId);
+    }
+
+    // ========== 템플릿 일괄 적용 ==========
+
+    /**
+     * 이 템플릿을 sourceTemplateId로 사용 중인 활성 계획의 영향 받는 사용자 목록을 반환한다.
+     */
+    @Transactional(readOnly = true)
+    public AffectedUsersResponse getAffectedUsers(UserPrincipal principal, UUID workspaceId, UUID templateId) {
+        workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
+        requireTemplate(workspaceId, templateId);
+
+        List<OnboardingPlan> affectedPlans = planRepository
+                .findByWorkspaceIdAndSourceTemplateIdAndStatusAndDeletedAtIsNull(
+                        workspaceId, templateId, PlanStatus.ACTIVE);
+
+        List<AffectedUsersResponse.AffectedUserSummary> summaries = affectedPlans.stream()
+                .map(plan -> {
+                    User user = userRepository.findById(plan.getUserId()).orElse(null);
+                    return new AffectedUsersResponse.AffectedUserSummary(
+                            plan.getUserId(),
+                            plan.getId(),
+                            user != null ? user.getEmail() : null,
+                            user != null ? user.getName() : null
+                    );
+                })
+                .toList();
+
+        return new AffectedUsersResponse(summaries.size(), summaries);
+    }
+
+    /**
+     * 이 템플릿을 sourceTemplateId로 사용 중인 모든 활성 계획을 최신 템플릿으로 재생성한다.
+     */
+    @Transactional
+    public ApplyTemplateResponse applyToActivePlans(UserPrincipal principal, UUID workspaceId,
+                                                    UUID templateId, ApplyTemplateRequest request) {
+        workspaceAccessService.requireRoles(workspaceId, principal.getId(), UserRole.OWNER, UserRole.ADMIN);
+        requireTemplate(workspaceId, templateId);
+
+        List<OnboardingPlan> affectedPlans = planRepository
+                .findByWorkspaceIdAndSourceTemplateIdAndStatusAndDeletedAtIsNull(
+                        workspaceId, templateId, PlanStatus.ACTIVE);
+
+        if (affectedPlans.isEmpty()) {
+            return ApplyTemplateResponse.success(List.of());
+        }
+
+        boolean keepCompleted = request != null && request.shouldKeepCompleted();
+        List<ApplyTemplateResponse.AffectedUser> results = new ArrayList<>();
+
+        for (OnboardingPlan plan : affectedPlans) {
+            try {
+                onboardingPlanService.generateForUser(
+                        workspaceId, plan.getUserId(), true, templateId, false);
+                results.add(new ApplyTemplateResponse.AffectedUser(
+                        plan.getUserId(), "SUCCESS", null));
+            } catch (Exception e) {
+                log.warn("템플릿 일괄 적용 실패: userId={}, templateId={}, error={}",
+                        plan.getUserId(), templateId, e.getMessage());
+                results.add(new ApplyTemplateResponse.AffectedUser(
+                        plan.getUserId(), "FAILED", e.getMessage()));
+            }
+        }
+
+        return ApplyTemplateResponse.success(results);
     }
 
     private OnboardingTemplate requireTemplate(UUID workspaceId, UUID templateId) {

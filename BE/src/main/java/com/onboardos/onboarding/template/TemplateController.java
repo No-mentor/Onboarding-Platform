@@ -1,6 +1,9 @@
 package com.onboardos.onboarding.template;
 
 import com.onboardos.onboarding.global.security.SecurityUtils;
+import com.onboardos.onboarding.template.dto.AffectedUsersResponse;
+import com.onboardos.onboarding.template.dto.ApplyTemplateRequest;
+import com.onboardos.onboarding.template.dto.ApplyTemplateResponse;
 import com.onboardos.onboarding.template.dto.CreateTemplateRequest;
 import com.onboardos.onboarding.template.dto.GenerateTemplateRequest;
 import com.onboardos.onboarding.template.dto.GeneratedTemplateResponse;
@@ -88,5 +91,27 @@ public class TemplateController {
             @PathVariable UUID templateId
     ) {
         templateService.delete(SecurityUtils.currentUser(), workspaceId, templateId);
+    }
+
+    @Operation(summary = "템플릿 적용 대상 사용자 미리보기",
+            description = "이 템플릿으로 생성된 활성 계획을 가진 신입 목록을 반환한다.")
+    @GetMapping("/{templateId}/affected-users")
+    public AffectedUsersResponse affectedUsers(
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @PathVariable UUID templateId
+    ) {
+        return templateService.getAffectedUsers(SecurityUtils.currentUser(), workspaceId, templateId);
+    }
+
+    @Operation(summary = "템플릿 일괄 적용",
+            description = "이 템플릿으로 생성된 활성 계획을 가진 모든 신입의 계획을 최신 템플릿으로 재생성한다.")
+    @PostMapping("/{templateId}/apply")
+    public ApplyTemplateResponse apply(
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @PathVariable UUID templateId,
+            @RequestBody(required = false) ApplyTemplateRequest request
+    ) {
+        return templateService.applyToActivePlans(
+                SecurityUtils.currentUser(), workspaceId, templateId, request);
     }
 }

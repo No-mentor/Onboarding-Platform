@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Edit2, Trash2, Search, LayoutTemplate, UsersRound, FileText, CircleCheck, Crown, Sparkles, ChevronUp, ChevronDown, Clock } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, LayoutTemplate, UsersRound, FileText, CircleCheck, Crown, Sparkles, ChevronUp, ChevronDown, Clock, RefreshCw } from 'lucide-react';
 import { CommonSidebar } from '@/components/common-sidebar';
 import { Modal, ModalPrimaryButton, ModalSecondaryButton, ModalDangerButton } from '@/components/ui/modal';
 import { useToast } from '@/components/ui/toast';
@@ -13,7 +13,10 @@ import {
   getDocuments,
   getTemplateDetail,
   getTemplates,
+  getTemplateAffectedUsers,
+  applyTemplateToPlans,
   updateTemplate,
+  type AffectedUserSummary,
   type DocumentResponse,
   type GeneratedTemplateResponse,
   type TemplateItemPayload,
@@ -391,6 +394,47 @@ export default function TemplatesPage() {
 
 
   const [keyword, setKeyword] = useState('');
+
+  // === 템플릿 일괄 적용 ===
+  const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
+  const [isApplyLoading, setIsApplyLoading] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
+  const [affectedUsers, setAffectedUsers] = useState<AffectedUserSummary[]>([]);
+  const [applyKeepCompleted, setApplyKeepCompleted] = useState(true);
+
+  const openApplyModal = async (templateId: string) => {
+    setIsApplyModalOpen(true);
+    setIsApplyLoading(true);
+    setAffectedUsers([]);
+    setApplyKeepCompleted(true);
+    try {
+      const result = await getTemplateAffectedUsers(templateId);
+      setAffectedUsers(result.users);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '영향 받는 사용자를 불러오지 못했습니다.', 'error');
+      setIsApplyModalOpen(false);
+    } finally {
+      setIsApplyLoading(false);
+    }
+  };
+
+  const handleApply = async () => {
+    if (!selectedTemplate) return;
+    setIsApplying(true);
+    try {
+      const result = await applyTemplateToPlans(selectedTemplate.id, { keepCompleted: applyKeepCompleted });
+      if (result.failCount > 0) {
+        showToast(`${result.successCount}명 적용 완료, ${result.failCount}명 실패`, 'error');
+      } else {
+        showToast(`${result.successCount}명의 계획이 최신 템플릿으로 업데이트되었습니다.`, 'success');
+      }
+      setIsApplyModalOpen(false);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '일괄 적용에 실패했습니다.', 'error');
+    } finally {
+      setIsApplying(false);
+    }
+  };
 
   // === AI 템플릿 생성 ===
   // 생성은 저장하지 않고 초안만 받는다. 검토·수정 후 저장 버튼을 눌러야 실제로 만들어진다.
@@ -832,6 +876,7 @@ export default function TemplatesPage() {
                   </div>
                   <div className={styles.actions}>
                     <button onClick={() => void openEditModal(selectedTemplate)}><Edit2 size={16} /> 편집</button>
+                    <button onClick={() => void openApplyModal(selectedTemplate.id)}><RefreshCw size={16} /> 신입에게 적용</button>
                     <button className={styles.delete} onClick={() => setIsDeleteModalOpen(true)}><Trash2 size={16} /> 삭제</button>
                   </div>
                 </>
@@ -969,8 +1014,7 @@ export default function TemplatesPage() {
           }
         >
           <p style={{ fontSize: '12px', color: '#94a3b8', lineHeight: 1.7, marginTop: 0, marginBottom: '14px' }}>
-            여기서 저장해도 이미 만들어진 사용자 계획에는 자동으로 반영되지 않습니다.
-            30일 계획 화면(관리자) 또는 신입 진행 현황 화면에서 계획을 재생성해야 적용됩니다.
+            여기서 저장한 뒤 상세 화면의 &quot;신입에게 적용&quot; 버튼을 누르면 기존 계획에도 반영됩니다.
           </p>
           <div className={styles.formGroup}>
             <label className={styles.label}>템플릿명</label>
@@ -1201,6 +1245,80 @@ export default function TemplatesPage() {
                   근거 문서: {draft.sourceDocuments.join(', ')}
                 </p>
               )}
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* 7. 템플릿 일괄 적용 */}
+      {isApplyModalOpen && selectedTemplate && (
+        <Modal
+          open
+          onClose={() => setIsApplyModalOpen(false)}
+          title="신입에게 템플릿 적용"
+          subtitle={`"${selectedTemplate.name}" 템플릿의 최신 내용을 기존 계획에 반영합니다.`}
+          footer={
+            <>
+              <ModalSecondaryButton onClick={() => setIsApplyModalOpen(false)} disabled={isApplying}>취소</ModalSecondaryButton>
+              <ModalPrimaryButton
+                loading={isApplying}
+                onClick={() => void handleApply()}
+                disabled={affectedUsers.length === 0}
+              >
+                {affectedUsers.length}명에게 적용
+              </ModalPrimaryButton>
+            </>
+          }
+        >
+          {isApplyLoading ? (
+            <div style={{ padding: '20px', fontSize: '14px', color: '#64748b' }}>영향 받는 사용자를 확인하는 중...</div>
+          ) : affectedUsers.length === 0 ? (
+            <div style={{ padding: '20px', fontSize: '14px', color: '#64748b' }}>
+              이 템플릿으로 생성된 활성 계획이 없습니다. 적용할 대상이 없습니다.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{
+                padding: '12px 14px', borderRadius: '10px', fontSize: '13px', lineHeight: 1.7,
+                backgroundColor: '#eff6ff', border: '1px solid #dbeafe', color: '#1e40af',
+              }}>
+                아래 {affectedUsers.length}명의 30일 계획이 최신 템플릿으로 재생성됩니다.
+              </div>
+
+              <div style={{
+                maxHeight: '200px', overflowY: 'auto',
+                border: '1px solid #e2e8f0', borderRadius: '10px',
+              }}>
+                {affectedUsers.map((user, index) => (
+                  <div
+                    key={user.userId}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px',
+                      borderTop: index === 0 ? 'none' : '1px solid #f1f5f9', fontSize: '13px',
+                    }}
+                  >
+                    <UsersRound size={16} style={{ color: '#64748b', flexShrink: 0 }} />
+                    <span style={{ color: '#0f172a' }}>{user.name ?? '이름 없음'}</span>
+                    <span style={{ color: '#94a3b8', fontSize: '12px' }}>{user.email}</span>
+                  </div>
+                ))}
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px', color: '#475569', lineHeight: 1.6 }}>
+                <input
+                  type="checkbox"
+                  checked={applyKeepCompleted}
+                  onChange={(e) => setApplyKeepCompleted(e.target.checked)}
+                  disabled={isApplying}
+                  style={{ marginTop: '3px' }}
+                />
+                <span>
+                  완료된 항목 유지<br />
+                  <span style={{ color: '#94a3b8', fontSize: '12px' }}>
+                    체크하면 신입이 이미 완료한 항목은 새 계획에서도 완료 상태로 유지됩니다.
+                  </span>
+                </span>
+              </label>
             </div>
           )}
         </Modal>

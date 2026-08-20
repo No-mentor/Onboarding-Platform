@@ -1072,6 +1072,60 @@ export async function deleteTemplate(templateId: string): Promise<void> {
   if (!response.ok) throw new Error(await errorMessage(response, '템플릿 삭제 실패'));
 }
 
+// ===== Template Apply (일괄 적용) =====
+
+export interface AffectedUserSummary {
+  userId: string;
+  planId: string;
+  email: string | null;
+  name: string | null;
+}
+
+export interface AffectedUsersResponse {
+  count: number;
+  users: AffectedUserSummary[];
+}
+
+/**
+ * 이 템플릿을 사용 중인 활성 계획의 신입 목록을 반환한다 (미리보기).
+ */
+export async function getTemplateAffectedUsers(templateId: string): Promise<AffectedUsersResponse> {
+  const response = await apiFetch(`${API_BASE}/templates/${templateId}/affected-users`, {
+    headers: workspaceHeaders(),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '영향 받는 사용자 조회 실패'));
+  return response.json();
+}
+
+export interface ApplyTemplateOptions {
+  keepCompleted?: boolean;
+}
+
+export interface ApplyTemplateResult {
+  totalAffected: number;
+  successCount: number;
+  failCount: number;
+  users: { userId: string; status: string; message: string | null }[];
+}
+
+/**
+ * 이 템플릿을 사용 중인 모든 활성 계획을 최신 템플릿으로 재생성한다.
+ */
+export async function applyTemplateToPlans(
+  templateId: string,
+  options?: ApplyTemplateOptions
+): Promise<ApplyTemplateResult> {
+  const response = await apiFetch(`${API_BASE}/templates/${templateId}/apply`, {
+    method: 'POST',
+    headers: workspaceHeaders(JSON_CONTENT),
+    body: JSON.stringify({ keepCompleted: options?.keepCompleted ?? true }),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '템플릿 일괄 적용 실패'));
+  return response.json();
+}
+
 // ===== Audit Logs =====
 /** GET /admin/audit-logs 항목 (서버 AuditLogResponse 와 1:1) */
 export interface AuditLogResponse {
