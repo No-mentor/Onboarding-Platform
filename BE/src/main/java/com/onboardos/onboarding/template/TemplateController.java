@@ -2,6 +2,8 @@ package com.onboardos.onboarding.template;
 
 import com.onboardos.onboarding.global.security.SecurityUtils;
 import com.onboardos.onboarding.template.dto.CreateTemplateRequest;
+import com.onboardos.onboarding.template.dto.GenerateTemplateRequest;
+import com.onboardos.onboarding.template.dto.GeneratedTemplateResponse;
 import com.onboardos.onboarding.template.dto.TemplateResponse;
 import com.onboardos.onboarding.template.dto.UpdateTemplateRequest;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,6 +32,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class TemplateController {
 
     private final TemplateService templateService;
+    private final TemplateGenerationService templateGenerationService;
+
+    @Operation(summary = "문서 기반 템플릿 초안 생성 (AI)",
+            description = "업로드된 문서를 근거로 온보딩 항목을 생성한다. 저장하지 않고 초안만 반환하므로, "
+                    + "검토·수정한 뒤 POST /templates 로 저장한다. AI 를 쓸 수 없으면 기본 골격을 반환한다.")
+    @PostMapping("/generate")
+    public GeneratedTemplateResponse generate(
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @Valid @RequestBody GenerateTemplateRequest request
+    ) {
+        return templateGenerationService.generate(SecurityUtils.currentUser(), workspaceId, request);
+    }
 
     @Operation(summary = "템플릿 목록")
     @GetMapping

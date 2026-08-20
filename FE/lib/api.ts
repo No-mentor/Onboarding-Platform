@@ -892,6 +892,48 @@ export interface TemplatePayload {
   items?: TemplateItemPayload[];
 }
 
+/** POST /templates/generate 요청 */
+export interface GenerateTemplatePayload {
+  targetRole?: WorkspaceRole;
+  department?: string;
+  /** 근거로 쓸 문서. 비우면 워크스페이스의 READY 문서를 모두 사용한다 */
+  documentIds?: string[];
+  /** 7~30. 비우면 30 */
+  planDays?: number;
+}
+
+/** POST /templates/generate 응답 (서버 GeneratedTemplateResponse 와 1:1) */
+export interface GeneratedTemplateResponse {
+  name: string;
+  targetRole: WorkspaceRole;
+  description: string | null;
+  /** createTemplate 의 items 와 같은 모양이라 그대로 저장 요청에 넣을 수 있다 */
+  items: TemplateItemPayload[];
+  sourceDocuments: string[];
+  /** false 면 AI 를 쓸 수 없어 기본 골격으로 대체된 것 */
+  aiGenerated: boolean;
+  fallbackReason: string | null;
+  model: string | null;
+}
+
+/**
+ * 업로드된 문서를 근거로 템플릿 초안을 생성한다. 저장되지 않으므로
+ * 화면에서 검토·수정한 뒤 createTemplate 으로 저장해야 한다.
+ * LLM 호출이 포함되어 10초 이상 걸릴 수 있다.
+ */
+export async function generateTemplate(
+  payload: GenerateTemplatePayload
+): Promise<GeneratedTemplateResponse> {
+  const response = await apiFetch(`${API_BASE}/templates/generate`, {
+    method: 'POST',
+    headers: workspaceHeaders(JSON_CONTENT),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, 'AI 템플릿 생성 실패'));
+  return response.json();
+}
+
 export async function createTemplate(payload: TemplatePayload): Promise<TemplateResponse> {
   const response = await apiFetch(`${API_BASE}/templates`, {
     method: 'POST',
