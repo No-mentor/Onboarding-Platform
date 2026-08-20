@@ -1,0 +1,115 @@
+.wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  background: var(--bg);
+}
+
+.card {
+  width: 100%;
+  max-width: 440px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 30px;
+}
+
+.brandName {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.formError {
+  margin-bottom: 22px;
+  padding: 13px 14px;
+  background: rgba(180, 52, 47, 0.07);
+  border-radius: var(--r-md);
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--danger);
+}
+
+/* slug 입력칸 앞에 고정 접두사를 붙여 최종 주소가 보이게 한다 */
+.slugControl {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.slugControl:hover {
+  border-color: #c3c3c8;
+}
+
+.slugControl:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(78, 78, 82, 0.11);
+}
+
+.slugPrefix {
+  flex-shrink: 0;
+  padding: 0 2px 0 14px;
+  font-size: 13.5px;
+  color: var(--text-faint);
+  user-select: none;
+}
+
+.slugControl input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 14px 0 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.invalid .slugControl {
+  border-color: var(--danger);
+}
+
+.invalid .slugControl:focus-within {
+  box-shadow: 0 0 0 3px rgba(180, 52, 47, 0.12);
+}
+
+.slugError {
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--danger);
+}
+
+.actions {
+  margin-top: 26px;
+}
+
+.back {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-sub);
+}
+
+.back a {
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.back a:hover {
+  text-decoration: underline;
+}

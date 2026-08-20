@@ -2,7 +2,9 @@ import { getAuthToken, getWorkspaceId, clearAuthToken } from './storage';
 import { API_BASE } from './config';
 
 /**
- * 공통 fetch 래퍼: 401 Unauthorized 발생 시 인증 정보를 삭제하고 로그인 페이지로 자동 리다이렉트
+ * 공통 fetch 래퍼.
+ * 401 이면 저장된 인증 정보를 버리고 로그인 화면으로 보낸다.
+ * (토큰 만료를 화면마다 처리하지 않기 위한 것)
  */
 export async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(input, init);
@@ -18,28 +20,71 @@ export async function apiFetch(input: string, init?: RequestInit): Promise<Respo
   return response;
 }
 
-export interface PageResponse<T> {
-  items?: T[];
-  content?: T[];
-  page?: number;
-  size?: number;
-  totalElements?: number;
-  totalPages?: number;
+/** 토큰만 필요한 요청 (워크스페이스 밖에서도 부를 수 있는 API) */
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const token = getAuthToken();
+  if (!token) throw new Error('인증 정보 없음');
+  return { Authorization: `Bearer ${token}`, ...extra };
 }
+
+/**
+ * 워크스페이스 컨텍스트가 필요한 요청.
+ * 서버는 X-Workspace-Id 가 없으면 500 을 주므로 여기서 먼저 막는다.
+ */
+function workspaceHeaders(extra?: Record<string, string>): Record<string, string> {
+  const token = getAuthToken();
+  const wsId = getWorkspaceId();
+  if (!token || !wsId) throw new Error('인증 정보 없음');
+  return { Authorization: `Bearer ${token}`, 'X-Workspace-Id': wsId, ...extra };
+}
+
+const JSON_CONTENT = { 'Content-Type': 'application/json' } as const;
+
+/** 서버 에러 본문(ErrorResponse)에서 메시지를 꺼낸다 */
+async function errorMessage(response: Response, fallback: string): Promise<string> {
+  const body = await response.json().catch(() => null);
+  return (body && (body.message || body.error)) || fallback;
+}
+
+/**
+ * 서버 공통 페이지네이션 응답 (global/web/PageResponse).
+ * 목록 키는 content 가 아니라 items 다.
+ */
+export interface PageResponse<T> {
+  items: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+/** 워크스페이스에서의 내 역할 (서버 UserRole) */
+export type WorkspaceRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER' | 'NEW_HIRE';
+
+/** 계획/체크리스트/추천 항목의 상태 (서버 ItemStatus) */
+export type ItemStatus = 'PENDING' | 'DONE' | 'SKIPPED' | 'DISMISSED';
+
+/** 계획 항목 종류 (서버 PlanItemType) */
+export type PlanItemType = 'DOCUMENT' | 'PERSON' | 'CHECKLIST' | 'PRACTICE';
+
+/** 계획 상태 (서버 PlanStatus) */
+export type PlanStatus = 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'ARCHIVED';
 
 // ===== Dashboard =====
+/** 대시보드 today.items 항목. 서버 RecommendationResponse 와 같은 모양이다 */
 export interface DashboardRecommendation {
   id: string;
-  type: string;
+  type: PlanItemType;
   title: string;
-  status: string;
+  status: ItemStatus;
   priority: number;
-  source: string;
-  planItemId: string;
-  documentId: string;
-  personName: string;
+  source: string | null;
+  planItemId: string | null;
+  documentId: string | null;
+  personName: string | null;
 }
 
+/** GET /dashboard/me (서버 DashboardResponse 와 1:1) */
 export interface DashboardResponse {
   progressPercent: number;
   today: {
@@ -48,905 +93,838 @@ export interface DashboardResponse {
     items: DashboardRecommendation[];
   };
   plan: {
-    planId: string;
+    planId: string | null;
     currentDay: number;
     totalDays: number;
-    status: string;
-  };
+    status: PlanStatus | null;
+  } | null;
   checklist: {
     total: number;
     done: number;
   };
-  message: string;
+  message: string | null;
 }
 
 export async function getDashboard(): Promise<DashboardResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/dashboard/me`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-    },
+  const response = await apiFetch(`${API_BASE}/dashboard/me`, {
+    headers: workspaceHeaders(),
   });
 
-  if (!response.ok) throw new Error('대시보드 조회 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '대시보드 조회 실패'));
   return response.json();
 }
 
 // ===== Recommendations (오늘 할 일) =====
-export interface RecommendationResponse {
-  id: string;
-  title: string;
-  label?: string;
-  time?: string;
-  status?: string;
-  type?: string;
-  completed?: boolean;
-  reason?: string;
-}
+/** GET /recommendations/today 항목 (서버 RecommendationResponse 와 1:1) */
+export type RecommendationResponse = DashboardRecommendation;
 
 export interface TodayRecommendationsResponse {
-  items?: RecommendationResponse[];
-  recommendations?: RecommendationResponse[];
+  /** 조회 기준 날짜 (yyyy-MM-dd) */
+  date: string;
+  items: RecommendationResponse[];
 }
 
-export async function getRecommendationsToday(): Promise<TodayRecommendationsResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/recommendations/today`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-    },
+export async function getRecommendationsToday(date?: string): Promise<TodayRecommendationsResponse> {
+  const query = date ? `?date=${date}` : '';
+  const response = await apiFetch(`${API_BASE}/recommendations/today${query}`, {
+    headers: workspaceHeaders(),
   });
 
-  if (!response.ok) throw new Error('오늘 할 일 조회 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '오늘 할 일 조회 실패'));
   return response.json();
 }
 
 export async function completeRecommendation(recommendationId: string): Promise<RecommendationResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/recommendations/${recommendationId}/complete`, {
+  const response = await apiFetch(`${API_BASE}/recommendations/${recommendationId}/complete`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-      'Content-Type': 'application/json',
-    },
+    headers: workspaceHeaders(JSON_CONTENT),
   });
 
-  if (!response.ok) throw new Error('할 일 완료 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '할 일 완료 실패'));
+  return response.json();
+}
+
+export async function dismissRecommendation(recommendationId: string): Promise<RecommendationResponse> {
+  const response = await apiFetch(`${API_BASE}/recommendations/${recommendationId}/dismiss`, {
+    method: 'POST',
+    headers: workspaceHeaders(JSON_CONTENT),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '추천 숨김 실패'));
   return response.json();
 }
 
 // ===== Onboarding Plans (30일 계획) =====
+/** GET /onboarding-plans/me 항목 (서버 PlanItemResponse 와 1:1) */
 export interface PlanItemResponse {
   id: string;
-  day: number;
+  /** 며칠차인지 (1~30). 서버 필드명이 day 가 아니라 dayIndex 다 */
+  dayIndex: number;
+  type: PlanItemType;
   title: string;
-  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | string;
-  type?: string;
-  description?: string;
-  personName?: string;
+  description: string | null;
+  status: ItemStatus;
+  documentId: string | null;
+  personName: string | null;
+  completedAt: string | null;
 }
 
+/** GET /onboarding-plans/me (서버 PlanResponse 와 1:1) */
 export interface PlanResponse {
-  id: string;
+  /** 서버 필드명이 id 가 아니라 planId 다 */
+  planId: string;
   userId: string;
-  totalDays: number;
-  currentDay: number;
-  items?: PlanItemResponse[];
-  createdAt: string;
+  status: PlanStatus;
+  version: number;
+  startDate: string;
+  endDate: string;
+  progressPercent: number;
+  itemCount: number;
+  items: PlanItemResponse[] | null;
 }
 
 export async function getOnboardingPlan(includeItems: boolean = true): Promise<PlanResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/onboarding-plans/me?includeItems=${includeItems}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-    },
+  const response = await apiFetch(`${API_BASE}/onboarding-plans/me?includeItems=${includeItems}`, {
+    headers: workspaceHeaders(),
   });
 
-  if (!response.ok) throw new Error('30일 계획 조회 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '30일 계획 조회 실패'));
   return response.json();
 }
 
 export async function generateOnboardingPlan(): Promise<PlanResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/onboarding-plans/generate`, {
+  const response = await apiFetch(`${API_BASE}/onboarding-plans/generate`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-      'Content-Type': 'application/json',
-    },
+    headers: workspaceHeaders(JSON_CONTENT),
+    body: JSON.stringify({ force: false }),
   });
 
-  if (!response.ok) throw new Error('계획 생성 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '계획 생성 실패'));
   return response.json();
 }
 
-export async function updatePlanItemStatus(itemId: string, status: string): Promise<PlanItemResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
+export async function getOnboardingPlanById(planId: string): Promise<PlanResponse> {
+  const response = await apiFetch(`${API_BASE}/onboarding-plans/${planId}`, {
+    headers: workspaceHeaders(),
+  });
 
-  const response = await fetch(`${API_BASE}/onboarding-plans/items/${itemId}`, {
+  if (!response.ok) throw new Error(await errorMessage(response, '계획 조회 실패'));
+  return response.json();
+}
+
+/** 계획 재생성 (Admin). keepCompleted=true 면 이미 완료한 항목은 유지한다 */
+export async function regenerateOnboardingPlan(
+  planId: string,
+  keepCompleted: boolean = true
+): Promise<PlanResponse> {
+  const response = await apiFetch(
+    `${API_BASE}/onboarding-plans/${planId}/regenerate?keepCompleted=${keepCompleted}`,
+    {
+      method: 'POST',
+      headers: workspaceHeaders(JSON_CONTENT),
+    }
+  );
+
+  if (!response.ok) throw new Error(await errorMessage(response, '계획 재생성 실패'));
+  return response.json();
+}
+
+export async function updatePlanItemStatus(itemId: string, status: ItemStatus): Promise<PlanItemResponse> {
+  const response = await apiFetch(`${API_BASE}/onboarding-plans/items/${itemId}`, {
     method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-      'Content-Type': 'application/json',
-    },
+    headers: workspaceHeaders(JSON_CONTENT),
     body: JSON.stringify({ status }),
   });
 
-  if (!response.ok) throw new Error('계획 항목 상태 변경 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '계획 항목 상태 변경 실패'));
   return response.json();
 }
 
 // ===== Checklists =====
+/** GET /checklists/me 항목 (서버 ChecklistResponse 와 1:1) */
 export interface ChecklistItemResponse {
   id: string;
   title: string;
-  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
-  createdAt?: string;
+  status: ItemStatus;
+  /** 며칠차까지 끝내야 하는지 */
+  dueDay: number | null;
+  completedAt: string | null;
 }
 
+/** GET /checklists/me (서버 ChecklistSummaryResponse 와 1:1) */
 export interface ChecklistSummaryResponse {
   items: ChecklistItemResponse[];
-  totalCount: number;
-  completedCount: number;
+  total: number;
+  done: number;
+  progressPercent: number;
 }
 
-export async function getChecklists(): Promise<ChecklistSummaryResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
+export type ChecklistStatusFilter = 'ALL' | 'PENDING' | 'DONE';
 
-  const response = await fetch(`${API_BASE}/checklists/me?status=ALL`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-    },
+export async function getChecklists(status: ChecklistStatusFilter = 'ALL'): Promise<ChecklistSummaryResponse> {
+  const response = await apiFetch(`${API_BASE}/checklists/me?status=${status}`, {
+    headers: workspaceHeaders(),
   });
 
-  if (!response.ok) throw new Error('체크리스트 조회 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '체크리스트 조회 실패'));
   return response.json();
 }
 
-export async function updateChecklistItemStatus(itemId: string, status: string): Promise<ChecklistItemResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/checklists/items/${itemId}`, {
+export async function updateChecklistItemStatus(
+  itemId: string,
+  status: ItemStatus
+): Promise<ChecklistItemResponse> {
+  const response = await apiFetch(`${API_BASE}/checklists/items/${itemId}`, {
     method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-      'Content-Type': 'application/json',
-    },
+    headers: workspaceHeaders(JSON_CONTENT),
     body: JSON.stringify({ status }),
   });
 
-  if (!response.ok) throw new Error('체크리스트 상태 변경 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '체크리스트 상태 변경 실패'));
   return response.json();
 }
 
 // ===== Progress =====
-export interface AdminProgressItemResponse {
-  id: string;
-  name: string;
-  team: string;
-  day: number;
-  progress: number;
-  completed: number;
-  total: number;
-  status: string;
-  activity?: string;
+/** GET /progress/me (서버 MyProgressResponse 와 1:1) */
+export interface MyProgressResponse {
+  progressPercent: number;
+  completedItems: number;
+  totalItems: number;
+  overdueItems: Array<{ id: string; title: string; dayIndex: number }>;
+  bottlenecks: string[];
 }
 
-export interface AdminProgressListResponse {
-  content: AdminProgressItemResponse[];
-  totalElements: number;
-  totalPages: number;
-  currentPage: number;
-  pageSize: number;
-}
-
-export async function getAdminProgress(page: number = 0, size: number = 20): Promise<AdminProgressListResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
-
-  const response = await fetch(`${API_BASE}/admin/progress?${params}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-    },
+export async function getMyProgress(): Promise<MyProgressResponse> {
+  const response = await apiFetch(`${API_BASE}/progress/me`, {
+    headers: workspaceHeaders(),
   });
 
-  if (!response.ok) throw new Error('신입 진행 현황 조회 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '진행 현황 조회 실패'));
+  return response.json();
+}
+
+/** GET /admin/progress 항목 (서버 AdminProgressItemResponse 와 1:1) */
+export interface AdminProgressItemResponse {
+  userId: string;
+  name: string;
+  email: string;
+  progressPercent: number;
+  status: string;
+  planId: string | null;
+  currentDay: number;
+}
+
+export type AdminProgressListResponse = PageResponse<AdminProgressItemResponse>;
+
+export async function getAdminProgress(page: number = 0, size: number = 20): Promise<AdminProgressListResponse> {
+  const params = new URLSearchParams({ page: String(page), size: String(size) });
+
+  const response = await apiFetch(`${API_BASE}/admin/progress?${params}`, {
+    headers: workspaceHeaders(),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '신입 진행 현황 조회 실패'));
+  return response.json();
+}
+
+/** GET /admin/progress/{userId} (서버 AdminProgressDetailResponse 와 1:1) */
+export interface AdminProgressDetailResponse {
+  userId: string;
+  name: string;
+  email: string;
+  progressPercent: number;
+  planId: string | null;
+  overdueItems: Array<{ id: string; title: string; dayIndex: number }>;
+  insights: string | null;
+}
+
+export async function getAdminProgressDetail(userId: string): Promise<AdminProgressDetailResponse> {
+  const response = await apiFetch(`${API_BASE}/admin/progress/${userId}`, {
+    headers: workspaceHeaders(),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '신입 상세 조회 실패'));
   return response.json();
 }
 
 // ===== Chat =====
+/** 서버가 답변에 붙여 주는 근거 조각 (ChatService 가 만드는 Map 과 1:1) */
+export interface ChatCitation {
+  documentId?: string;
+  title?: string;
+  chunkId?: string;
+  snippet?: string;
+  page?: number | null;
+}
+
 export interface ChatSessionSummaryResponse {
   id: string;
   title: string;
-  createdAt?: string;
-  updatedAt?: string;
+  updatedAt: string;
 }
 
+/** 서버 ChatMessageResponse 와 1:1. role 은 'user' | 'assistant' */
 export interface ChatMessageResponse {
   id: string;
-  type: 'user' | 'ai';
+  role: string;
   content: string;
-  citations?: Array<{ name: string; type?: string }>;
+  citations?: ChatCitation[];
   createdAt?: string;
 }
 
 export interface ChatSessionDetailResponse {
   id: string;
-  title: string;
   messages: ChatMessageResponse[];
 }
 
+/** POST /chat/messages 요청 (서버 SendMessageRequest 와 1:1) */
 export interface SendMessageRequest {
   message: string;
+  /** 주지 않으면 서버가 새 세션을 만든다 */
   sessionId?: string;
+  stream?: boolean;
 }
 
+/** POST /chat/messages 응답 (서버 SendMessageResponse 와 1:1) */
 export interface SendMessageResponse {
-  id: string;
   sessionId: string;
-  content: string;
-  citations?: Array<{ name: string; type?: string }>;
+  messageId: string;
+  role: string;
+  /** 답변 본문. 서버 필드명이 content 가 아니라 answer 다 */
+  answer: string;
+  citations?: ChatCitation[];
+  /** 권한이 없어 참조하지 못한 문서 */
+  permissionDeniedDocumentIds?: string[];
+  createdAt?: string;
 }
 
 export async function getChatSessions(): Promise<{ items: ChatSessionSummaryResponse[] }> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/chat/sessions`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-    },
+  const response = await apiFetch(`${API_BASE}/chat/sessions`, {
+    headers: workspaceHeaders(),
   });
 
-  if (!response.ok) throw new Error('채팅 세션 조회 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '채팅 세션 조회 실패'));
   return response.json();
 }
 
 export async function getChatSessionDetail(sessionId: string): Promise<ChatSessionDetailResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/chat/sessions/${sessionId}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-    },
+  const response = await apiFetch(`${API_BASE}/chat/sessions/${sessionId}`, {
+    headers: workspaceHeaders(),
   });
 
-  if (!response.ok) throw new Error('세션 상세 조회 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '세션 상세 조회 실패'));
   return response.json();
 }
 
 export async function sendChatMessage(message: string, sessionId?: string): Promise<SendMessageResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/chat/messages`, {
+  const response = await apiFetch(`${API_BASE}/chat/messages`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ message, sessionId }),
+    headers: workspaceHeaders(JSON_CONTENT),
+    // sessionId 를 주지 않으면 서버가 새 세션을 만든다
+    body: JSON.stringify(sessionId ? { message, sessionId } : { message }),
   });
 
-  if (!response.ok) throw new Error('메시지 전송 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '메시지 전송 실패'));
   return response.json();
+}
+
+/** 인용을 화면에 쓸 한 줄로 (제목 + 쪽수) */
+export function citationTitle(citation: ChatCitation): string {
+  const title = citation.title ?? citation.documentId ?? '참고 문서';
+  return citation.page ? `${title} · ${citation.page}쪽` : title;
 }
 
 // ===== Members =====
+/** 서버 MembershipStatus */
+export type MembershipStatus = 'ACTIVE' | 'DISABLED';
+
+/** GET /members 항목 (서버 MemberResponse 와 1:1) */
 export interface MemberResponse {
   id: string;
-  email: string;
+  userId: string;
   name: string;
-  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'MANAGER' | 'NEW_HIRE' | string;
-  status: string;
-  department?: string;
-  team?: string;
-  joinedAt?: string;
+  email: string;
+  role: WorkspaceRole;
+  status: MembershipStatus;
+  department: string | null;
+  careerLevel: string | null;
+  title: string | null;
 }
 
-export interface MemberListResponse {
-  content?: MemberResponse[];
-  members?: MemberResponse[];
-  totalElements?: number;
-  totalPages?: number;
-  currentPage?: number;
-  pageSize?: number;
-}
+export type MemberListResponse = PageResponse<MemberResponse>;
 
-export async function getMembers(page: number = 0, size: number = 20): Promise<MemberListResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
+export async function getMembers(
+  page: number = 0,
+  size: number = 20,
+  role?: WorkspaceRole
+): Promise<MemberListResponse> {
+  const params = new URLSearchParams({ page: String(page), size: String(size) });
+  if (role) params.set('role', role);
 
-  const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
-
-  const response = await fetch(`${API_BASE}/members?${params}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-    },
+  const response = await apiFetch(`${API_BASE}/members?${params}`, {
+    headers: workspaceHeaders(),
   });
 
-  if (!response.ok) throw new Error('멤버 목록 조회 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '멤버 목록 조회 실패'));
   return response.json();
 }
 
-export interface InvitationResponse {
-  id: string;
-  email: string;
-  role: string;
-  token: string;
-  expiresAt: string;
-  status: string;
+/** PATCH /members/{memberId} - 역할과 상태를 함께 보낼 수 있다 */
+export async function updateMember(
+  memberId: string,
+  patch: { role?: WorkspaceRole; status?: MembershipStatus }
+): Promise<MemberResponse> {
+  const response = await apiFetch(`${API_BASE}/members/${memberId}`, {
+    method: 'PATCH',
+    headers: workspaceHeaders(JSON_CONTENT),
+    body: JSON.stringify(patch),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '멤버 정보 변경 실패'));
+  return response.json();
 }
 
-// ===== Document Detail & Upload =====
-export type DocumentStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
+export async function updateMemberRole(memberId: string, role: WorkspaceRole): Promise<MemberResponse> {
+  return updateMember(memberId, { role });
+}
 
+/** GET /members 초대 응답 (서버 InvitationResponse 와 1:1) */
+export interface InvitationResponse {
+  invitationId: string;
+  email: string;
+  role: WorkspaceRole;
+  token: string;
+  expiresAt: string;
+  status: 'PENDING' | 'ACCEPTED' | 'EXPIRED' | 'REVOKED';
+}
+
+export interface InviteMemberPayload {
+  email: string;
+  role?: WorkspaceRole;
+  department?: string;
+  careerLevel?: string;
+  title?: string;
+}
+
+export async function inviteMember(payload: InviteMemberPayload): Promise<InvitationResponse> {
+  const response = await apiFetch(`${API_BASE}/members/invitations`, {
+    method: 'POST',
+    headers: workspaceHeaders(JSON_CONTENT),
+    body: JSON.stringify({ role: 'NEW_HIRE', ...payload }),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '멤버 초대 실패'));
+  return response.json();
+}
+
+/** POST /members/invitations/{token}/accept (서버 AcceptInvitationResponse 와 1:1) */
+export interface AcceptInvitationResponse {
+  workspaceId: string;
+  role: WorkspaceRole;
+  membershipId: string;
+  onboardingPlanId: string | null;
+}
+
+/**
+ * 초대 수락. 로그인한 사용자 기준으로 처리되므로 토큰이 반드시 필요하다.
+ * (초대받은 주소와 로그인한 계정이 다르면 서버가 403 을 준다)
+ */
+export async function acceptMemberInvitation(invitationToken: string): Promise<AcceptInvitationResponse> {
+  const response = await apiFetch(`${API_BASE}/members/invitations/${invitationToken}/accept`, {
+    method: 'POST',
+    headers: authHeaders(JSON_CONTENT),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '초대 수락 실패'));
+  return response.json();
+}
+
+// ===== Documents =====
+export type DocumentStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
+export type DocumentVisibility = 'WORKSPACE' | 'RESTRICTED';
+
+/** GET /documents 응답 항목 (서버 DocumentResponse 와 1:1) */
 export interface DocumentResponse {
   id: string;
-  name?: string;
-  title?: string;
-  fileName?: string;
-  type?: string;
-  mimeType?: string;
-  sizeBytes?: number;
-  size?: number | string | any;
-  status: DocumentStatus | string;
-  chunkCount?: number | null;
-  errorMessage?: string | null;
-  uploadedBy?: string;
-  uploadedAt?: string;
-  processedAt?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  allowedRoles?: string[];
+  title: string;
+  status: DocumentStatus;
+  visibility: DocumentVisibility | null;
+  allowedRoles: string[] | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  chunkCount: number | null;
+  errorMessage: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 }
 
 export type DocumentPageResponse = PageResponse<DocumentResponse>;
 
-export async function uploadDocument(formData: FormData): Promise<DocumentResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
+export interface DocumentListParams {
+  page?: number;
+  size?: number;
+  status?: DocumentStatus;
+}
 
-  const response = await fetch(`${API_BASE}/documents`, {
+export async function getDocuments(params: DocumentListParams = {}): Promise<DocumentPageResponse> {
+  const query = new URLSearchParams({
+    page: String(params.page ?? 0),
+    size: String(params.size ?? 20),
+  });
+  if (params.status) query.set('status', params.status);
+
+  const response = await apiFetch(`${API_BASE}/documents?${query}`, {
+    headers: workspaceHeaders(),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '파일 목록 조회 실패'));
+  return response.json();
+}
+
+/** 서버가 주는 바이트 크기를 화면용 문자열로 */
+export function formatFileSize(bytes?: number | null): string {
+  if (bytes === null || bytes === undefined) return '-';
+  if (bytes < 1024) return `${bytes}B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)}KB`;
+  return `${(kb / 1024).toFixed(1)}MB`;
+}
+
+/** mimeType 에서 화면에 쓸 확장자 라벨을 뽑는다 */
+export function formatFileType(mimeType?: string | null, title?: string): string {
+  const fromTitle = title?.includes('.') ? title.split('.').pop()?.toUpperCase() : undefined;
+  if (fromTitle && fromTitle.length <= 5) return fromTitle;
+  if (!mimeType) return 'FILE';
+  if (mimeType.includes('pdf')) return 'PDF';
+  if (mimeType.includes('sheet') || mimeType.includes('excel')) return 'XLSX';
+  if (mimeType.includes('word')) return 'DOCX';
+  if (mimeType.includes('presentation')) return 'PPTX';
+  if (mimeType.includes('text')) return 'TXT';
+  return mimeType.split('/').pop()?.toUpperCase() ?? 'FILE';
+}
+
+/** 서버가 주는 Instant(ISO) 를 화면용 날짜/시간으로 */
+export function formatDateTime(value?: string | null): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export interface UploadDocumentParams {
+  file: File;
+  title?: string;
+  visibility?: DocumentVisibility;
+  /** RESTRICTED 일 때 접근을 허용할 역할 */
+  allowedRoles?: WorkspaceRole[];
+}
+
+export async function uploadDocument(params: UploadDocumentParams): Promise<DocumentResponse> {
+  const formData = new FormData();
+  formData.append('file', params.file);
+
+  const query = new URLSearchParams();
+  if (params.title) query.set('title', params.title);
+  if (params.visibility) query.set('visibility', params.visibility);
+  if (params.allowedRoles?.length) query.set('allowedRoles', params.allowedRoles.join(','));
+  const suffix = query.toString() ? `?${query}` : '';
+
+  // Content-Type 은 브라우저가 boundary 와 함께 직접 넣어야 한다
+  const response = await apiFetch(`${API_BASE}/documents${suffix}`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-    },
+    headers: workspaceHeaders(),
     body: formData,
   });
 
-  if (!response.ok) throw new Error('파일 업로드 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '파일 업로드 실패'));
   return response.json();
 }
 
 export async function getDocumentDetail(documentId: string): Promise<DocumentResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/documents/${documentId}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-    },
+  const response = await apiFetch(`${API_BASE}/documents/${documentId}`, {
+    headers: workspaceHeaders(),
   });
 
-  if (!response.ok) throw new Error('문서 조회 실패');
-  return response.json();
-}
-
-// ===== Workspace =====
-export interface WorkspaceResponse {
-  id: string;
-  name: string;
-  memberCount?: number;
-  createdAt?: string;
-}
-
-export interface WorkspaceListResponse {
-  workspaces: WorkspaceResponse[];
-}
-
-export async function getMyWorkspaces(): Promise<WorkspaceListResponse> {
-  const token = getAuthToken();
-  if (!token) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/workspaces/me`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok) throw new Error('워크스페이스 목록 조회 실패');
-  return response.json();
-}
-
-export async function createWorkspace(name: string): Promise<WorkspaceResponse> {
-  const token = getAuthToken();
-  if (!token) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/workspaces`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ name }),
-  });
-
-  if (!response.ok) throw new Error('워크스페이스 생성 실패');
-  return response.json();
-}
-
-export async function updateWorkspace(workspaceId: string, name: string): Promise<WorkspaceResponse> {
-  const token = getAuthToken();
-  if (!token) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/workspaces/${workspaceId}`, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ name }),
-  });
-
-  if (!response.ok) throw new Error('워크스페이스 수정 실패');
-  return response.json();
-}
-
-// ===== Templates =====
-export interface TemplateSection {
-  title: string;
-  items?: Array<{ title: string }>;
-}
-
-export interface TemplateResponse {
-  id: string;
-  name?: string;
-  title?: string;
-  role: string;
-  status?: string;
-  description?: string;
-  durationDays?: number;
-  itemCount?: number;
-  sections?: TemplateSection[];
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface TemplateListResponse {
-  items?: TemplateResponse[];
-  templates?: TemplateResponse[];
-}
-
-export async function getTemplates(): Promise<TemplateListResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/templates`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-    },
-  });
-
-  if (!response.ok) throw new Error('템플릿 목록 조회 실패');
-  return response.json();
-}
-
-export async function createTemplateAPI(data: any): Promise<TemplateResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/templates`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) throw new Error('템플릿 생성 실패');
-  return response.json();
-}
-
-export const createTemplate = createTemplateAPI;
-
-export async function deleteTemplate(templateId: string): Promise<void> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/templates/${templateId}`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-    },
-  });
-
-  if (!response.ok) throw new Error('템플릿 삭제 실패');
-}
-
-// ===== Member Role & Invitation =====
-export async function updateMemberRole(memberId: string, role: string): Promise<MemberResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/members/${memberId}`, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ role }),
-  });
-
-  if (!response.ok) throw new Error('멤버 역할 변경 실패');
-  return response.json();
-}
-
-export interface AcceptInvitationResponse {
-  workspaceId: string;
-  role: string;
-  membershipId?: string;
-  onboardingPlanId?: string | null;
-}
-
-export async function acceptMemberInvitation(token: string): Promise<AcceptInvitationResponse> {
-  const authToken = getAuthToken();
-  if (!authToken) {
-    throw new Error('초대를 수락하려면 로그인이 필요합니다.');
-  }
-
-  const response = await fetch(`${API_BASE}/members/invitations/${token}/accept`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${authToken}`,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || '초대 수락에 실패했습니다.');
-  }
-  return response.json();
-}
-
-// ===== Recommendation Actions =====
-export async function dismissRecommendation(recommendationId: string): Promise<void> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/recommendations/${recommendationId}/dismiss`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) throw new Error('추천 숨김 실패');
-}
-
-// ===== Document Actions =====
-export async function updateDocumentPermission(documentId: string, allowedRoles: string[]): Promise<DocumentResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/documents/${documentId}`, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ allowedRoles }),
-  });
-
-  if (!response.ok) throw new Error('문서 권한 변경 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '문서 조회 실패'));
   return response.json();
 }
 
 export async function reprocessDocument(documentId: string): Promise<DocumentResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/documents/${documentId}/reprocess`, {
+  const response = await apiFetch(`${API_BASE}/documents/${documentId}/reprocess`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-      'Content-Type': 'application/json',
-    },
+    headers: workspaceHeaders(JSON_CONTENT),
   });
 
-  if (!response.ok) throw new Error('문서 재처리 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '문서 재처리 실패'));
   return response.json();
 }
 
-// ===== Plan Updates =====
-export async function updateOnboardingPlan(planId: string, data: any): Promise<PlanResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/onboarding-plans/${planId}`, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
+export async function deleteDocument(documentId: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/documents/${documentId}`, {
+    method: 'DELETE',
+    headers: workspaceHeaders(),
   });
 
-  if (!response.ok) throw new Error('계획 수정 실패');
-  return response.json();
+  if (!response.ok) throw new Error(await errorMessage(response, '문서 삭제 실패'));
 }
 
-export async function regenerateOnboardingPlan(planId: string): Promise<PlanResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/onboarding-plans/${planId}/regenerate`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) throw new Error('계획 재생성 실패');
-  return response.json();
-}
-
-// ===== Template Updates =====
-export async function updateTemplate(templateId: string, data: any): Promise<TemplateResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
-
-  const response = await fetch(`${API_BASE}/templates/${templateId}`, {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) throw new Error('템플릿 수정 실패');
-  return response.json();
-}
-
-// ===== Audit Logs =====
-export interface AuditLogResponse {
+// ===== Workspace =====
+/** POST /workspaces, PATCH /workspaces/{id} (서버 WorkspaceResponse 와 1:1) */
+export interface WorkspaceResponse {
   id: string;
-  timestamp?: string;
-  createdAt?: string;
-  actorId?: string | null;
-  actorName?: string;
-  eventType: string;
-  targetType?: string;
-  targetId?: string;
-  targetName?: string;
-  resourceType?: string | null;
-  resourceId?: string | null;
-  result: 'ALLOW' | 'DENY' | 'SUCCESS' | 'FAILURE' | string;
-  details?: string;
-  metadata?: Record<string, unknown> | null;
+  name: string;
+  slug: string;
+  createdAt: string;
 }
 
-export interface AuditLogPageResponse {
-  content: AuditLogResponse[];
-  totalElements: number;
-  totalPages: number;
-  currentPage: number;
-  pageSize: number;
+/** GET /workspaces/me 항목 (서버 WorkspaceSummaryResponse 와 1:1) */
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  slug: string;
+  role: WorkspaceRole;
 }
 
-export async function getAuditLogs(
-  page: number = 0,
-  size: number = 50,
-  actorId?: string,
-  eventType?: string,
-  from?: string,
-  to?: string
-): Promise<AuditLogPageResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
+/** 서버는 items 로 내려준다 (workspaces 아님) */
+export interface WorkspaceListResponse {
+  items: WorkspaceSummary[];
+}
 
-  const params = new URLSearchParams({
-    page: page.toString(),
-    size: size.toString(),
+export async function getMyWorkspaces(): Promise<WorkspaceListResponse> {
+  const response = await apiFetch(`${API_BASE}/workspaces/me`, {
+    headers: authHeaders(),
   });
 
-  if (actorId) params.append('actorId', actorId);
-  if (eventType) params.append('eventType', eventType);
-  if (from) params.append('from', from);
-  if (to) params.append('to', to);
-
-  const response = await fetch(`${API_BASE}/admin/audit-logs?${params}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-    },
-  });
-
-  if (!response.ok) throw new Error('감사 로그 조회 실패');
+  if (!response.ok) throw new Error(await errorMessage(response, '워크스페이스 목록 조회 실패'));
   return response.json();
 }
 
-export async function inviteMember(email: string, role: string = 'MEMBER'): Promise<InvitationResponse> {
-  const token = getAuthToken();
-  const wsId = getWorkspaceId();
-  if (!token || !wsId) throw new Error('인증 정보 없음');
+export class WorkspaceError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = 'WorkspaceError';
+  }
 
-  const response = await fetch(`${API_BASE}/members/invitations`, {
+  isConflict(): boolean {
+    return this.status === 409;
+  }
+}
+
+/** 서버는 name 과 slug 를 모두 요구한다 (slug: ^[a-z0-9]+(?:-[a-z0-9]+)*$, 2~80자) */
+export async function createWorkspace(name: string, slug: string): Promise<WorkspaceResponse> {
+  const response = await apiFetch(`${API_BASE}/workspaces`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Workspace-Id': wsId,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, role }),
+    headers: authHeaders(JSON_CONTENT),
+    body: JSON.stringify({ name, slug }),
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || '멤버 초대 실패');
+    // slug 중복(409) / 형식 오류(400) 를 구분해서 보여줘야 해서 상태 코드를 함께 올린다
+    throw new WorkspaceError(response.status, await errorMessage(response, '워크스페이스 생성 실패'));
   }
-
   return response.json();
 }
 
-// ===== Auth =====
+export async function updateWorkspace(workspaceId: string, name: string): Promise<WorkspaceResponse> {
+  const response = await apiFetch(`${API_BASE}/workspaces/${workspaceId}`, {
+    method: 'PATCH',
+    headers: authHeaders(JSON_CONTENT),
+    body: JSON.stringify({ name }),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '워크스페이스 수정 실패'));
+  return response.json();
+}
+
+// ===== Templates =====
+/** 서버 TemplateItemResponse 와 1:1 */
+export interface TemplateItemResponse {
+  id: string;
+  dayIndex: number;
+  type: PlanItemType;
+  title: string;
+  description: string | null;
+  sortOrder: number;
+}
+
+/** GET /templates 항목 (서버 TemplateResponse 와 1:1) */
+export interface TemplateResponse {
+  id: string;
+  name: string;
+  /** 서버 필드명이 role 이 아니라 targetRole 이다 */
+  targetRole: WorkspaceRole | null;
+  description: string | null;
+  isDefault: boolean;
+  updatedAt: string | null;
+  items: TemplateItemResponse[] | null;
+}
+
+/** 서버는 items 키로 감싸서 내려준다 */
+export interface TemplateListResponse {
+  items: TemplateResponse[];
+}
+
+export async function getTemplates(): Promise<TemplateListResponse> {
+  const response = await apiFetch(`${API_BASE}/templates`, {
+    headers: workspaceHeaders(),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '템플릿 목록 조회 실패'));
+  return response.json();
+}
+
+export async function getTemplateDetail(templateId: string): Promise<TemplateResponse> {
+  const response = await apiFetch(`${API_BASE}/templates/${templateId}`, {
+    headers: workspaceHeaders(),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '템플릿 조회 실패'));
+  return response.json();
+}
+
+export interface TemplateItemPayload {
+  dayIndex: number;
+  type: PlanItemType;
+  title: string;
+  description?: string;
+  sortOrder?: number;
+}
+
+export interface TemplatePayload {
+  name: string;
+  targetRole?: WorkspaceRole;
+  description?: string;
+  isDefault?: boolean;
+  items?: TemplateItemPayload[];
+}
+
+export async function createTemplate(payload: TemplatePayload): Promise<TemplateResponse> {
+  const response = await apiFetch(`${API_BASE}/templates`, {
+    method: 'POST',
+    headers: workspaceHeaders(JSON_CONTENT),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '템플릿 생성 실패'));
+  return response.json();
+}
+
+/** @deprecated 이름을 createTemplate 으로 정리했다. 예전 호출부 호환용 별칭. */
+export const createTemplateAPI = createTemplate;
+
+export async function updateTemplate(
+  templateId: string,
+  payload: Partial<TemplatePayload>
+): Promise<TemplateResponse> {
+  const response = await apiFetch(`${API_BASE}/templates/${templateId}`, {
+    method: 'PATCH',
+    headers: workspaceHeaders(JSON_CONTENT),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '템플릿 수정 실패'));
+  return response.json();
+}
+
+export async function deleteTemplate(templateId: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/templates/${templateId}`, {
+    method: 'DELETE',
+    headers: workspaceHeaders(),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '템플릿 삭제 실패'));
+}
+
+// ===== Audit Logs =====
+/** GET /admin/audit-logs 항목 (서버 AuditLogResponse 와 1:1) */
+export interface AuditLogResponse {
+  id: string;
+  eventType: string;
+  actorId: string | null;
+  resourceType: string | null;
+  resourceId: string | null;
+  result: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export type AuditLogPageResponse = PageResponse<AuditLogResponse>;
+
+export interface AuditLogParams {
+  page?: number;
+  size?: number;
+  actorId?: string;
+  eventType?: string;
+  /** ISO-8601 (예: 2026-08-11T00:00:00Z) */
+  from?: string;
+  to?: string;
+}
+
+export async function getAuditLogs(params: AuditLogParams = {}): Promise<AuditLogPageResponse> {
+  const query = new URLSearchParams({
+    page: String(params.page ?? 0),
+    size: String(params.size ?? 50),
+  });
+  if (params.actorId) query.set('actorId', params.actorId);
+  if (params.eventType) query.set('eventType', params.eventType);
+  if (params.from) query.set('from', params.from);
+  if (params.to) query.set('to', params.to);
+
+  const response = await apiFetch(`${API_BASE}/admin/audit-logs?${query}`, {
+    headers: workspaceHeaders(),
+  });
+
+  if (!response.ok) throw new Error(await errorMessage(response, '감사 로그 조회 실패'));
+  return response.json();
+}
+
+// ===== Auth 요청 타입 (서버 SignupRequest / VerifyEmailRequest 와 1:1) =====
 export interface SignupRequest {
   email: string;
   name: string;
   password: string;
 }
 
-export interface SignupResponse {
-  email: string;
-  success: boolean;
-  message?: string;
-}
-
-export async function signup(request: SignupRequest): Promise<SignupResponse> {
-  const response = await fetch(`${API_BASE}/auth/signup`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      email: request.email.trim().toLowerCase(),
-      name: request.name,
-      password: request.password,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || '회원가입 실패');
-  }
-
-  return response.json();
-}
-
-// ===== Email Verification =====
 export interface VerifyEmailRequest {
   email: string;
+  /** 6자리 인증 코드 */
   code: string;
 }
 
+// ===== Email Verification =====
 export interface VerifyEmailResponse {
   email: string;
-  success: boolean;
+  message: string;
 }
 
 export interface ResendVerificationResponse {
-  success: boolean;
-  message?: string;
+  message: string;
 }
 
 export async function verifyEmail(email: string, code: string): Promise<VerifyEmailResponse> {
   const response = await fetch(`${API_BASE}/auth/verify-email`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      email: email.trim().toLowerCase(),
-      code,
-    }),
+    headers: JSON_CONTENT,
+    body: JSON.stringify({ email: email.trim().toLowerCase(), code }),
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || '이메일 인증 실패');
-  }
-
+  if (!response.ok) throw new Error(await errorMessage(response, '이메일 인증 실패'));
   return response.json();
 }
 
 export async function resendVerificationCode(email: string): Promise<ResendVerificationResponse> {
   const response = await fetch(`${API_BASE}/auth/resend-verification`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      email: email.trim().toLowerCase(),
-    }),
+    headers: JSON_CONTENT,
+    body: JSON.stringify({ email: email.trim().toLowerCase() }),
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || '코드 재전송 실패');
-  }
-
+  if (!response.ok) throw new Error(await errorMessage(response, '코드 재전송 실패'));
   return response.json();
 }

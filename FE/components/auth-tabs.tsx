@@ -4,8 +4,10 @@ import React, { useState } from 'react';
 import { LoginForm } from './login-form';
 import { SignupForm } from './signup-form';
 
-export function AuthTabs() {
-  const [activeTab, setActiveTab] = useState<'login' | 'signup'>('login');
+type AuthTab = 'login' | 'signup';
+
+export function AuthTabs({ initialTab = 'login' }: { initialTab?: AuthTab }) {
+  const [activeTab, setActiveTab] = useState<AuthTab>(initialTab);
 
   return (
     <>
@@ -37,7 +39,7 @@ export function AuthTabs() {
         aria-labelledby="tab-login"
         hidden={activeTab !== 'login'}
       >
-        <LoginForm />
+        <LoginForm onSwitchToSignup={() => setActiveTab('signup')} />
       </section>
 
       <section
@@ -47,7 +49,7 @@ export function AuthTabs() {
         aria-labelledby="tab-signup"
         hidden={activeTab !== 'signup'}
       >
-        <SignupForm />
+        <SignupForm onSwitchToLogin={() => setActiveTab('login')} />
       </section>
     </>
   );

@@ -57,6 +57,22 @@ dependencies {
 	testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
+tasks.named('bootRun') {
+	// Spring Boot 는 .env 를 자동으로 읽지 않는다.
+	// 이게 없으면 ./gradlew bootRun 으로 켤 때 OPENAI_API_KEY·MAIL_*·JWT_SECRET 가 빠져
+	// AI 가 템플릿 폴백으로 떨어지고 메일 발송이 실패한다.
+	def envFile = file('.env')
+	if (envFile.exists()) {
+		envFile.readLines('UTF-8').each { line ->
+			def trimmed = line.trim()
+			if (trimmed && !trimmed.startsWith('#') && trimmed.contains('=')) {
+				def separator = trimmed.indexOf('=')
+				environment trimmed.substring(0, separator).trim(), trimmed.substring(separator + 1).trim()
+			}
+		}
+	}
+}
+
 tasks.named('test') {
 	useJUnitPlatform {
 		// Docker/Testcontainers 통합 테스트와 실제 API 수동 검증은 기본 test 에서 제외
